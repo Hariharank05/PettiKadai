@@ -72,7 +72,7 @@ export async function initDatabase(): Promise<void> {
     );
   `);
   
-  // Create Settings table
+  // Create Settings table s
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS settings (
       id TEXT PRIMARY KEY,
