@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, Platform, Image } from 'react-native';
+import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Product } from '~/lib/stores/types';
 import { useProductStore } from '~/lib/stores/productStore';
@@ -25,18 +25,21 @@ import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { Input } from '~/components/ui/input';
 import { Button as ShadcnButton } from '~/components/ui/button';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Filter, Pencil, Trash2, X, ListFilter } from 'lucide-react-native';
 
 const ProductManagementScreen = () => {
   const { products: rawProducts, fetchProducts, addProduct, updateProduct, deleteProduct } = useProductStore();
   const products = useMemo(() => rawProducts.map(product => ({
     ...product,
     isActive: product.isActive ?? true,
-    imageUri: product.imageUri ?? '', // Ensure imageUri is always defined
+    imageUri: product.imageUri ?? '',
+    category: product.category ?? '',
   })), [rawProducts]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -46,26 +49,47 @@ const ProductManagementScreen = () => {
     costPrice: '',
     sellingPrice: '',
     quantity: '',
-    unit: 'piece', // Kept for UI purposes
-    imageUri: '', // Kept for UI purposes
+    unit: 'piece',
+    imageUri: '',
   });
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // To force FlashList re-render
+  const [categorySearch, setCategorySearch] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [isNewCategory, setIsNewCategory] = useState(false);
+  const [isNewProduct, setIsNewProduct] = useState(false);
 
-  // Derive unique categories
   const categories = useMemo(() => {
     const cats = Array.from(new Set(products.map(p => p.category).filter(c => c))).sort();
-    return ['All', ...cats];
+    return ['Add New Category', ...cats];
   }, [products]);
 
-  // Filter products by selected category
+  const productNames = useMemo(() => {
+    const names = Array.from(new Set(products.map(p => p.name).filter(n => n))).sort();
+    return ['Add New Product', ...names];
+  }, [products]);
+
+  const filteredCategories = useMemo(() => {
+    if (!categorySearch) return categories;
+    return categories.filter(cat => 
+      (cat?.toLowerCase() ?? '').includes(categorySearch.toLowerCase())
+    );
+  }, [categories, categorySearch]);
+
+  const filteredProductNames = useMemo(() => {
+    if (!productSearch) return productNames;
+    return productNames.filter(name => 
+      name.toLowerCase().includes(productSearch.toLowerCase())
+    );
+  }, [productNames, productSearch]);
+
   const filteredProducts = useMemo(() => {
     if (!selectedCategory || selectedCategory === 'All') return products;
     return products.filter(p => p.category === selectedCategory);
   }, [products, selectedCategory]);
 
-  // Calculate profit
   const profit = useMemo(() => {
     const cost = parseFloat(form.costPrice) || 0;
     const selling = parseFloat(form.sellingPrice) || 0;
@@ -114,19 +138,21 @@ const ProductManagementScreen = () => {
         costPrice: parseFloat(form.costPrice),
         sellingPrice: parseFloat(form.sellingPrice),
         quantity: parseInt(form.quantity) || 0,
-        imageUri: form.imageUri || undefined, // Include imageUri
+        imageUri: form.imageUri || undefined,
         isActive: false,
         unit: ''
       });
       resetForm();
       setDialogOpen(false);
       setError(null);
+      await fetchProducts();
+      setRefreshKey(prev => prev + 1); // Force FlashList re-render
     } catch (error) {
       setError('Failed to add product. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [form, addProduct, isLoading, isFormValid]);
+  }, [form, addProduct, isLoading, isFormValid, fetchProducts]);
 
   const handleEditClick = useCallback((product: Product) => {
     setSelectedProduct(product);
@@ -136,13 +162,15 @@ const ProductManagementScreen = () => {
       costPrice: product.costPrice.toString(),
       sellingPrice: product.sellingPrice.toString(),
       quantity: product.quantity.toString(),
-      unit: 'piece', // Default since not in DB
-      imageUri: product.imageUri || '', // Use product's imageUri
+      unit: 'piece',
+      imageUri: product.imageUri || '',
     });
-    setSelectedImage(product.imageUri || null); // Set selectedImage for UI
+    setSelectedImage(product.imageUri || null);
     setFormMode('edit');
     setDialogOpen(true);
     setError(null);
+    setIsNewCategory(false);
+    setIsNewProduct(false);
   }, []);
 
   const handleDeleteClick = useCallback((product: Product) => {
@@ -163,7 +191,7 @@ const ProductManagementScreen = () => {
         costPrice: parseFloat(form.costPrice),
         sellingPrice: parseFloat(form.sellingPrice),
         quantity: parseInt(form.quantity) || 0,
-        imageUri: form.imageUri || undefined, // Include imageUri
+        imageUri: form.imageUri || undefined,
       };
       await updateProduct(selectedProduct.id, updatedFields);
       setDialogOpen(false);
@@ -171,7 +199,8 @@ const ProductManagementScreen = () => {
       setFormMode('add');
       setSelectedProduct(null);
       setError(null);
-      fetchProducts();
+      await fetchProducts();
+      setRefreshKey(prev => prev + 1); // Force FlashList re-render
     } catch (error) {
       setError('Failed to update product. Please try again.');
     } finally {
@@ -186,11 +215,13 @@ const ProductManagementScreen = () => {
         setDeleteDialogOpen(false);
         setSelectedProduct(null);
         setError(null);
+        await fetchProducts();
+        setRefreshKey(prev => prev + 1); // Force FlashList re-render
       } catch (error) {
         setError('Failed to delete product. Please try again.');
       }
     }
-  }, [selectedProduct, deleteProduct]);
+  }, [selectedProduct, deleteProduct, fetchProducts]);
 
   const resetForm = useCallback(() => {
     setForm({
@@ -203,18 +234,63 @@ const ProductManagementScreen = () => {
       imageUri: '',
     });
     setSelectedImage(null);
+    setCategorySearch('');
+    setProductSearch('');
+    setIsNewCategory(false);
+    setIsNewProduct(false);
   }, []);
+
+  const clearFilter = useCallback(() => {
+    setSelectedCategory(null);
+    setFilterDialogOpen(false);
+  }, []);
+
+  const handleCategoryToggle = useCallback(() => {
+    const newIsNewCategory = !isNewCategory;
+    setIsNewCategory(newIsNewCategory);
+    setForm({ ...form, category: '' });
+    setCategorySearch('');
+    setIsNewProduct(newIsNewCategory);
+    setForm({ ...form, category: '', name: '' });
+  }, [isNewCategory, form]);
+
+  const handleProductToggle = useCallback(() => {
+    const newIsNewProduct = !isNewProduct;
+    setIsNewProduct(newIsNewProduct);
+    setForm({ ...form, name: '' });
+    setProductSearch('');
+    if (!newIsNewProduct) {
+      setIsNewCategory(false);
+      setForm({ ...form, name: '' });
+    }
+  }, [isNewProduct, form]);
 
   return (
     <View className="p-4 flex-1 bg-background">
       <View className="flex-row justify-between items-center mb-4 gap-x-2">
         <Text className="text-2xl font-bold text-foreground">Products</Text>
-        <View className="flex-row gap-x-2">
+        <View className="flex-row gap-x-1 items-center">
+          {selectedCategory && (
+            <ShadcnButton
+              variant="ghost"
+              size="sm"
+              onPress={clearFilter}
+              disabled={isLoading}
+            >
+              <X size={20} color="#EF4444" />
+            </ShadcnButton>
+          )}
           <ShadcnButton
+            variant="ghost"
+            size="sm"
             onPress={() => setFilterDialogOpen(true)}
             disabled={isLoading}
           >
-            <Text className="text-primary-foreground">Filter</Text>
+            {selectedCategory ? (
+              <ListFilter size={24} color="#3B82F6" />
+            ) : (
+              <Filter size={24} color="#3B82F6" />
+            )}
           </ShadcnButton>
           <ShadcnButton
             onPress={() => {
@@ -235,68 +311,71 @@ const ProductManagementScreen = () => {
       )}
 
       <FlashList
+        key={refreshKey} // Force re-render after add/edit/delete
         data={filteredProducts}
         keyExtractor={(item: Product) => item.id}
         renderItem={({ item }: { item: Product }) => (
-          <Card className="mb-3 overflow-hidden">
-            <CardHeader className="pb-2">
+          <Card className="mb-2 overflow-hidden">
+            <CardHeader className="py-2 px-3">
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center">
                   {item.imageUri ? (
                     <Image
                       source={{ uri: item.imageUri }}
-                      style={{ width: 50, height: 50 }}
-                      className="rounded-md mr-3"
+                      style={{ width: 40, height: 40 }}
+                      className="rounded-md mr-2"
                     />
                   ) : (
-                    <View className="w-[50px] h-[50px] rounded-md mr-3 bg-muted" />
+                    <View className="w-[40px] h-[40px] rounded-md mr-2 bg-muted" />
                   )}
                   <View>
-                    <CardTitle className="text-foreground">{item.name}</CardTitle>
+                    <CardTitle className="text-base text-foreground">{item.name}</CardTitle>
                     {item.category && (
-                      <Text className="text-sm text-muted-foreground">{item.category}</Text>
+                      <Text className="text-xs text-muted-foreground">{item.category}</Text>
                     )}
                   </View>
                 </View>
                 <View>
                   <Text className="text-xs text-muted-foreground">Stock</Text>
-                  <Text className="text-foreground">{item.quantity} piece</Text>
+                  <Text className="text-sm text-foreground">{item.quantity} piece</Text>
                 </View>
               </View>
             </CardHeader>
-            <CardContent className="py-2">
-              <View className="flex-row flex-wrap">
-                <View className="w-1/2 mb-1 pr-1">
-                  <Text className="text-xs text-muted-foreground">Cost</Text>
-                  <Text className="text-foreground">₹{item.costPrice.toFixed(2)}</Text>
+            <CardContent className="py-1 px-3">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row">
+                  <View className="w-[100px] pr-1">
+                    <Text className="text-xs text-muted-foreground">Cost</Text>
+                    <Text className="text-sm text-foreground">₹{item.costPrice.toFixed(2)}</Text>
+                  </View>
+                  <View className="w-[100px] pl-1">
+                    <Text className="text-xs text-muted-foreground">Selling</Text>
+                    <Text className="text-sm text-foreground">₹{item.sellingPrice.toFixed(2)}</Text>
+                  </View>
                 </View>
-                <View className="w-1/2 mb-1 pl-1">
-                  <Text className="text-xs text-muted-foreground">Selling</Text>
-                  <Text className="text-foreground">₹{item.sellingPrice.toFixed(2)}</Text>
+                <View className="flex-row gap-x-1">
+                  <ShadcnButton
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => handleEditClick(item)}
+                    disabled={isLoading}
+                  >
+                    <Pencil size={16} color="#3B82F6" />
+                  </ShadcnButton>
+                  <ShadcnButton
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => handleDeleteClick(item)}
+                    disabled={isLoading}
+                  >
+                    <Trash2 size={16} color="#EF4444" />
+                  </ShadcnButton>
                 </View>
               </View>
             </CardContent>
-            <CardFooter className="flex-row justify-end pt-2 pb-3 px-4 gap-x-2 bg-muted/50">
-              <ShadcnButton
-                variant="ghost"
-                size="sm"
-                onPress={() => handleEditClick(item)}
-                disabled={isLoading}
-              >
-                <MaterialIcons name="edit" size={20} color="#3B82F6" />
-              </ShadcnButton>
-              <ShadcnButton
-                variant="ghost"
-                size="sm"
-                onPress={() => handleDeleteClick(item)}
-                disabled={isLoading}
-              >
-                <MaterialIcons name="delete" size={20} color="#EF4444" />
-              </ShadcnButton>
-            </CardFooter>
           </Card>
         )}
-        estimatedItemSize={150} // Approximate height of each card
+        estimatedItemSize={100}
       />
 
       {/* Filter Dialog */}
@@ -305,7 +384,7 @@ const ProductManagementScreen = () => {
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-foreground">Filter by Category</DialogTitle>
           </DialogHeader>
-          <View className="my-4">
+          <View className="my-4 w-[250px]">
             <Picker
               selectedValue={selectedCategory || 'All'}
               onValueChange={(value) => setSelectedCategory(value === 'All' ? null : value)}
@@ -318,6 +397,12 @@ const ProductManagementScreen = () => {
             </Picker>
           </View>
           <DialogFooter className="flex-row justify-end gap-x-3">
+            <ShadcnButton
+              variant="outline"
+              onPress={clearFilter}
+            >
+              <Text>Clear</Text>
+            </ShadcnButton>
             <ShadcnButton
               variant="outline"
               onPress={() => setFilterDialogOpen(false)}
@@ -333,6 +418,117 @@ const ProductManagementScreen = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Category Selection Dialog */}
+      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-full mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">Select Category</DialogTitle>
+          </DialogHeader>
+          <View className="my-4">
+            <View className="w-[250px] mb-2">
+              <Input
+                placeholder="Search categories..."
+                value={categorySearch}
+                onChangeText={setCategorySearch}
+                className="h-12 rounded-md text-base"
+                editable={!isLoading}
+              />
+            </View>
+            <FlashList
+              data={filteredCategories}
+              keyExtractor={(item) => item || 'unknown-key'}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (item === 'Add New Category') {
+                      setIsNewCategory(true);
+                      setIsNewProduct(true);
+                      setForm({ ...form, category: '', name: '' });
+                    } else {
+                      setIsNewCategory(false);
+                      setIsNewProduct(false);
+                      setForm({ ...form, category: item || '', name: '' });
+                    }
+                    setCategorySearch('');
+                    setCategoryDialogOpen(false);
+                  }}
+                  className="py-2 px-4 border-b border-border"
+                >
+                  <Text className="text-base text-foreground">{item}</Text>
+                </TouchableOpacity>
+              )}
+              estimatedItemSize={40}
+            />
+          </View>
+          <DialogFooter className="flex-row justify-end gap-x-3">
+            <ShadcnButton
+              variant="outline"
+              onPress={() => {
+                setCategorySearch('');
+                setCategoryDialogOpen(false);
+              }}
+            >
+              <Text>Cancel</Text>
+            </ShadcnButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Product Selection Dialog */}
+      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
+        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-full mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">Select Product</DialogTitle>
+          </DialogHeader>
+          <View className="my-4">
+            <View className="w-[250px] mb-2">
+              <Input
+                placeholder="Search products..."
+                value={productSearch}
+                onChangeText={setProductSearch}
+                className="h-12 rounded-md text-base"
+                editable={!isLoading}
+              />
+            </View>
+            <FlashList
+              data={filteredProductNames}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (item === 'Add New Product') {
+                      setIsNewProduct(true);
+                      setForm({ ...form, name: '' });
+                    } else {
+                      setIsNewProduct(false);
+                      setIsNewCategory(false);
+                      setForm({ ...form, name: item });
+                    }
+                    setProductSearch('');
+                    setProductDialogOpen(false);
+                  }}
+                  className="py-2 px-4 border-b border-border"
+                >
+                  <Text className="text-base text-foreground">{item}</Text>
+                </TouchableOpacity>
+              )}
+              estimatedItemSize={40}
+            />
+          </View>
+          <DialogFooter className="flex-row justify-end gap-x-3">
+            <ShadcnButton
+              variant="outline"
+              onPress={() => {
+                setProductSearch('');
+                setProductDialogOpen(false);
+              }}
+            >
+              <Text>Cancel</Text>
+            </ShadcnButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Add/Edit Product Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => {
         setDialogOpen(open);
@@ -343,149 +539,208 @@ const ProductManagementScreen = () => {
           setError(null);
         }
       }}>
-        <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-lg w-full mx-auto">
-          <DialogHeader className="p-6 pb-4 border-b border-border">
-            <DialogTitle className="text-xl font-bold text-foreground">
-              {formMode === 'edit' ? 'Edit Product' : 'Add New Product'}
-            </DialogTitle>
-          </DialogHeader>
-          <View className="space-y-4 p-4 w-[320px]">
-            {error && (
-              <Text className="text-destructive text-center">{error}</Text>
-            )}
-            <View>
-              <Text className="mb-2 text-base font-semibold text-muted-foreground">Category (Optional)</Text>
-              <Input
-                placeholder="e.g., Groceries, Electronics"
-                value={form.category}
-                onChangeText={(text) => setForm({ ...form, category: text })}
-                className="h-12 rounded-md text-base"
-                editable={!isLoading}
-              />
-            </View>
-            <View>
-              <Text className="mb-2 mt-4 text-base font-semibold text-muted-foreground">
-                Product Name <Text className="text-destructive">*</Text>
-              </Text>
-              <Input
-                placeholder="Enter product name"
-                value={form.name}
-                onChangeText={(text) => setForm({ ...form, name: text })}
-                className="h-12 rounded-md text-base"
-                editable={!isLoading}
-              />
-            </View>
-            <View className="flex-row gap-x-4 mt-4">
-              <View className="flex-1">
-                <Text className="mb-2 text-base font-semibold text-muted-foreground">
-                  Cost Price (₹) <Text className="text-destructive">*</Text>
-                </Text>
-                <Input
-                  placeholder="0.00"
-                  keyboardType="numeric"
-                  value={form.costPrice}
-                  onChangeText={(text) => setForm({ ...form, costPrice: text })}
-                  className="h-12 rounded-md text-base"
-                  editable={!isLoading}
-                />
-              </View>
-              <View className="flex-1">
-                <Text className="mb-2 text-base font-semibold text-muted-foreground">
-                  Selling Price (₹) <Text className="text-destructive">*</Text>
-                </Text>
-                <Input
-                  placeholder="0.00"
-                  keyboardType="numeric"
-                  value={form.sellingPrice}
-                  onChangeText={(text) => setForm({ ...form, sellingPrice: text })}
-                  className="h-12 rounded-md text-base"
-                  editable={!isLoading}
-                />
-                <Text className="mt-2 text-sm text-foreground">
-                  Profit: ₹{profit} {parseFloat(profit) < 0 ? '(Loss)' : ''}
-                </Text>
-              </View>
-            </View>
-            <View className="flex-row gap-x-4 mt-4">
-              <View className="flex-1">
-                <Text className="mb-2 text-base font-semibold text-muted-foreground">Quantity</Text>
-                <Input
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={form.quantity}
-                  onChangeText={(text) => setForm({ ...form, quantity: text })}
-                  className="h-12 rounded-md text-base"
-                  editable={!isLoading}
-                />
-              </View>
-              <View className="flex-1">
-                <Text className="mb-2 text-base font-semibold text-muted-foreground">Unit</Text>
-                <View className="border border-input rounded-md bg-background h-12 justify-center">
-                  <Picker
-                    selectedValue={form.unit}
-                    onValueChange={(value) => setForm({ ...form, unit: value })}
-                    style={{ color: Platform.OS === 'ios' ? '#000' : undefined, fontSize: 16 }}
-                    dropdownIconColor={Platform.OS === 'android' ? '#999' : undefined}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 100}
+        >
+          <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-lg w-auto mx-auto" style={{ maxHeight: '100%' }}>
+            <ScrollView contentContainerStyle={{ padding: 0, width: '100%' }}>
+              <DialogHeader className="p-6 pb-4 border-b border-border">
+                <DialogTitle className="text-xl font-bold text-foreground">
+                  {formMode === 'edit' ? 'Edit Product' : 'Add New Product'}
+                </DialogTitle>
+              </DialogHeader>
+              <View className="space-y-4 p-4 w-[350px] mx-auto">
+                {error && (
+                  <Text className="text-destructive text-center mb-4">{error}</Text>
+                )}
+                <View>
+                  <Text className="mb-2 text-base font-semibold text-muted-foreground">Category</Text>
+                  <View className="flex-row justify-between mb-2">
+                    <Text className="text-sm text-muted-foreground mt-2">
+                      {isNewCategory ? 'Enter New Category' : 'Select Existing Category'}
+                    </Text>
+                    <ShadcnButton
+                      variant="ghost"
+                      size="sm"
+                      onPress={handleCategoryToggle}
+                    >
+                      <Text className="text-blue-500">
+                        {isNewCategory ? 'Select Existing' : 'Add New'}
+                      </Text>
+                    </ShadcnButton>
+                  </View>
+                  {isNewCategory ? (
+                    <Input
+                      placeholder="Enter new category"
+                      value={form.category}
+                      onChangeText={(text) => setForm({ ...form, category: text })}
+                      className="h-12 rounded-md text-base"
+                      editable={!isLoading}
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setCategoryDialogOpen(true)}
+                      className="border border-input rounded-md bg-background h-12 justify-center px-4"
+                      disabled={isLoading}
+                    >
+                      <Text className="text-base text-foreground">
+                        {form.category || 'Select a category'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View>
+                  <Text className="mb-2 mt-4 text-base font-semibold text-muted-foreground">
+                    Product Name <Text className="text-destructive">*</Text>
+                  </Text>
+                  <View className="flex-row justify-between mb-2">
+                    <Text className="text-sm text-muted-foreground mt-2">
+                      {isNewProduct ? 'Enter New Product' : 'Select Existing Product'}
+                    </Text>
+                    <ShadcnButton
+                      variant="ghost"
+                      size="sm"
+                      onPress={handleProductToggle}
+                    >
+                      <Text className="text-blue-500">
+                        {isNewProduct ? 'Select Existing' : 'Add New'}
+                      </Text>
+                    </ShadcnButton>
+                  </View>
+                  {isNewProduct ? (
+                    <Input
+                      placeholder="Enter new product name"
+                      value={form.name}
+                      onChangeText={(text) => setForm({ ...form, name: text })}
+                      className="h-12 rounded-md text-base"
+                      editable={!isLoading}
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setProductDialogOpen(true)}
+                      className="border border-input rounded-md bg-background h-12 justify-center px-4"
+                      disabled={isLoading}
+                    >
+                      <Text className="text-base text-foreground">
+                        {form.name || 'Select a product'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View className="flex-row gap-x-4 mt-4">
+                  <View className="flex-1">
+                    <Text className="mb-2 text-base font-semibold text-muted-foreground">
+                      Cost Price (₹) <Text className="text-destructive">*</Text>
+                    </Text>
+                    <Input
+                      placeholder="0.00"
+                      keyboardType="numeric"
+                      value={form.costPrice}
+                      onChangeText={(text) => setForm({ ...form, costPrice: text })}
+                      className="h-12 rounded-md text-base"
+                      editable={!isLoading}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="mb-2 text-base font-semibold text-muted-foreground">
+                      Selling Price (₹) <Text className="text-destructive">*</Text>
+                    </Text>
+                    <Input
+                      placeholder="0.00"
+                      keyboardType="numeric"
+                      value={form.sellingPrice}
+                      onChangeText={(text) => setForm({ ...form, sellingPrice: text })}
+                      className="h-12 rounded-md text-base"
+                      editable={!isLoading}
+                    />
+                    <Text className={`mt-2 text-sm ${parseFloat(profit) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      Profit: ₹{profit} {parseFloat(profit) < 0 ? '(Loss)' : ''}
+                    </Text>
+                  </View>
+                </View>
+                <View className="flex-row gap-x-4 mt-4">
+                  <View className="flex-1">
+                    <Text className="mb-2 text-base font-semibold text-muted-foreground">Quantity</Text>
+                    <Input
+                      placeholder="0"
+                      keyboardType="numeric"
+                      value={form.quantity}
+                      onChangeText={(text) => setForm({ ...form, quantity: text })}
+                      className="h-12 rounded-md text-base"
+                      editable={!isLoading}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="mb-2 text-base font-semibold text-muted-foreground">Unit</Text>
+                    <View className="border border-input rounded-md bg-background h-12 justify-center">
+                      <Picker
+                        selectedValue={form.unit}
+                        onValueChange={(value) => setForm({ ...form, unit: value })}
+                        style={{ color: Platform.OS === 'ios' ? '#000' : undefined, fontSize: 16 }}
+                        dropdownIconColor={Platform.OS === 'android' ? '#999' : undefined}
+                      >
+                        <Picker.Item label="Piece" value="piece" />
+                        <Picker.Item label="Kilogram (kg)" value="kg" />
+                        <Picker.Item label="Gram (g)" value="g" />
+                        <Picker.Item label="Liter (l)" value="l" />
+                        <Picker.Item label="Milliliter (ml)" value="ml" />
+                        <Picker.Item label="Dozen" value="dozen" />
+                        <Picker.Item label="Box" value="box" />
+                        <Picker.Item label="Packet" value="packet" />
+                      </Picker>
+                    </View>
+                  </View>
+                </View>
+                <View>
+                  <Text className="mb-2 mt-4 text-base font-semibold text-muted-foreground">Product Image</Text>
+                  <ShadcnButton
+                    variant="outline"
+                    className="w-full h-12"
+                    onPress={pickImage}
+                    disabled={isLoading}
                   >
-                    <Picker.Item label="Piece" value="piece" />
-                    <Picker.Item label="Kilogram (kg)" value="kg" />
-                    <Picker.Item label="Gram (g)" value="g" />
-                    <Picker.Item label="Liter (l)" value="l" />
-                    <Picker.Item label="Milliliter (ml)" value="ml" />
-                    <Picker.Item label="Dozen" value="dozen" />
-                    <Picker.Item label="Box" value="box" />
-                    <Picker.Item label="Packet" value="packet" />
-                  </Picker>
+                    <Text className="text-base">{form.imageUri ? 'Change Image' : 'Select Image'}</Text>
+                  </ShadcnButton>
+                  {selectedImage && (
+                    <View className="mt-4 items-center">
+                      <Image
+                        source={{ uri: selectedImage }}
+                        style={{ width: 128, height: 128 }}
+                        className="rounded-md border border-border"
+                      />
+                    </View>
+                  )}
                 </View>
               </View>
-            </View>
-            <View>
-              <Text className="mb-2 mt-4 text-base font-semibold text-muted-foreground">Product Image</Text>
-              <ShadcnButton
-                variant="outline"
-                className="w-full h-12"
-                onPress={pickImage}
-                disabled={isLoading}
-              >
-                <Text className="text-base">{form.imageUri ? 'Change Image' : 'Select Image'}</Text>
-              </ShadcnButton>
-              {selectedImage && (
-                <View className="mt-4 items-center">
-                  <Image
-                    source={{ uri: selectedImage }}
-                    style={{ width: 128, height: 128 }}
-                    className="rounded-md border border-border"
-                  />
-                </View>
-              )}
-            </View>
-          </View>
-          <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-border">
-            <ShadcnButton
-              variant="outline"
-              size="lg"
-              className="h-12 px-6"
-              onPress={() => {
-                setDialogOpen(false);
-                resetForm();
-                setFormMode('add');
-                setSelectedProduct(null);
-                setError(null);
-              }}
-              disabled={isLoading}
-            >
-              <Text className="text-base">Cancel</Text>
-            </ShadcnButton>
-            <ShadcnButton
-              size="lg"
-              className="h-12 px-6"
-              onPress={formMode === 'edit' ? handleEditSubmit : handleAddProduct}
-              disabled={isLoading || !isFormValid()}
-            >
-              <Text className="text-white">{formMode === 'edit' ? 'Save Changes' : 'Add Product'}</Text>
-            </ShadcnButton>
-          </DialogFooter>
-        </DialogContent>
+              <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-border">
+                <ShadcnButton
+                  variant="outline"
+                  size="lg"
+                  className="h-12 px-6"
+                  onPress={() => {
+                    setDialogOpen(false);
+                    resetForm();
+                    setFormMode('add');
+                    setSelectedProduct(null);
+                    setError(null);
+                  }}
+                  disabled={isLoading}
+                >
+                  <Text className="text-base">Cancel</Text>
+                </ShadcnButton>
+                <ShadcnButton
+                  size="lg"
+                  className="h-12 px-6"
+                  onPress={formMode === 'edit' ? handleEditSubmit : handleAddProduct}
+                  disabled={isLoading || !isFormValid()}
+                >
+                  <Text className="text-white">{formMode === 'edit' ? 'Save Changes' : 'Add Product'}</Text>
+                </ShadcnButton>
+              </DialogFooter>
+            </ScrollView>
+          </DialogContent>
+        </KeyboardAvoidingView>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
@@ -498,9 +753,12 @@ const ProductManagementScreen = () => {
             </Text>
           </DialogHeader>
           <DialogFooter>
-            <ShadcnButton onPress={() => setDeleteDialogOpen(false)} disabled={isLoading}>
-              <Text className="text-base">Cancel</Text>
-            </ShadcnButton>
+            <ShadcnButton  
+            variant="outline" 
+            onPress={() => setDeleteDialogOpen(false)} 
+            disabled={isLoading}>
+           <Text>Cancel</Text>
+           </ShadcnButton>
             <ShadcnButton onPress={handleDelete} disabled={isLoading}>
               <Text className="text-white">Delete</Text>
             </ShadcnButton>
@@ -512,3 +770,4 @@ const ProductManagementScreen = () => {
 };
 
 export default ProductManagementScreen;
+

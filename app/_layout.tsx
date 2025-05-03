@@ -10,7 +10,8 @@ import { useColorScheme } from '~/lib/useColorScheme';
 import { PortalHost } from '@rn-primitives/portal';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { setAndroidNavigationBar } from '~/lib/android-navigation-bar';
-import { Home, Settings, User } from 'lucide-react-native'; 
+import { Home, Settings, ShoppingBag, SlashSquare, User } from 'lucide-react-native'; 
+import Products from './products';
 
 const LIGHT_THEME: Theme = {
   ...DefaultTheme,
@@ -94,6 +95,13 @@ export default function RootLayout() {
           options={{
             title: 'Settings',
             tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
+          }}
+        />
+          <Tabs.Screen
+          name="products" // This now refers to app/settings.tsx
+          options={{
+            title: 'products',
+            tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size} />, // Replace 'Products' with a valid icon component
           }}
         />
       </Tabs>

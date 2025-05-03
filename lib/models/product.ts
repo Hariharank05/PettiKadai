@@ -10,6 +10,7 @@ function generateId(): string {
 }
 
 export interface Product {
+    isActive: boolean;
     id: string;
     name: string;
     costPrice: number;
