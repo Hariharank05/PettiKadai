@@ -9,6 +9,35 @@ export const initDatabase = (): void => {
   try {
     db.withTransactionSync(() => {
       // ReceiptTemplates Table (moved first due to foreign key dependency)
+
+      db.execSync(`
+        CREATE TABLE IF NOT EXISTS Users (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE,
+          phone TEXT UNIQUE,
+          passwordHash TEXT NOT NULL,
+          passwordSalt TEXT NOT NULL,
+          securityQuestion TEXT NOT NULL,
+          securityAnswer TEXT NOT NULL,
+          createdAt TEXT DEFAULT (datetime('now')),
+          updatedAt TEXT DEFAULT (datetime('now'))
+        );
+      `);
+
+      // Add AuthState Table
+      db.execSync(`
+        CREATE TABLE IF NOT EXISTS AuthState (
+          id TEXT PRIMARY KEY DEFAULT 'current_auth',
+          isAuthenticated INTEGER DEFAULT 0,
+          userId TEXT,
+          userName TEXT,
+          lastLoginAt TEXT,
+          updatedAt TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id)
+        );
+      `);
+
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ReceiptTemplates (
           id TEXT PRIMARY KEY,
@@ -22,19 +51,19 @@ export const initDatabase = (): void => {
 
       // Products Table
       db.execSync(`
-       CREATE TABLE IF NOT EXISTS products (
-       id TEXT PRIMARY KEY,
-       name TEXT NOT NULL,
-       costPrice REAL NOT NULL,
-       sellingPrice REAL NOT NULL,
-       quantity INTEGER NOT NULL DEFAULT 0,     
-       unit TEXT NOT NULL DEFAULT 'piece',     
-       category TEXT,                           
-       imageUri TEXT,                         
-       createdAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), 
-       updatedAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))  
-      );
-   `);
+        CREATE TABLE IF NOT EXISTS products (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        costPrice REAL NOT NULL,
+        sellingPrice REAL NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 0,     
+        unit TEXT NOT NULL DEFAULT 'piece',     
+        category TEXT,                           
+        imageUri TEXT,                         
+        createdAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), 
+        updatedAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))  
+       );
+    `);
 
       // Categories Table
       db.execSync(`

@@ -1,5 +1,6 @@
 // ~/lib/db/types.ts
 export interface Product {
+    unit: string;
     imageUri: string;
     id: string;
     name: string;
