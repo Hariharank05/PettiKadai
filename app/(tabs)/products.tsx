@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList } from 'react-native';
+// import { FlatList } from '@shopify/Flat-list';
 import { Product } from '~/lib/stores/types';
 import { useProductStore } from '~/lib/stores/productStore';
 import {
@@ -26,9 +26,11 @@ import { Picker } from '@react-native-picker/picker';
 import { Input } from '~/components/ui/input';
 import { Button as ShadcnButton } from '~/components/ui/button';
 import { Filter, Pencil, Trash2, X, ListFilter } from 'lucide-react-native';
+import { useRefresh } from '~/components/RefreshProvider';
 
 const ProductManagementScreen = () => {
   const { products: rawProducts, fetchProducts, addProduct, updateProduct, deleteProduct } = useProductStore();
+  const { refreshForm: appRefreshForm } = useRefresh();
   const products = useMemo(() => rawProducts.map(product => ({
     ...product,
     isActive: product.isActive ?? true,
@@ -55,11 +57,12 @@ const ProductManagementScreen = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // To force FlashList re-render
+  const [refreshKey, setRefreshKey] = useState(0);
   const [categorySearch, setCategorySearch] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [isNewCategory, setIsNewCategory] = useState(false);
   const [isNewProduct, setIsNewProduct] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(products.map(p => p.category).filter(c => c))).sort();
@@ -72,15 +75,17 @@ const ProductManagementScreen = () => {
   }, [products]);
 
   const filteredCategories = useMemo(() => {
-    if (!categorySearch) return categories;
-    return categories.filter(cat => 
+    const filtered = categories.filter(cat => cat !== 'Add New Category');
+    if (!categorySearch) return filtered;
+    return filtered.filter(cat =>
       (cat?.toLowerCase() ?? '').includes(categorySearch.toLowerCase())
     );
   }, [categories, categorySearch]);
 
   const filteredProductNames = useMemo(() => {
-    if (!productSearch) return productNames;
-    return productNames.filter(name => 
+    const filtered = productNames.filter(name => name !== 'Add New Product');
+    if (!productSearch) return filtered;
+    return filtered.filter(name =>
       name.toLowerCase().includes(productSearch.toLowerCase())
     );
   }, [productNames, productSearch]);
@@ -146,7 +151,7 @@ const ProductManagementScreen = () => {
       setDialogOpen(false);
       setError(null);
       await fetchProducts();
-      setRefreshKey(prev => prev + 1); // Force FlashList re-render
+      setRefreshKey(prev => prev + 1);
     } catch (error) {
       setError('Failed to add product. Please try again.');
     } finally {
@@ -200,7 +205,7 @@ const ProductManagementScreen = () => {
       setSelectedProduct(null);
       setError(null);
       await fetchProducts();
-      setRefreshKey(prev => prev + 1); // Force FlashList re-render
+      setRefreshKey(prev => prev + 1);
     } catch (error) {
       setError('Failed to update product. Please try again.');
     } finally {
@@ -216,7 +221,7 @@ const ProductManagementScreen = () => {
         setSelectedProduct(null);
         setError(null);
         await fetchProducts();
-        setRefreshKey(prev => prev + 1); // Force FlashList re-render
+        setRefreshKey(prev => prev + 1);
       } catch (error) {
         setError('Failed to delete product. Please try again.');
       }
@@ -240,46 +245,11 @@ const ProductManagementScreen = () => {
     setIsNewProduct(false);
   }, []);
 
-  const clearFilter = useCallback(() => {
-    setSelectedCategory(null);
-    setFilterDialogOpen(false);
-  }, []);
-
-  const handleCategoryToggle = useCallback(() => {
-    const newIsNewCategory = !isNewCategory;
-    setIsNewCategory(newIsNewCategory);
-    setForm({ ...form, category: '' });
-    setCategorySearch('');
-    setIsNewProduct(newIsNewCategory);
-    setForm({ ...form, category: '', name: '' });
-  }, [isNewCategory, form]);
-
-  const handleProductToggle = useCallback(() => {
-    const newIsNewProduct = !isNewProduct;
-    setIsNewProduct(newIsNewProduct);
-    setForm({ ...form, name: '' });
-    setProductSearch('');
-    if (!newIsNewProduct) {
-      setIsNewCategory(false);
-      setForm({ ...form, name: '' });
-    }
-  }, [isNewProduct, form]);
-
   return (
     <View className="p-4 flex-1 bg-background">
       <View className="flex-row justify-between items-center mb-4 gap-x-2">
         <Text className="text-2xl font-bold text-foreground">Products</Text>
-        <View className="flex-row gap-x-1 items-center">
-          {selectedCategory && (
-            <ShadcnButton
-              variant="ghost"
-              size="sm"
-              onPress={clearFilter}
-              disabled={isLoading}
-            >
-              <X size={20} color="#EF4444" />
-            </ShadcnButton>
-          )}
+        <View className="flex-row items-center gap-x-2">
           <ShadcnButton
             variant="ghost"
             size="sm"
@@ -287,9 +257,9 @@ const ProductManagementScreen = () => {
             disabled={isLoading}
           >
             {selectedCategory ? (
-              <ListFilter size={24} color="#3B82F6" />
+              <ListFilter size={30} color="#3B82F6" />
             ) : (
-              <Filter size={24} color="#3B82F6" />
+              <Filter size={30} color="#3B82F6" />
             )}
           </ShadcnButton>
           <ShadcnButton
@@ -310,10 +280,43 @@ const ProductManagementScreen = () => {
         <Text className="text-destructive text-center mb-4">{error}</Text>
       )}
 
-      <FlashList
-        key={refreshKey} // Force re-render after add/edit/delete
+      {selectedCategory && (
+        <View className="mb-2 flex-row justify-start">
+          <ShadcnButton
+            variant="ghost"
+            size="sm"
+            onPress={() => {
+              setSelectedCategory(null);
+              setFilterDialogOpen(false);
+            }}
+            disabled={isLoading}
+            className="flex-row items-center"
+          >
+            <Text className="text-destructive">Clear All</Text>
+            <X size={20} color="#EF4444" />
+          </ShadcnButton>
+        </View>
+      )}
+
+      <FlatList
+        key={refreshKey}
         data={filteredProducts}
         keyExtractor={(item: Product) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              setSelectedCategory(null);
+              fetchProducts().finally(() => {
+                setRefreshing(false);
+                setRefreshKey(prev => prev + 1);
+              });
+            }}
+            colors={['#3B82F6']}
+            tintColor="#3B82F6"
+          />
+        }
         renderItem={({ item }: { item: Product }) => (
           <Card className="mb-2 overflow-hidden">
             <CardHeader className="py-2 px-3">
@@ -346,11 +349,11 @@ const ProductManagementScreen = () => {
                 <View className="flex-row">
                   <View className="w-[100px] pr-1">
                     <Text className="text-xs text-muted-foreground">Cost</Text>
-                    <Text className="text-sm text-foreground">₹{item.costPrice.toFixed(2)}</Text>
+                    <Text className="text-sm text-foreground">â‚¹{item.costPrice.toFixed(2)}</Text>
                   </View>
                   <View className="w-[100px] pl-1">
                     <Text className="text-xs text-muted-foreground">Selling</Text>
-                    <Text className="text-sm text-foreground">₹{item.sellingPrice.toFixed(2)}</Text>
+                    <Text className="text-sm text-foreground">â‚¹{item.sellingPrice.toFixed(2)}</Text>
                   </View>
                 </View>
                 <View className="flex-row gap-x-1">
@@ -375,7 +378,7 @@ const ProductManagementScreen = () => {
             </CardContent>
           </Card>
         )}
-        estimatedItemSize={100}
+        // estimatedItemSize is not a valid prop for FlatList, removed it
       />
 
       {/* Filter Dialog */}
@@ -399,7 +402,10 @@ const ProductManagementScreen = () => {
           <DialogFooter className="flex-row justify-end gap-x-3">
             <ShadcnButton
               variant="outline"
-              onPress={clearFilter}
+              onPress={() => {
+                setSelectedCategory(null);
+                setFilterDialogOpen(false);
+              }}
             >
               <Text>Clear</Text>
             </ShadcnButton>
@@ -420,12 +426,29 @@ const ProductManagementScreen = () => {
 
       {/* Category Selection Dialog */}
       <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-full mx-auto">
+        <DialogContent
+          className="p-0 bg-background rounded-lg shadow-lg max-w-lg w-auto mx-auto"
+          style={{ maxHeight: '70%', overflow: 'hidden' }}
+        >
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-foreground">Select Category</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-foreground p-4 text-end">Select Category</DialogTitle>
           </DialogHeader>
-          <View className="my-4">
-            <View className="w-[250px] mb-2">
+          <View className="mb-0">
+            <View className="w-[250px] p-2 mt-0">
+              <TouchableOpacity
+                onPress={() => {
+                  setIsNewCategory(true);
+                  setIsNewProduct(true);
+                  setForm({ ...form, category: '', name: '' });
+                  setCategorySearch('');
+                  setCategoryDialogOpen(false);
+                }}
+                className="py-2 px-4 border-b border-border"
+              >
+                <Text className="text-base text-foreground">Add New Category</Text>
+              </TouchableOpacity>
+            </View>
+            <View className="w-[250px] p-2 mt-0">
               <Input
                 placeholder="Search categories..."
                 value={categorySearch}
@@ -434,54 +457,59 @@ const ProductManagementScreen = () => {
                 editable={!isLoading}
               />
             </View>
-            <FlashList
-              data={filteredCategories}
-              keyExtractor={(item) => item || 'unknown-key'}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => {
-                    if (item === 'Add New Category') {
-                      setIsNewCategory(true);
-                      setIsNewProduct(true);
-                      setForm({ ...form, category: '', name: '' });
-                    } else {
+            <View style={{ flex: 1, maxHeight: 450, paddingVertical: 8 }}>
+              <FlatList
+                style={{ height: '100%' }}
+                data={filteredCategories}
+                keyExtractor={(item) => item || 'unknown-key'}
+                showsVerticalScrollIndicator={true}
+                alwaysBounceVertical={true}
+                overScrollMode="always"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
                       setIsNewCategory(false);
                       setIsNewProduct(false);
                       setForm({ ...form, category: item || '', name: '' });
-                    }
-                    setCategorySearch('');
-                    setCategoryDialogOpen(false);
-                  }}
-                  className="py-2 px-4 border-b border-border"
-                >
-                  <Text className="text-base text-foreground">{item}</Text>
-                </TouchableOpacity>
-              )}
-              estimatedItemSize={40}
-            />
+                      setCategorySearch('');
+                      setCategoryDialogOpen(false);
+                    }}
+                    className="py-2 px-4 border-b border-border"
+                  >
+                    <Text className="text-base text-foreground">{item}</Text>
+                  </TouchableOpacity>
+                )}
+                // estimatedItemSize={40}
+              />
+            </View>
           </View>
-          <DialogFooter className="flex-row justify-end gap-x-3">
-            <ShadcnButton
-              variant="outline"
-              onPress={() => {
-                setCategorySearch('');
-                setCategoryDialogOpen(false);
-              }}
-            >
-              <Text>Cancel</Text>
-            </ShadcnButton>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Product Selection Dialog */}
       <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-full mx-auto">
+        <DialogContent
+          className="p-0 bg-background rounded-lg shadow-lg max-w-lg w-auto mx-auto"
+          style={{ maxHeight: '70%', overflow: 'hidden' }}
+        >
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-foreground">Select Product</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-foreground p-4">Select Product</DialogTitle>
           </DialogHeader>
-          <View className="my-4">
-            <View className="w-[250px] mb-2">
+          <View className="mb-0">
+            <View className="w-[250px] p-2">
+              <TouchableOpacity
+                onPress={() => {
+                  setIsNewProduct(true);
+                  setForm({ ...form, name: '' });
+                  setProductSearch('');
+                  setProductDialogOpen(false);
+                }}
+                className="py-2 px-4 border-b border-border"
+              >
+                <Text className="text-base text-foreground">Add New Product</Text>
+              </TouchableOpacity>
+            </View>
+            <View className="w-[250px] p-2">
               <Input
                 placeholder="Search products..."
                 value={productSearch}
@@ -490,42 +518,32 @@ const ProductManagementScreen = () => {
                 editable={!isLoading}
               />
             </View>
-            <FlashList
-              data={filteredProductNames}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => {
-                    if (item === 'Add New Product') {
-                      setIsNewProduct(true);
-                      setForm({ ...form, name: '' });
-                    } else {
+            <View style={{ flex: 1, maxHeight: 450, paddingVertical: 8 }}>
+              <FlatList
+                style={{ height: '100%' }}
+                data={filteredProductNames}
+                keyExtractor={(item) => item}
+                showsVerticalScrollIndicator={true}
+                alwaysBounceVertical={true}
+                overScrollMode="always"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => {
                       setIsNewProduct(false);
                       setIsNewCategory(false);
                       setForm({ ...form, name: item });
-                    }
-                    setProductSearch('');
-                    setProductDialogOpen(false);
-                  }}
-                  className="py-2 px-4 border-b border-border"
-                >
-                  <Text className="text-base text-foreground">{item}</Text>
-                </TouchableOpacity>
-              )}
-              estimatedItemSize={40}
-            />
+                      setProductSearch('');
+                      setProductDialogOpen(false);
+                    }}
+                    className="py-2 px-4 border-b border-border"
+                  >
+                    <Text className="text-base text-foreground">{item}</Text>
+                  </TouchableOpacity>
+                )}
+                // estimatedItemSize={40}
+              />
+            </View>
           </View>
-          <DialogFooter className="flex-row justify-end gap-x-3">
-            <ShadcnButton
-              variant="outline"
-              onPress={() => {
-                setProductSearch('');
-                setProductDialogOpen(false);
-              }}
-            >
-              <Text>Cancel</Text>
-            </ShadcnButton>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -543,8 +561,10 @@ const ProductManagementScreen = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 100}
         >
-          <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-lg w-auto mx-auto" style={{ maxHeight: '100%' }}>
-            <ScrollView contentContainerStyle={{ padding: 0, width: '100%' }}>
+          <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-lg w-auto mx-auto mt-5" style={{ maxHeight: '100%' }}>
+            <ScrollView
+              contentContainerStyle={{ padding: 0, width: '100%' }}
+            >
               <DialogHeader className="p-6 pb-4 border-b border-border">
                 <DialogTitle className="text-xl font-bold text-foreground">
                   {formMode === 'edit' ? 'Edit Product' : 'Add New Product'}
@@ -563,7 +583,14 @@ const ProductManagementScreen = () => {
                     <ShadcnButton
                       variant="ghost"
                       size="sm"
-                      onPress={handleCategoryToggle}
+                      onPress={() => {
+                        const newIsNewCategory = !isNewCategory;
+                        setIsNewCategory(newIsNewCategory);
+                        setForm({ ...form, category: '' });
+                        setCategorySearch('');
+                        setIsNewProduct(newIsNewCategory);
+                        setForm({ ...form, category: '', name: '' });
+                      }}
                     >
                       <Text className="text-blue-500">
                         {isNewCategory ? 'Select Existing' : 'Add New'}
@@ -601,7 +628,16 @@ const ProductManagementScreen = () => {
                     <ShadcnButton
                       variant="ghost"
                       size="sm"
-                      onPress={handleProductToggle}
+                      onPress={() => {
+                        const newIsNewProduct = !isNewProduct;
+                        setIsNewProduct(newIsNewProduct);
+                        setForm({ ...form, name: '' });
+                        setProductSearch('');
+                        if (!newIsNewProduct) {
+                          setIsNewCategory(false);
+                          setForm({ ...form, name: '' });
+                        }
+                      }}
                     >
                       <Text className="text-blue-500">
                         {isNewProduct ? 'Select Existing' : 'Add New'}
@@ -631,7 +667,7 @@ const ProductManagementScreen = () => {
                 <View className="flex-row gap-x-4 mt-4">
                   <View className="flex-1">
                     <Text className="mb-2 text-base font-semibold text-muted-foreground">
-                      Cost Price (₹) <Text className="text-destructive">*</Text>
+                      Cost Price (â‚¹) <Text className="text-destructive">*</Text>
                     </Text>
                     <Input
                       placeholder="0.00"
@@ -644,7 +680,7 @@ const ProductManagementScreen = () => {
                   </View>
                   <View className="flex-1">
                     <Text className="mb-2 text-base font-semibold text-muted-foreground">
-                      Selling Price (₹) <Text className="text-destructive">*</Text>
+                      Selling Price (â‚¹) <Text className="text-destructive">*</Text>
                     </Text>
                     <Input
                       placeholder="0.00"
@@ -655,7 +691,7 @@ const ProductManagementScreen = () => {
                       editable={!isLoading}
                     />
                     <Text className={`mt-2 text-sm ${parseFloat(profit) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      Profit: ₹{profit} {parseFloat(profit) < 0 ? '(Loss)' : ''}
+                      Profit: â‚¹{profit} {parseFloat(profit) < 0 ? '(Loss)' : ''}
                     </Text>
                   </View>
                 </View>
@@ -753,12 +789,13 @@ const ProductManagementScreen = () => {
             </Text>
           </DialogHeader>
           <DialogFooter>
-            <ShadcnButton  
-            variant="outline" 
-            onPress={() => setDeleteDialogOpen(false)} 
-            disabled={isLoading}>
-           <Text>Cancel</Text>
-           </ShadcnButton>
+            <ShadcnButton
+              variant="outline"
+              onPress={() => setDeleteDialogOpen(false)}
+              disabled={isLoading}
+            >
+              <Text>Cancel</Text>
+            </ShadcnButton>
             <ShadcnButton onPress={handleDelete} disabled={isLoading}>
               <Text className="text-white">Delete</Text>
             </ShadcnButton>
@@ -770,4 +807,3 @@ const ProductManagementScreen = () => {
 };
 
 export default ProductManagementScreen;
-

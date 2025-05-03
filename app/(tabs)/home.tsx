@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScrollView, TouchableOpacity } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { useProductStore } from '~/lib/stores/productStore';
 import { Text } from '~/components/ui/text';
@@ -8,35 +9,60 @@ import { BarChart4, TrendingUp, Package, DollarSign, AlertTriangle, Plus, Calend
 import { format } from 'date-fns';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { userName } = useAuthStore();
-  const { products, fetchProducts } = useProductStore();
+  const { products, fetchProducts
+    // , getLowStockProducts 
+  } = useProductStore();
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Load products on component mount
+  const [lowStockProducts, setLowStockProducts] = useState<number>(0);
+  const [outOfStockProducts, setOutOfStockProducts] = useState<number>(0);
+
+  // Load products and stats on component mount
   useEffect(() => {
     const loadData = async () => {
       try {
         await fetchProducts();
+
+        // Count low stock products
+        const lowStock = products.filter(p => p.quantity < 5 && p.quantity > 0).length;
+        setLowStockProducts(lowStock);
+
+        // Count out of stock products
+        const outOfStock = products.filter(p => p.quantity === 0).length;
+        setOutOfStockProducts(outOfStock);
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     loadData();
-  }, [fetchProducts]);
-  
+  }, [fetchProducts, products]);
+
   // Calculate statistics
   const totalProducts = products.length;
-  const lowStockProducts = products.filter(p => p.quantity < 5).length;
-  const outOfStockProducts = products.filter(p => p.quantity === 0).length;
   const totalValue = products.reduce((sum, product) => sum + (product.costPrice * product.quantity), 0);
-  
+
   // Get current date
   const today = new Date();
   const dateFormatted = format(today, 'EEEE, MMMM d, yyyy');
-  
+
+  // Navigate to products page
+  const navigateToProducts = () => {
+    router.push('/(tabs)/products');
+  };
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-background">
+        <ActivityIndicator size="large" color="hsl(var(--primary))" />
+        <Text className="mt-4 text-muted-foreground">Loading dashboard...</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView className="flex-1 bg-background">
       <View className="p-4">
@@ -49,7 +75,7 @@ export default function HomeScreen() {
             <Text className="text-sm text-muted-foreground">{dateFormatted}</Text>
           </View>
         </View>
-        
+
         {/* Quick Stats */}
         <View className="flex-row mb-6 gap-x-2">
           <Card className="flex-1">
@@ -63,7 +89,7 @@ export default function HomeScreen() {
               </View>
             </CardContent>
           </Card>
-          
+
           <Card className="flex-1">
             <CardContent className="p-4 flex-row">
               <View className="h-10 w-10 rounded-md bg-green-100 dark:bg-green-900 justify-center items-center mr-3">
@@ -76,22 +102,24 @@ export default function HomeScreen() {
             </CardContent>
           </Card>
         </View>
-        
+
         {/* Low Stock Alert */}
         <Card className="mb-6">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">Inventory Alerts</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <View className="flex-row items-center py-2">
-              <View className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900 justify-center items-center mr-3">
-                <AlertTriangle size={16} className="text-yellow-500 dark:text-yellow-300" />
+            {lowStockProducts > 0 && (
+              <View className="flex-row items-center py-2">
+                <View className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900 justify-center items-center mr-3">
+                  <AlertTriangle size={16} className="text-yellow-500 dark:text-yellow-300" />
+                </View>
+                <View>
+                  <Text className="text-foreground">{lowStockProducts} products with low stock</Text>
+                </View>
               </View>
-              <View>
-                <Text className="text-foreground">{lowStockProducts} products with low stock</Text>
-              </View>
-            </View>
-            
+            )}
+
             {outOfStockProducts > 0 && (
               <View className="flex-row items-center py-2">
                 <View className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-900 justify-center items-center mr-3">
@@ -102,13 +130,22 @@ export default function HomeScreen() {
                 </View>
               </View>
             )}
-            
-            <TouchableOpacity className="bg-muted py-2 px-4 rounded-md mt-2 items-center">
+
+            {lowStockProducts === 0 && outOfStockProducts === 0 && (
+              <View className="flex-row items-center py-2">
+                <Text className="text-foreground">All products are well stocked!</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              className="bg-muted py-2 px-4 rounded-md mt-2 items-center"
+              onPress={navigateToProducts}
+            >
               <Text className="text-primary text-sm">View All Inventory</Text>
             </TouchableOpacity>
           </CardContent>
         </Card>
-        
+
         {/* Quick Actions */}
         <Card className="mb-6">
           <CardHeader className="pb-2">
@@ -122,21 +159,24 @@ export default function HomeScreen() {
                   <Text className="text-foreground text-sm">New Sale</Text>
                 </View>
               </TouchableOpacity>
-              
-              <TouchableOpacity className="w-1/2 p-2">
+
+              <TouchableOpacity
+                className="w-1/2 p-2"
+                onPress={navigateToProducts}
+              >
                 <View className="bg-muted p-4 rounded-md items-center">
                   <Package size={20} className="text-green-500 dark:text-green-300 mb-1" />
                   <Text className="text-foreground text-sm">Add Product</Text>
                 </View>
               </TouchableOpacity>
-              
+
               <TouchableOpacity className="w-1/2 p-2">
                 <View className="bg-muted p-4 rounded-md items-center">
                   <BarChart4 size={20} className="text-purple-500 dark:text-purple-300 mb-1" />
                   <Text className="text-foreground text-sm">Reports</Text>
                 </View>
               </TouchableOpacity>
-              
+
               <TouchableOpacity className="w-1/2 p-2">
                 <View className="bg-muted p-4 rounded-md items-center">
                   <Calendar size={20} className="text-orange-500 dark:text-orange-300 mb-1" />
@@ -146,7 +186,7 @@ export default function HomeScreen() {
             </View>
           </CardContent>
         </Card>
-        
+
         {/* Recent Sales */}
         <Card className="mb-6">
           <CardHeader className="pb-2">
@@ -161,7 +201,7 @@ export default function HomeScreen() {
             </View>
           </CardContent>
         </Card>
-        
+
         {/* Store Info */}
         <Card className="mb-6">
           <CardHeader className="pb-2">

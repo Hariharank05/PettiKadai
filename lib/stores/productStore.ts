@@ -1,160 +1,101 @@
 import { create } from 'zustand';
-import { getDatabase } from '~/lib/db/database';
-import { Product } from './types';
-import { generateId } from '~/lib/utils/authUtils';
+import { Product, ProductInput, ProductModel } from '../models/product';
 
-interface ProductStore {
+interface ProductState {
   products: Product[];
-  isLoading: boolean;
+  loading: boolean;
   error: string | null;
-  
+  lowStockProducts: Product[];
+ 
   // Actions
   fetchProducts: () => Promise<void>;
-  addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Product>;
-  updateProduct: (id: string, updates: Partial<Product>) => Promise<Product>;
+  fetchLowStockProducts: () => Promise<void>;
+  addProduct: (product: ProductInput) => Promise<Product>;
+  updateProduct: (id: string, product: Partial<ProductInput>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
-  clearError: () => void;
 }
 
-export const useProductStore = create<ProductStore>((set, get) => ({
+export const useProductStore = create<ProductState>((set, get) => ({
   products: [],
-  isLoading: false,
+  loading: false,
   error: null,
+  lowStockProducts: [],
 
   fetchProducts: async () => {
-    set({ isLoading: true, error: null });
+    set({ loading: true, error: null });
     try {
-      const db = getDatabase();
-      const products = await db.getAllAsync<Product>('SELECT * FROM products ORDER BY name');
-      set({ products, isLoading: false });
-    } catch (error) {
+      const products = await ProductModel.getAll();
+      set({ products, loading: false });
+    } catch (error: any) {
       console.error('Error fetching products:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to fetch products', 
-        isLoading: false 
-      });
+      set({ error: 'Failed to fetch products', loading: false });
     }
   },
 
-  addProduct: async (product) => {
-    set({ isLoading: true, error: null });
+  fetchLowStockProducts: async () => {
+    set({ loading: true, error: null });
     try {
-      const db = getDatabase();
-      const id = generateId();
-      const now = new Date().toISOString();
-      
-      const newProduct: Product = {
-        id,
-        ...product,
-        createdAt: now,
-        updatedAt: now,
-      };
-      
-      // Insert into database
-      await db.runAsync(
-        `INSERT INTO products (
-          id, name, costPrice, sellingPrice, quantity, unit, 
-          category, imageUri, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          newProduct.id,
-          newProduct.name,
-          newProduct.costPrice,
-          newProduct.sellingPrice,
-          newProduct.quantity,
-          newProduct.unit || 'piece',
-          newProduct.category || null,
-          newProduct.imageUri || null,
-          newProduct.createdAt,
-          newProduct.updatedAt,
-        ]
-      );
-      
-      // Update local state
-      set(state => ({
+      const lowStockProducts = await ProductModel.getLowStock();
+      set({ lowStockProducts, loading: false });
+    } catch (error: any) {
+      console.error('Error fetching low stock products:', error);
+      set({ error: 'Failed to fetch low stock products', loading: false });
+    }
+  },
+
+  addProduct: async (product: ProductInput) => {
+    set({ loading: true, error: null });
+    try {
+      const newProduct = await ProductModel.create(product);
+      set((state) => ({
         products: [...state.products, newProduct],
-        isLoading: false
+        loading: false
       }));
-      
-      return newProduct;
-    } catch (error) {
-      console.error('Error adding product:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to add product', 
-        isLoading: false 
-      });
-      throw error;
-    }
-  },
-
-  updateProduct: async (id, updates) => {
-    set({ isLoading: true, error: null });
-    try {
-      const db = getDatabase();
-      const now = new Date().toISOString();
-      
-      // Get current product
-      const currentProduct = get().products.find(p => p.id === id);
-      if (!currentProduct) {
-        throw new Error('Product not found');
+     
+      // If the new product has low stock, update lowStockProducts
+      if (newProduct.quantity < 5) {
+        get().fetchLowStockProducts();
       }
-      
-      // Update fields
-      const updatedProduct = {
-        ...currentProduct,
-        ...updates,
-        updatedAt: now
-      };
-      
-      // Build dynamic update query based on which fields are provided
-      const updateFields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-      const updateValues = [...Object.values(updates), now, id];
-      
-      // Update database
-      await db.runAsync(
-        `UPDATE products SET ${updateFields}, updatedAt = ? WHERE id = ?`,
-        updateValues
-      );
-      
-      // Update local state
-      set(state => ({
-        products: state.products.map(p => (p.id === id ? updatedProduct : p)),
-        isLoading: false
-      }));
-      
-      return updatedProduct;
-    } catch (error) {
-      console.error('Error updating product:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to update product', 
-        isLoading: false 
-      });
+     
+      return newProduct;
+    } catch (error: any) {
+      console.error('Error adding product:', error);
+      set({ error: 'Failed to add product', loading: false });
       throw error;
     }
   },
 
-  deleteProduct: async (id) => {
-    set({ isLoading: true, error: null });
+  updateProduct: async (id: string, product: Partial<ProductInput>) => {
+    set({ loading: true, error: null });
     try {
-      const db = getDatabase();
-      
-      // Delete from database
-      await db.runAsync('DELETE FROM products WHERE id = ?', [id]);
-      
-      // Update local state
-      set(state => ({
-        products: state.products.filter(p => p.id !== id),
-        isLoading: false
+      const updatedProduct = await ProductModel.update(id, product);
+      set((state) => ({
+        products: state.products.map(p => p.id === id ? updatedProduct : p),
+        loading: false
       }));
-    } catch (error) {
-      console.error('Error deleting product:', error);
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to delete product', 
-        isLoading: false 
-      });
+     
+      // Refresh low stock products as the update might have changed stock levels
+      get().fetchLowStockProducts();
+    } catch (error: any) {
+      console.error('Error updating product:', error);
+      set({ error: 'Failed to update product', loading: false });
       throw error;
     }
   },
-  
-  clearError: () => set({ error: null }),
+
+  deleteProduct: async (id: string) => {
+    set({ loading: true, error: null });
+    try {
+      await ProductModel.delete(id);
+      set((state) => ({
+        products: state.products.filter(p => p.id !== id),
+        lowStockProducts: state.lowStockProducts.filter(p => p.id !== id),
+        loading: false
+      }));
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      set({ error: 'Failed to delete product', loading: false });
+      throw error;
+    }
+  }
 }));

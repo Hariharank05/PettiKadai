@@ -452,6 +452,31 @@ export const initDatabase = (): void => {
         );
       `);
 
+      // Check if Settings has a default row
+      const settingsExists = db.getFirstSync<{ count: number }>(
+        'SELECT COUNT(*) as count FROM Settings WHERE id = "app_settings"'
+      );
+      
+      // Create default settings if none exist
+      if (!settingsExists || settingsExists.count === 0) {
+        db.runSync(
+          `INSERT INTO Settings (
+            id, storeName, storeAddress, storePhone, storeEmail, 
+            currencySymbol, taxRate, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            'app_settings',
+            'My Store',
+            '',
+            '',
+            '',
+            '₹',
+            0,
+            new Date().toISOString()
+          ]
+        );
+      }
+
       // Enable foreign keys
       db.execSync('PRAGMA foreign_keys = ON;');
     });
