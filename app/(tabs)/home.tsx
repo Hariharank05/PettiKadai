@@ -54,6 +54,11 @@ export default function HomeScreen() {
     router.push('/(tabs)/products');
   };
 
+  // Navigate to sales page (NEW)
+  const navigateToNewSale = () => {
+    router.push('/(tabs)/sales');
+  };
+
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-background">
@@ -153,7 +158,10 @@ export default function HomeScreen() {
           </CardHeader>
           <CardContent className="py-2">
             <View className="flex-row flex-wrap">
-              <TouchableOpacity className="w-1/2 p-2">
+              <TouchableOpacity
+                className="w-1/2 p-2"
+                onPress={navigateToNewSale} // Add onPress handler
+              >
                 <View className="bg-muted p-4 rounded-md items-center">
                   <Plus size={20} className="text-blue-500 dark:text-blue-300 mb-1" />
                   <Text className="text-foreground text-sm">New Sale</Text>
