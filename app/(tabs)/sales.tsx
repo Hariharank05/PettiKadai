@@ -47,6 +47,7 @@ export default function SalesScreen() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isClearCartDialogOpen, setIsClearCartDialogOpen] = useState(false);
   const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
+  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
 
   // Load products function
   const loadProducts = useCallback(async () => {
@@ -74,7 +75,7 @@ export default function SalesScreen() {
     fetchProducts().finally(() => setIsLoading(false));
   }, [fetchProducts]);
 
-  // Update displayProducts when products or cartItems change
+  // Update displayProducts and sync selectedQuantities when products or cartItems change
   useEffect(() => {
     if (products.length > 0) {
       const updatedProducts = products.map((product) => {
@@ -88,6 +89,16 @@ export default function SalesScreen() {
         return product;
       });
       setDisplayProducts(updatedProducts);
+
+      // Sync selectedQuantities with cartItems
+      const updatedQuantities: Record<string, number> = {};
+      cartItems.forEach((item) => {
+        updatedQuantities[item.id] = item.quantityInCart;
+      });
+      setSelectedQuantities(updatedQuantities);
+
+      // Log products for debugging (once per render)
+      // console.log('Rendering ProductItems:', updatedProducts);
     }
   }, [products, cartItems]);
 
@@ -110,41 +121,101 @@ export default function SalesScreen() {
     );
   }, []);
 
-  const handleSelectProduct = useCallback(
-    (product: Product) => {
-      setCartItems((prevCart) => {
-        const existingItemIndex = prevCart.findIndex((item) => item.id === product.id);
-        const quantityInCart = existingItemIndex !== -1 ? prevCart[existingItemIndex].quantityInCart : 0;
-
-        // Check available stock from displayProducts, which accounts for cart quantities
-        const displayProduct = displayProducts.find((p) => p.id === product.id);
-        const availableStock = displayProduct ? displayProduct.quantity : product.quantity;
-
-        if (availableStock <= 0) {
-          Alert.alert(
-            "Stock Limit Reached",
-            `Cannot add more ${product.name}${product.category ? ` (${product.category})` : ''}. No more in stock.`,
-            [{ text: "OK" }]
+  const addToCart = useCallback(
+    (productId: string, quantityToAdd: number) => {
+      if (quantityToAdd <= 0) return;
+      const originalProduct = products.find((p) => p.id === productId);
+      if (!originalProduct) {
+        console.error(`Product with ID ${productId} not found`);
+        return;
+      }
+      const displayProduct = displayProducts.find((p) => p.id === productId);
+      if (!displayProduct) {
+        console.error(`Display product with ID ${productId} not found`);
+        return;
+      }
+      if (quantityToAdd > displayProduct.quantity) {
+        Alert.alert(`Only ${displayProduct.quantity} left in stock`);
+        return;
+      }
+      setCartItems((prev) => {
+        const existingItem = prev.find((item) => item.id === productId);
+        if (existingItem) {
+          return prev.map((item) =>
+            item.id === productId
+              ? { ...item, quantityInCart: item.quantityInCart + quantityToAdd }
+              : item
           );
-          return prevCart;
-        }
-
-        let updatedCart;
-        if (existingItemIndex !== -1) {
-          updatedCart = [...prevCart];
-          updatedCart[existingItemIndex] = {
-            ...updatedCart[existingItemIndex],
-            quantityInCart: updatedCart[existingItemIndex].quantityInCart + 1,
-          };
         } else {
-          updatedCart = [...prevCart, { ...product, quantityInCart: 1 }];
+          return [...prev, { ...originalProduct, quantityInCart: quantityToAdd }];
         }
+      });
+      setSelectedQuantities((prev) => ({
+        ...prev,
+        [productId]: (prev[productId] || 0) + quantityToAdd,
+      }));
+      setIsCartOpen(true);
+    },
+    [products, displayProducts]
+  );
 
-        setIsCartOpen(true);
-        return updatedCart;
+  const increaseListQuantity = useCallback(
+    (productId: string, maxStock: number) => {
+      const displayProduct = displayProducts.find((p) => p.id === productId);
+      if (!displayProduct) return;
+      setSelectedQuantities((prev) => {
+        const currentQty = prev[productId] || 0;
+        if (currentQty >= maxStock) {
+          Alert.alert(`Maximum quantity available is ${maxStock}`);
+          return prev;
+        }
+        const newQty = currentQty + 1;
+        setCartItems((prevCart) => {
+          const existingItem = prevCart.find((item) => item.id === productId);
+          const originalProduct = products.find((p) => p.id === productId);
+          if (!originalProduct) return prevCart;
+          if (existingItem) {
+            return prevCart.map((item) =>
+              item.id === productId
+                ? { ...item, quantityInCart: newQty }
+                : item
+            );
+          } else {
+            return [...prevCart, { ...originalProduct, quantityInCart: newQty }];
+          }
+        });
+        return { ...prev, [productId]: newQty };
       });
     },
-    [displayProducts]
+    [products, displayProducts]
+  );
+
+  const decreaseListQuantity = useCallback(
+    (productId: string) => {
+      setSelectedQuantities((prev) => {
+        const currentQty = prev[productId] || 0;
+        if (currentQty <= 0) {
+          return prev;
+        }
+        const newQty = currentQty - 1;
+        setCartItems((prevCart) => {
+          if (newQty === 0) {
+            const newCart = prevCart.filter((item) => item.id !== productId);
+            if (newCart.length === 0) {
+              setIsCartOpen(false);
+            }
+            return newCart;
+          }
+          return prevCart.map((item) =>
+            item.id === productId
+              ? { ...item, quantityInCart: newQty }
+              : item
+          );
+        });
+        return { ...prev, [productId]: newQty };
+      });
+    },
+    []
   );
 
   const increaseQuantity = useCallback(
@@ -160,17 +231,22 @@ export default function SalesScreen() {
         if (availableStock <= 0) {
           Alert.alert(
             "Stock Limit Reached",
-            `Cannot add more ${item.name}${item.category ? ` (${item.category})` : ''}. No more in stock.`,
+            `Cannot add more ${item.name || 'product'}${item.category ? ` (${item.category})` : ''}. No more in stock.`,
             [{ text: "OK" }]
           );
           return prevCart;
         }
 
+        const newQty = item.quantityInCart + 1;
         const updatedCart = [...prevCart];
         updatedCart[itemIndex] = {
           ...item,
-          quantityInCart: item.quantityInCart + 1,
+          quantityInCart: newQty,
         };
+        setSelectedQuantities((prev) => ({
+          ...prev,
+          [productId]: newQty,
+        }));
         return updatedCart;
       });
     },
@@ -185,14 +261,24 @@ export default function SalesScreen() {
 
         const item = prevCart[itemIndex];
         if (item.quantityInCart > 1) {
+          const newQty = item.quantityInCart - 1;
           const updatedCart = [...prevCart];
           updatedCart[itemIndex] = {
             ...item,
-            quantityInCart: item.quantityInCart - 1,
+            quantityInCart: newQty,
           };
+          setSelectedQuantities((prev) => ({
+            ...prev,
+            [productId]: newQty,
+          }));
           return updatedCart;
         } else {
           const newCart = prevCart.filter((i) => i.id !== productId);
+          setSelectedQuantities((prev) => {
+            const newQuantities = { ...prev };
+            delete newQuantities[productId];
+            return newQuantities;
+          });
           if (newCart.length === 0) {
             setIsCartOpen(false);
           }
@@ -207,6 +293,11 @@ export default function SalesScreen() {
     (productId: string) => {
       setCartItems((prevCart) => {
         const newCart = prevCart.filter((item) => item.id !== productId);
+        setSelectedQuantities((prev) => {
+          const newQuantities = { ...prev };
+          delete newQuantities[productId];
+          return newQuantities;
+        });
         if (newCart.length === 0) {
           setIsCartOpen(false);
         }
@@ -222,6 +313,7 @@ export default function SalesScreen() {
 
   const confirmClearCart = useCallback(() => {
     setCartItems([]);
+    setSelectedQuantities({});
     setIsCartOpen(false);
     setIsClearCartDialogOpen(false);
   }, []);
@@ -243,65 +335,133 @@ export default function SalesScreen() {
 
   // --- Render Functions ---
   const renderProductItem = ({ item }: { item: Product }) => (
-    <TouchableOpacity onPress={() => handleSelectProduct(item)} disabled={item.quantity <= 0}>
-      <Card className={`mb-3 overflow-hidden bg-card border border-border ${item.quantity <= 0 ? 'opacity-50' : ''}`}>
-        <CardContent className="p-4 flex-row items-center">
-          {item.imageUri ? (
-            <Image
-              source={{ uri: item.imageUri }}
-              style={{ width: 50, height: 50 }}
-              className="rounded-md mr-3"
-              resizeMode="cover"
-            />
-          ) : (
-            <View className="w-12 h-12 rounded-md mr-3 bg-muted items-center justify-center">
-              <Package size={24} className="text-muted-foreground" />
-            </View>
-          )}
-          <View className="flex-1 mr-2">
-            <Text className="text-base font-medium text-foreground" numberOfLines={1}>
-              {item.name}
-            </Text>
-            <View className="flex-row items-center mt-1 flex-wrap">
-              {item.quantity > 0 ? (
-                <View
-                  className={`mr-2 px-2 py-0.5 rounded ${
-                    item.quantity > 5 ? 'bg-green-100 dark:bg-green-900' : 'bg-yellow-100 dark:bg-yellow-900'
-                  }`}
+    <Card className={`mb-2 bg-card border border-border ${item.quantity <= 0 ? 'opacity-50' : ''}`}>
+      <CardContent className="p-3 flex-row items-center">
+        {item.imageUri ? (
+          <Image
+            source={{ uri: item.imageUri }}
+            style={{ width: 40, height: 40 }}
+            className="rounded-md mr-3"
+            resizeMode="cover"
+            onError={(e) => console.log(`Image load error for ${item.name}:`, e.nativeEvent.error)}
+          />
+        ) : (
+          <View className="w-10 h-10 rounded-md mr-3 bg-muted items-center justify-center">
+            <Package size={20} className="text-muted-foreground" />
+          </View>
+        )}
+        <View className="flex-1 mr-3">
+          <Text
+            className="text-sm font-medium text-foreground"
+            numberOfLines={1}
+            style={{ color: '#000', backgroundColor: 'transparent' }}
+          >
+            {item.name || 'Unknown Product'}
+          </Text>
+          <View className="flex-row items-center mt-0.5">
+            {item.quantity > 0 ? (
+              <View
+                className={`mr-1 px-1.5 py-0.5 rounded ${item.quantity > 5 ? 'bg-green-100 dark:bg-green-900' : 'bg-yellow-100 dark:bg-yellow-900'}`}
+              >
+                <Text
+                  className={`text-xs ${item.quantity > 5 ? 'text-green-700 dark:text-green-200' : 'text-yellow-700 dark:text-yellow-200'}`}
                 >
-                  <Text
-                    className={`text-xs ${
-                      item.quantity > 5 ? 'text-green-700 dark:text-green-200' : 'text-yellow-700 dark:text-yellow-200'
-                    }`}
-                  >
-                    Stock: {item.quantity}
-                  </Text>
-                </View>
-              ) : (
-                <View className="mr-2 px-2 py-0.5 rounded bg-red-100 dark:bg-red-900">
-                  <Text className="text-xs text-red-700 dark:text-red-200">Out of Stock</Text>
-                </View>
-              )}
-              {item.category && (
-                <View className="px-2 py-0.5 rounded border border-border mt-1 sm:mt-0">
-                  <Text className="text-xs text-muted-foreground">{item.category}</Text>
-                </View>
-              )}
-            </View>
+                  {item.quantity}
+                </Text>
+              </View>
+            ) : (
+              <View className="mr-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900">
+                <Text className="text-xs text-red-700 dark:text-red-200">Out</Text>
+              </View>
+            )}
+            <Text
+              className="text-xs text-muted-foreground"
+              style={{ color: '#6B7280', backgroundColor: 'transparent' }}
+            >
+              {item.category || 'No category'}
+            </Text>
           </View>
-          <View className="items-end">
-            <Text className="text-base font-semibold text-primary">₹{item.sellingPrice.toFixed(2)}</Text>
-          </View>
-        </CardContent>
-      </Card>
-    </TouchableOpacity>
+        </View>
+        <View className="flex-row items-center">
+          <Text className="text-sm font-semibold text-primary mr-2">₹{item.sellingPrice.toFixed(2)}</Text>
+          <TouchableOpacity
+            onPress={() => decreaseListQuantity(item.id)}
+            disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
+            className="p-1"
+          >
+            <MinusCircle size={18} color={(item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0) ? '#9CA3AF' : '#EF4444'} />
+          </TouchableOpacity>
+          <TextInput
+            className="bg-background rounded w-10 h-7 text-center text-sm text-foreground"
+            keyboardType="number-pad"
+            value={String(selectedQuantities[item.id] || 0)}
+            onChangeText={(text) => {
+              const num = parseInt(text, 10);
+              if (isNaN(num) || num < 0) {
+                setSelectedQuantities((prev) => ({ ...prev, [item.id]: 0 }));
+                setCartItems((prevCart) => prevCart.filter((i) => i.id !== item.id));
+              } else if (num <= item.quantity) {
+                setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
+                setCartItems((prevCart) => {
+                  const existingItem = prevCart.find((i) => i.id === item.id);
+                  const originalProduct = products.find((p) => p.id === item.id);
+                  if (!originalProduct) return prevCart;
+                  if (num === 0) {
+                    return prevCart.filter((i) => i.id !== item.id);
+                  }
+                  if (existingItem) {
+                    return prevCart.map((i) =>
+                      i.id === item.id ? { ...i, quantityInCart: num } : i
+                    );
+                  }
+                  return [...prevCart, { ...originalProduct, quantityInCart: num }];
+                });
+              } else {
+                setSelectedQuantities((prev) => ({ ...prev, [item.id]: item.quantity }));
+                setCartItems((prevCart) => {
+                  const existingItem = prevCart.find((i) => i.id === item.id);
+                  const originalProduct = products.find((p) => p.id === item.id);
+                  if (!originalProduct) return prevCart;
+                  if (existingItem) {
+                    return prevCart.map((i) =>
+                      i.id === item.id ? { ...i, quantityInCart: item.quantity } : i
+                    );
+                  }
+                  return [...prevCart, { ...originalProduct, quantityInCart: item.quantity }];
+                });
+                Alert.alert(`Maximum quantity available is ${item.quantity}`);
+              }
+            }}
+            editable={item.quantity > 0}
+          />
+          <TouchableOpacity
+            onPress={() => increaseListQuantity(item.id, item.quantity)}
+            disabled={item.quantity <= 0}
+            className="p-1"
+          >
+            <PlusCircle size={18} color={item.quantity <= 0 ? '#9CA3AF' : '#3B82F6'} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => addToCart(item.id, selectedQuantities[item.id] || 1)}
+            disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
+            className="p-1 ml-1"
+          >
+            <ShoppingCart size={20} color={(item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0) ? '#9CA3AF' : '#3B82F6'} />
+          </TouchableOpacity>
+        </View>
+      </CardContent>
+    </Card>
   );
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
+    console.log('Rendering CartItem:', item); // Debug log to inspect data
     const handleQuantityChange = (text: string) => {
       const newQuantity = parseInt(text.replace(/[^0-9]/g, ''), 10);
       const productInStore = products.find((p) => p.id === item.id);
-      if (!productInStore) return;
+      if (!productInStore) {
+        console.error(`Product with ID ${item.id} not found in store`);
+        return;
+      }
 
       const currentInCart = item.quantityInCart;
       const maxAllowed = productInStore.quantity + currentInCart;
@@ -309,6 +469,7 @@ export default function SalesScreen() {
       if (isNaN(newQuantity)) {
         if (text === '') {
           updateItemQuantity(item.id, 1);
+          setSelectedQuantities((prev) => ({ ...prev, [item.id]: 1 }));
         }
         return;
       }
@@ -321,51 +482,77 @@ export default function SalesScreen() {
       if (newQuantity > maxAllowed) {
         Alert.alert(
           "Stock Limit Reached",
-          `Cannot set quantity to ${newQuantity}. Only ${maxAllowed} ${item.name}${
-            item.category ? ` (${item.category})` : ''
-          } in stock.`,
-          [{ text: "OK", onPress: () => updateItemQuantity(item.id, maxAllowed) }]
+          `Cannot set quantity to ${newQuantity}. Only ${maxAllowed} ${item.name || 'product'}${item.category ? ` (${item.category})` : ''} in stock.`,
+          [{ text: "OK", onPress: () => {
+            updateItemQuantity(item.id, maxAllowed);
+            setSelectedQuantities((prev) => ({ ...prev, [item.id]: maxAllowed }));
+          } }]
         );
-        updateItemQuantity(item.id, maxAllowed);
         return;
       }
 
       updateItemQuantity(item.id, newQuantity);
+      setSelectedQuantities((prev) => ({ ...prev, [item.id]: newQuantity }));
     };
 
     return (
-      <View className="flex-row items-center py-3 border-b border-border ">
-        <View className="flex-1 mr-2">
-          <Text className="text-base font-medium text-foreground" numberOfLines={1}>
+      <View className="flex-row items-center py-3 px-4 border-b border-border bg-card rounded-lg mb-2">
+        {item.imageUri ? (
+          <Image
+            source={{ uri: item.imageUri }}
+            style={{ width: 40, height: 40 }}
+            className="rounded-md mr-3"
+            resizeMode="cover"
+            onError={(e) => console.log(`Cart image load error for ${item.name}:`, e.nativeEvent.error)}
+          />
+        ) : (
+          <View className="w-10 h-10 rounded-md mr-3 bg-muted items-center justify-center">
+            <Package size={20} className="text-muted-foreground" />
+          </View>
+        )}
+        <View className="flex-1 mr-4">
+          <Text
+            className="text-lg font-semibold text-foreground"
+            numberOfLines={1}
+            style={{ color: '#000', backgroundColor: 'transparent' }}
+          >
             {item.name}
           </Text>
-          <Text className="text-xs text-muted-foreground">
-            {item.category || 'Uncategorized'}
+          <Text
+            className="text-sm text-muted-foreground mt-1"
+            style={{ color: '#6B7280', backgroundColor: 'transparent' }}
+          >
+            {item.category || 'No category'}
           </Text>
-          <Text className="text-xs text-muted-foreground mt-1">₹{item.sellingPrice.toFixed(2)} each</Text>
+          <Text
+            className="text-sm text-muted-foreground mt-1"
+            style={{ color: '#6B7280', backgroundColor: 'transparent' }}
+          >
+            ₹{item.sellingPrice.toFixed(2)} each
+          </Text>
         </View>
         <View className="flex-row items-center">
-          <TouchableOpacity onPress={() => decreaseQuantity(item.id)} className="p-1">
-            <MinusCircle size={22} color="#EF4444" />
+          <TouchableOpacity onPress={() => decreaseQuantity(item.id)} className="p-2">
+            <MinusCircle size={26} color="#EF4444" />
           </TouchableOpacity>
           <TextInput
-            className="border border-input bg-background rounded-md w-12 h-9 text-center mx-1 text-base text-foreground"
+            className="border border-input bg-background rounded-md w-16 h-10 text-center mx-2 text-base text-foreground"
             value={item.quantityInCart.toString()}
             onChangeText={handleQuantityChange}
             keyboardType="number-pad"
             selectTextOnFocus
             maxLength={3}
           />
-          <TouchableOpacity onPress={() => increaseQuantity(item.id)} className="p-1">
-            <PlusCircle size={22} color="#3B82F6" />
+          <TouchableOpacity onPress={() => increaseQuantity(item.id)} className="p-2">
+            <PlusCircle size={26} color="#3B82F6" />
+          </TouchableOpacity>
+          <Text className="text-base font-medium text-foreground w-24 text-right ml-4">
+            ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
+          </Text>
+          <TouchableOpacity onPress={() => removeCartItem(item.id)} className="ml-4 p-2">
+            <XCircle size={24} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
-        <Text className="text-base font-medium text-foreground w-20 text-right ml-2">
-          ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
-        </Text>
-        <TouchableOpacity onPress={() => removeCartItem(item.id)} className="ml-2 p-1">
-          <XCircle size={20} className="text-muted-foreground" />
-        </TouchableOpacity>
       </View>
     );
   };
@@ -380,6 +567,7 @@ export default function SalesScreen() {
   const confirmSale = () => {
     console.log("Sale Confirmed");
     setCartItems([]);
+    setSelectedQuantities({});
     setIsCartOpen(false);
     setIsConfirmDialogOpen(false);
   };
@@ -449,14 +637,14 @@ export default function SalesScreen() {
 
       {/* Cart Dialog */}
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-md w-auto mx-auto">
-          <DialogHeader className="p-6 pb-4 border-b border-border">
-            <DialogTitle className="text-xl font-bold text-foreground flex-row items-center">
-              <ShoppingCart size={24} color="#3B82F6" className="mr-2" />
+        <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
+          <DialogHeader className="p-4 border-b border-border">
+            <DialogTitle className="text-lg font-bold text-foreground flex-row items-center">
+              <ShoppingCart size={22} color="#3B82F6" className="mr-2" />
               <Text>Current Sale</Text>
             </DialogTitle>
           </DialogHeader>
-          <View className="p-4" style={{ maxHeight: 400 }}>
+          <View className="p-3" style={{ maxHeight: 400 }}>
             {cartItems.length === 0 ? (
               <View className="items-center justify-center border border-dashed border-border rounded-lg p-6 my-4 min-h-32">
                 <ShoppingCart size={40} color="#9CA3AF" />
@@ -490,10 +678,10 @@ export default function SalesScreen() {
                 </View>
               </View>
               <DialogFooter className="flex-row gap-2 pt-2">
-                <Button variant="outline" className="h-12 flex-1" onPress={clearCart}>
+                <Button variant="outline" className="h-10 flex-1" onPress={clearCart}>
                   <Text className="text-muted-foreground">Clear Sale</Text>
                 </Button>
-                <Button className="h-12 flex-1" onPress={handleProceedToPayment}>
+                <Button className="h-10 flex-1" onPress={handleProceedToPayment}>
                   <Text className="text-white font-semibold">Proceed to Payment</Text>
                 </Button>
               </DialogFooter>
@@ -504,9 +692,9 @@ export default function SalesScreen() {
 
       {/* Confirm Sale Dialog */}
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
-        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-full mx-auto">
+        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-foreground">Confirm Sale</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground">Confirm Sale</DialogTitle>
           </DialogHeader>
           <View className="my-4">
             <Text className="text-foreground mb-4">Please confirm the following sale:</Text>
@@ -537,9 +725,9 @@ export default function SalesScreen() {
 
       {/* Clear Cart Confirmation Dialog */}
       <Dialog open={isClearCartDialogOpen} onOpenChange={setIsClearCartDialogOpen}>
-        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-full mx-auto">
+        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-foreground">Clear Cart</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground">Clear Cart</DialogTitle>
           </DialogHeader>
           <View className="my-4">
             <Text className="text-foreground">Are you sure you want to clear all items from the cart?</Text>

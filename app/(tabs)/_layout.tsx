@@ -5,15 +5,15 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { Home, ShoppingBag, User, Settings, ShoppingCart } from 'lucide-react-native';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import { useColorScheme } from '~/lib/useColorScheme';
 
 export default function TabsLayout() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
   const [isChecking, setIsChecking] = useState(true);
+  const { isDarkColorScheme } = useColorScheme();
 
-  // Auth protection - redirect to login if not authenticated
   useEffect(() => {
-    // Short timeout to allow auth state to be loaded
     const timer = setTimeout(() => {
       setIsChecking(false);
       if (!isAuthenticated && !isLoading) {
@@ -24,7 +24,6 @@ export default function TabsLayout() {
     return () => clearTimeout(timer);
   }, [isAuthenticated, isLoading, router]);
 
-  // Show loading indicator while checking auth
   if (isChecking || isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-background">
@@ -37,7 +36,11 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: 'hsl(var(--primary))',
+        tabBarActiveTintColor: isDarkColorScheme ? '#E5E7EB' : '#1F2937', // gray-200 for dark, gray-900 for light
+        tabBarInactiveTintColor: isDarkColorScheme ? '#6B7280' : '#9CA3AF', // gray-500 for dark, gray-400 for light
+        tabBarStyle: {
+          backgroundColor: isDarkColorScheme ? '#1F2937' : '#FFFFFF', // gray-900 for dark, white for light
+        },
       }}
     >
       <Tabs.Screen
@@ -46,6 +49,10 @@ export default function TabsLayout() {
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937', // White text for contrast
         }}
       />
       <Tabs.Screen
@@ -54,13 +61,21 @@ export default function TabsLayout() {
           title: 'Products',
           tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
-        name="sales" 
+        name="sales"
         options={{
-          title: 'Sales', 
-          tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />, // Use ShoppingCart or Receipt icon
+          title: 'Sales',
+          tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
@@ -69,6 +84,10 @@ export default function TabsLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
@@ -77,6 +96,10 @@ export default function TabsLayout() {
           title: 'Settings',
           tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
     </Tabs>

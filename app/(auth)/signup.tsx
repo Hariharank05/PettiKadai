@@ -7,10 +7,10 @@ import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { Eye, EyeOff, ChevronDown } from 'lucide-react-native';
 import { SECURITY_QUESTIONS } from '~/lib/models/user';
-import { 
-  validateEmail, 
-  validatePhone, 
-  validatePasswordStrength 
+import {
+  validateEmail,
+  validatePhone,
+  validatePasswordStrength
 } from '~/lib/utils/authUtils';
 import {
   Select,
@@ -31,17 +31,17 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  
+
   const { signup, isLoading, error, clearError } = useAuthStore();
   const router = useRouter();
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
-    
+
     if (!name.trim()) {
       errors.name = 'Name is required';
     }
-    
+
     if (!emailOrPhone.trim()) {
       errors.emailOrPhone = `${isEmail ? 'Email' : 'Phone'} is required`;
     } else if (isEmail && !validateEmail(emailOrPhone)) {
@@ -49,25 +49,25 @@ export default function SignupScreen() {
     } else if (!isEmail && !validatePhone(emailOrPhone)) {
       errors.emailOrPhone = 'Invalid phone format';
     }
-    
+
     if (!password) {
       errors.password = 'Password is required';
     } else if (!validatePasswordStrength(password)) {
       errors.password = 'Password must be at least 8 characters and contain a number';
     }
-    
+
     if (password !== confirmPassword) {
       errors.confirmPassword = 'Passwords do not match';
     }
-    
+
     if (!securityQuestion) {
       errors.securityQuestion = 'Security question is required';
     }
-    
+
     if (!securityAnswer.trim()) {
       errors.securityAnswer = 'Security answer is required';
     }
-    
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -76,20 +76,20 @@ export default function SignupScreen() {
     if (!validateForm()) {
       return;
     }
-    
+
     clearError();
-    
+
     const userData = {
       name,
       password,
       securityQuestion,
       securityAnswer,
       // Set either email or phone based on user's choice
-      ...(isEmail 
-        ? { email: emailOrPhone } 
+      ...(isEmail
+        ? { email: emailOrPhone }
         : { phone: emailOrPhone })
     };
-    
+
     const success = await signup(userData);
     if (success) {
       router.replace('/(auth)/login');
@@ -126,13 +126,13 @@ export default function SignupScreen() {
             <Text className="text-3xl font-bold text-foreground">Create Account</Text>
             <Text className="text-base text-muted-foreground mt-2">Sign up for Petti Kadai</Text>
           </View>
-          
+
           {error && (
             <View className="bg-destructive/10 p-3 rounded-md mb-4">
               <Text className="text-destructive text-center">{error}</Text>
             </View>
           )}
-          
+
           <View className="space-y-4 mb-6">
             <View>
               <Text className="text-base text-foreground font-medium mb-2">Full Name</Text>
@@ -153,7 +153,7 @@ export default function SignupScreen() {
                 <Text className="text-destructive text-sm mt-1">{validationErrors.name}</Text>
               )}
             </View>
-            
+
             <View>
               <View className="flex-row justify-between items-center mb-2">
                 <Text className="text-base text-foreground font-medium">
@@ -165,7 +165,7 @@ export default function SignupScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-              
+
               <Input
                 placeholder={isEmail ? "Enter your email" : "Enter your phone number"}
                 value={emailOrPhone}
@@ -185,7 +185,7 @@ export default function SignupScreen() {
                 <Text className="text-destructive text-sm mt-1">{validationErrors.emailOrPhone}</Text>
               )}
             </View>
-            
+
             <View>
               <Text className="text-base text-foreground font-medium mb-2">Password</Text>
               <View className="relative">
@@ -218,7 +218,7 @@ export default function SignupScreen() {
                 <Text className="text-destructive text-sm mt-1">{validationErrors.password}</Text>
               )}
             </View>
-            
+
             <View>
               <Text className="text-base text-foreground font-medium mb-2">Confirm Password</Text>
               <Input
@@ -239,7 +239,7 @@ export default function SignupScreen() {
                 <Text className="text-destructive text-sm mt-1">{validationErrors.confirmPassword}</Text>
               )}
             </View>
-            
+
             <View>
               <Text className="text-base text-foreground font-medium mb-2">Security Question</Text>
               <Select
@@ -250,11 +250,10 @@ export default function SignupScreen() {
               >
                 <SelectTrigger className="h-12">
                   <SelectValue placeholder="Select a security question" />
-                  <ChevronDown size={18} className="text-foreground opacity-50" />
                 </SelectTrigger>
                 <SelectContent>
                   {SECURITY_QUESTIONS.map((question) => (
-                    <SelectItem key={question} value={question} label={''}>
+                    <SelectItem key={question} value={question} label={question}>
                       {question}
                     </SelectItem>
                   ))}
@@ -264,7 +263,7 @@ export default function SignupScreen() {
                 <Text className="text-destructive text-sm mt-1">{validationErrors.securityQuestion}</Text>
               )}
             </View>
-            
+
             <View>
               <Text className="text-base text-foreground font-medium mb-2">Security Answer</Text>
               <Input
@@ -285,7 +284,7 @@ export default function SignupScreen() {
               )}
             </View>
           </View>
-          
+
           <Button
             onPress={handleSignup}
             disabled={isLoading}
@@ -295,7 +294,7 @@ export default function SignupScreen() {
               {isLoading ? 'Creating Account...' : 'Create Account'}
             </Text>
           </Button>
-          
+
           <View className="flex-row justify-center items-center">
             <Text className="text-muted-foreground">Already have an account?</Text>
             <Link href="/(auth)/login" asChild>

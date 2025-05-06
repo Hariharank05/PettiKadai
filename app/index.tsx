@@ -66,7 +66,7 @@ export default function SplashScreen() {
     <View className="flex-1 items-center justify-center bg-background">
       <View className="items-center">
         <Image
-          source={require('../assets/images/icon.png')}
+          source={require('../assets/images/petti-kadai-icon.png')}
           style={{ width: 120, height: 120 }}
           resizeMode="contain"
         />
