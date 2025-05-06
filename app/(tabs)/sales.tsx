@@ -96,9 +96,6 @@ export default function SalesScreen() {
         updatedQuantities[item.id] = item.quantityInCart;
       });
       setSelectedQuantities(updatedQuantities);
-
-      // Log products for debugging (once per render)
-      // console.log('Rendering ProductItems:', updatedProducts);
     }
   }, [products, cartItems]);
 
@@ -454,7 +451,7 @@ export default function SalesScreen() {
   );
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
-    console.log('Rendering CartItem:', item); // Debug log to inspect data
+    // console.log('Rendering CartItem:', item); // Debug log to inspect data
     const handleQuantityChange = (text: string) => {
       const newQuantity = parseInt(text.replace(/[^0-9]/g, ''), 10);
       const productInStore = products.find((p) => p.id === item.id);
@@ -483,10 +480,12 @@ export default function SalesScreen() {
         Alert.alert(
           "Stock Limit Reached",
           `Cannot set quantity to ${newQuantity}. Only ${maxAllowed} ${item.name || 'product'}${item.category ? ` (${item.category})` : ''} in stock.`,
-          [{ text: "OK", onPress: () => {
-            updateItemQuantity(item.id, maxAllowed);
-            setSelectedQuantities((prev) => ({ ...prev, [item.id]: maxAllowed }));
-          } }]
+          [{
+            text: "OK", onPress: () => {
+              updateItemQuantity(item.id, maxAllowed);
+              setSelectedQuantities((prev) => ({ ...prev, [item.id]: maxAllowed }));
+            }
+          }]
         );
         return;
       }
@@ -496,64 +495,68 @@ export default function SalesScreen() {
     };
 
     return (
-      <View className="flex-row items-center py-3 px-4 border-b border-border bg-card rounded-lg mb-2">
-        {item.imageUri ? (
-          <Image
-            source={{ uri: item.imageUri }}
-            style={{ width: 40, height: 40 }}
-            className="rounded-md mr-3"
-            resizeMode="cover"
-            onError={(e) => console.log(`Cart image load error for ${item.name}:`, e.nativeEvent.error)}
-          />
-        ) : (
-          <View className="w-10 h-10 rounded-md mr-3 bg-muted items-center justify-center">
-            <Package size={20} className="text-muted-foreground" />
+      <Card className="mb-2 bg-card border border-border">
+        <CardContent className="p-3 flex-row items-center">
+          {item.imageUri ? (
+            <Image
+              source={{ uri: item.imageUri }}
+              style={{ width: 40, height: 40 }}
+              className="rounded-md mr-3"
+              resizeMode="cover"
+              onError={(e) => console.log(`Cart image load error for ${item.name}:`, e.nativeEvent.error)}
+            />
+          ) : (
+            <View className="w-10 h-10 rounded-md mr-3 bg-muted items-center justify-center">
+              <Package size={20} className="text-muted-foreground" />
+            </View>
+          )}
+          <View className="flex-1 mr-3">
+            <Text
+              className="text-sm font-medium text-foreground"
+              numberOfLines={1}
+              style={{ color: '#000', backgroundColor: 'transparent' }}
+            >
+              {item.name}
+            </Text>
+            <View className="flex-row items-center mt-0.5">
+              <Text
+                className="text-xs text-muted-foreground mr-1"
+                style={{ color: '#6B7280', backgroundColor: 'transparent' }}
+              >
+                {item.category || 'No category'}
+              </Text>
+              <Text
+                className="text-xs text-muted-foreground"
+                style={{ color: '#6B7280', backgroundColor: 'transparent' }}
+              >
+                ₹{item.sellingPrice.toFixed(2)}
+              </Text>
+            </View>
           </View>
-        )}
-        <View className="flex-1 mr-4">
-          <Text
-            className="text-lg font-semibold text-foreground"
-            numberOfLines={1}
-            style={{ color: '#000', backgroundColor: 'transparent' }}
-          >
-            {item.name}
-          </Text>
-          <Text
-            className="text-sm text-muted-foreground mt-1"
-            style={{ color: '#6B7280', backgroundColor: 'transparent' }}
-          >
-            {item.category || 'No category'}
-          </Text>
-          <Text
-            className="text-sm text-muted-foreground mt-1"
-            style={{ color: '#6B7280', backgroundColor: 'transparent' }}
-          >
-            ₹{item.sellingPrice.toFixed(2)} each
-          </Text>
-        </View>
-        <View className="flex-row items-center">
-          <TouchableOpacity onPress={() => decreaseQuantity(item.id)} className="p-2">
-            <MinusCircle size={26} color="#EF4444" />
-          </TouchableOpacity>
-          <TextInput
-            className="border border-input bg-background rounded-md w-16 h-10 text-center mx-2 text-base text-foreground"
-            value={item.quantityInCart.toString()}
-            onChangeText={handleQuantityChange}
-            keyboardType="number-pad"
-            selectTextOnFocus
-            maxLength={3}
-          />
-          <TouchableOpacity onPress={() => increaseQuantity(item.id)} className="p-2">
-            <PlusCircle size={26} color="#3B82F6" />
-          </TouchableOpacity>
-          <Text className="text-base font-medium text-foreground w-24 text-right ml-4">
-            ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
-          </Text>
-          <TouchableOpacity onPress={() => removeCartItem(item.id)} className="ml-4 p-2">
-            <XCircle size={24} color="#9CA3AF" />
-          </TouchableOpacity>
-        </View>
-      </View>
+          <View className="flex-row items-center">
+            <TouchableOpacity onPress={() => decreaseQuantity(item.id)} className="p-1">
+              <MinusCircle size={18} color="#EF4444" />
+            </TouchableOpacity>
+            <TextInput
+              className="bg-background rounded w-10 h-7 text-center text-sm text-foreground"
+              value={item.quantityInCart.toString()}
+              onChangeText={handleQuantityChange}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              maxLength={3}
+            />
+            <TouchableOpacity onPress={() => increaseQuantity(item.id)} className="p-1">
+              <PlusCircle size={18} color="#3B82F6" />
+            </TouchableOpacity>
+            <Text className="text-sm font-semibold text-primary w-20 text-center">
+              ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
+            </Text>
+            <TouchableOpacity onPress={() => removeCartItem(item.id)} className="p-1">
+              <XCircle size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+        </CardContent>
+      </Card>
     );
   };
 
@@ -637,14 +640,14 @@ export default function SalesScreen() {
 
       {/* Cart Dialog */}
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
+        <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-sm w-[95%] mx-auto">
           <DialogHeader className="p-4 border-b border-border">
             <DialogTitle className="text-lg font-bold text-foreground flex-row items-center">
               <ShoppingCart size={22} color="#3B82F6" className="mr-2" />
               <Text>Current Sale</Text>
             </DialogTitle>
           </DialogHeader>
-          <View className="p-3" style={{ maxHeight: 400 }}>
+          <View className="p-3" style={{ maxHeight: 250 }}>
             {cartItems.length === 0 ? (
               <View className="items-center justify-center border border-dashed border-border rounded-lg p-6 my-4 min-h-32">
                 <ShoppingCart size={40} color="#9CA3AF" />
@@ -657,7 +660,7 @@ export default function SalesScreen() {
                 renderItem={renderCartItem}
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={true}
-                contentContainerStyle={{ paddingBottom: 20 }}
+              // contentContainerStyle={{ paddingBottom: 20 }}
               />
             )}
           </View>
