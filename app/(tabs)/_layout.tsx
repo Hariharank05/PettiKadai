@@ -3,28 +3,27 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { Home, ShoppingBag, User, Settings } from 'lucide-react-native';
+import { Home, ShoppingBag, User, Settings, ShoppingCart } from 'lucide-react-native';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import { useColorScheme } from '~/lib/useColorScheme';
 
 export default function TabsLayout() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
   const [isChecking, setIsChecking] = useState(true);
-  
-  // Auth protection - redirect to login if not authenticated
+  const { isDarkColorScheme } = useColorScheme();
+
   useEffect(() => {
-    // Short timeout to allow auth state to be loaded
     const timer = setTimeout(() => {
       setIsChecking(false);
       if (!isAuthenticated && !isLoading) {
         router.replace('/(auth)/login');
       }
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, [isAuthenticated, isLoading, router]);
-  
-  // Show loading indicator while checking auth
+
   if (isChecking || isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-background">
@@ -33,11 +32,15 @@ export default function TabsLayout() {
       </View>
     );
   }
-  
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: 'hsl(var(--primary))',
+        tabBarActiveTintColor: isDarkColorScheme ? '#E5E7EB' : '#1F2937',
+        tabBarInactiveTintColor: isDarkColorScheme ? '#6B7280' : '#9CA3AF',
+        tabBarStyle: {
+          backgroundColor: isDarkColorScheme ? '#1F2937' : '#FFFFFF',
+        },
       }}
     >
       <Tabs.Screen
@@ -46,14 +49,33 @@ export default function TabsLayout() {
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
-          title: 'Products',
+          title: 'Invenrtry',
           tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+        }}
+      />
+      <Tabs.Screen
+        name="sales"
+        options={{
+          title: 'Sales',
+          tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
@@ -62,6 +84,10 @@ export default function TabsLayout() {
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
@@ -70,6 +96,22 @@ export default function TabsLayout() {
           title: 'Settings',
           tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+        }}
+      />
+      <Tabs.Screen
+        name="customers"
+        options={{
+          title: 'Customers',
+          // tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />, // We can define an icon
+          href: null,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
