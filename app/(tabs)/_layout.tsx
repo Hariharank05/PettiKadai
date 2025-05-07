@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { Home, ShoppingBag, User, Settings, ShoppingCart } from 'lucide-react-native';
+import { Home, ShoppingBag, User, Settings, ShoppingCart, HistoryIcon } from 'lucide-react-native';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { useColorScheme } from '~/lib/useColorScheme';
 
@@ -72,6 +72,18 @@ export default function TabsLayout() {
         options={{
           title: 'Sales',
           tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+        }}
+      />
+      <Tabs.Screen
+        name="receipts"
+        options={{
+          title: 'Receipts',
+          tabBarIcon: ({ color, size }) => <HistoryIcon color={color} size={size} />,
+          headerRight: () => <ThemeToggle />,
           headerStyle: {
             backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
           },

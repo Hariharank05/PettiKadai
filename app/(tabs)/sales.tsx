@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
-  Text,
+  // Text, // Using custom Text from ~/components/ui/text
   SafeAreaView,
   TouchableOpacity,
   FlatList,
@@ -11,17 +11,18 @@ import {
   RefreshControl,
   Alert,
   StyleSheet,
-  TextInput,
+  TextInput, // Standard TextInput
   Keyboard,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle } from 'lucide-react-native';
-import { Input } from '~/components/ui/input';
-import { Button } from '~/components/ui/button';
+import { Text } from '~/components/ui/text'; // Using your custom Text component
+import { Input } from '~/components/ui/input'; // Your custom Input component
+import { Button } from '~/components/ui/button'; // Your custom Button component
 import { Card, CardContent } from '~/components/ui/card';
 import { useProductStore } from '~/lib/stores/productStore';
-import { Product } from '~/lib/models/product';
+import { Product } from '~/lib/models/product'; // Ensure this path is correct
 import { Separator } from '~/components/ui/separator';
 import {
   Dialog,
@@ -31,10 +32,124 @@ import {
   DialogFooter,
 } from '~/components/ui/dialog';
 
-// Define the structure for items in the cart
+// --- Database and Utility Imports ---
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import 'react-native-get-random-values'; // Required for uuid
+import { v4 as uuidv4 } from 'uuid';
+import { getDatabase } from '~/lib/db/database'; // Ensure this path is correct
+import { generateAndShareReceipt } from '~/lib/utils/receiptUtils';
+
+// Interface for items in the cart
 interface CartItem extends Product {
   quantityInCart: number;
 }
+
+// Interface for Store Settings (fetched for receipt)
+interface ReceiptStoreSettings {
+  storeName?: string;
+  storeAddress?: string;
+  storePhone?: string;
+  storeEmail?: string;
+  currencySymbol?: string;
+}
+
+// Interface for simplified cart item for receipt generation
+interface CartItemForReceipt {
+  name: string;
+  quantityInCart: number;
+  sellingPrice: number;
+  costPrice: number;
+  category?: string | null;
+}
+
+// --- generateReceiptHtml function ---
+const generateReceiptHtml = (
+  cartItems: CartItemForReceipt[],
+  totalAmount: number,
+  saleId: string,
+  saleTimestamp: string,
+  storeSettings?: ReceiptStoreSettings | null
+): string => {
+  const storeName = storeSettings?.storeName || 'Petti Kadai';
+  const storeAddress = storeSettings?.storeAddress || '';
+  const storePhone = storeSettings?.storePhone || '';
+  const currency = storeSettings?.currencySymbol || '₹';
+
+  const itemsHtml = cartItems
+    .map(
+      (item) => `
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name} ${item.category ? `(${item.category})` : ''}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantityInCart}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${currency}${item.sellingPrice.toFixed(2)}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${currency}${(item.sellingPrice * item.quantityInCart).toFixed(2)}</td>
+    </tr>
+  `
+    )
+    .join('');
+
+  return `
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; font-size: 12px; color: #333; }
+          .container { max-width: 300px; margin: auto; border: 1px solid #ddd; padding: 15px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+          .header { text-align: center; margin-bottom: 15px; }
+          .store-name { font-size: 16px; font-weight: bold; margin-bottom: 3px; }
+          .store-details { font-size: 10px; color: #555; margin-bottom: 3px; }
+          .info-section { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #ccc; }
+          .info-section p { margin: 2px 0; font-size: 10px; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+          .items-table th { font-size: 11px; text-align: left; padding: 8px 4px; border-bottom: 1px solid #555; }
+          .items-table td { font-size: 11px; padding: 6px 4px; vertical-align: top; }
+          .totals-section { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc; }
+          .totals-section p { margin: 4px 0; font-size: 12px; display: flex; justify-content: space-between; }
+          .totals-section .grand-total { font-weight: bold; font-size: 14px; }
+          .footer { text-align: center; margin-top: 15px; font-size: 10px; color: #777; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="store-name">${storeName}</div>
+            ${storeAddress ? `<div class="store-details">${storeAddress}</div>` : ''}
+            ${storePhone ? `<div class="store-details">Phone: ${storePhone}</div>` : ''}
+          </div>
+
+          <div class="info-section">
+            <p><strong>Receipt No:</strong> RCPT-${saleId.substring(0, 8).toUpperCase()}</p>
+            <p><strong>Date:</strong> ${new Date(saleTimestamp).toLocaleString()}</p>
+          </div>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Price</th>
+                <th style="text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div class="totals-section">
+            <p class="grand-total"><span>GRAND TOTAL:</span> <span>${currency}${totalAmount.toFixed(2)}</span></p>
+          </div>
+
+          <div class="footer">
+            Thank you for your purchase!
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
 
 export default function SalesScreen() {
   const router = useRouter();
@@ -43,13 +158,15 @@ export default function SalesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessingSale, setIsProcessingSale] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isClearCartDialogOpen, setIsClearCartDialogOpen] = useState(false);
   const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
 
-  // Load products function
+  const db = getDatabase();
+
   const loadProducts = useCallback(async () => {
     try {
       await fetchProducts();
@@ -61,21 +178,16 @@ export default function SalesScreen() {
     }
   }, [fetchProducts]);
 
-  // Refresh function
   const onRefresh = useCallback(() => {
-    console.log("ON REFRESH: Called");
     setRefreshing(true);
     fetchProducts().finally(() => setRefreshing(false));
   }, [fetchProducts]);
 
-  // Initial product load effect
   useEffect(() => {
-    console.log("SALES SCREEN: Initial mount effect");
     setIsLoading(true);
     fetchProducts().finally(() => setIsLoading(false));
   }, [fetchProducts]);
 
-  // Update displayProducts and sync selectedQuantities when products or cartItems change
   useEffect(() => {
     if (products.length > 0) {
       const updatedProducts = products.map((product) => {
@@ -90,16 +202,16 @@ export default function SalesScreen() {
       });
       setDisplayProducts(updatedProducts);
 
-      // Sync selectedQuantities with cartItems
       const updatedQuantities: Record<string, number> = {};
       cartItems.forEach((item) => {
         updatedQuantities[item.id] = item.quantityInCart;
       });
       setSelectedQuantities(updatedQuantities);
+    } else {
+      setDisplayProducts([]);
     }
   }, [products, cartItems]);
 
-  // Filter products based on search query
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return displayProducts;
     return displayProducts.filter(
@@ -109,7 +221,6 @@ export default function SalesScreen() {
     );
   }, [displayProducts, searchQuery]);
 
-  // --- Cart Logic ---
   const updateItemQuantity = useCallback((productId: string, quantity: number) => {
     setCartItems((prevCart) =>
       prevCart.map((cartItem) =>
@@ -167,20 +278,22 @@ export default function SalesScreen() {
           return prev;
         }
         const newQty = currentQty + 1;
-        setCartItems((prevCart) => {
-          const existingItem = prevCart.find((item) => item.id === productId);
-          const originalProduct = products.find((p) => p.id === productId);
-          if (!originalProduct) return prevCart;
-          if (existingItem) {
-            return prevCart.map((item) =>
-              item.id === productId
-                ? { ...item, quantityInCart: newQty }
-                : item
-            );
-          } else {
-            return [...prevCart, { ...originalProduct, quantityInCart: newQty }];
-          }
-        });
+        if (newQty > 0) {
+          setCartItems((prevCart) => {
+            const existingItem = prevCart.find((item) => item.id === productId);
+            const originalProduct = products.find((p) => p.id === productId);
+            if (!originalProduct) return prevCart;
+            if (existingItem) {
+              return prevCart.map((item) =>
+                item.id === productId
+                  ? { ...item, quantityInCart: newQty }
+                  : item
+              );
+            } else {
+              return [...prevCart, { ...originalProduct, quantityInCart: newQty }];
+            }
+          });
+        }
         return { ...prev, [productId]: newQty };
       });
     },
@@ -198,9 +311,7 @@ export default function SalesScreen() {
         setCartItems((prevCart) => {
           if (newQty === 0) {
             const newCart = prevCart.filter((item) => item.id !== productId);
-            if (newCart.length === 0) {
-              setIsCartOpen(false);
-            }
+            if (newCart.length === 0) setIsCartOpen(false);
             return newCart;
           }
           return prevCart.map((item) =>
@@ -222,13 +333,15 @@ export default function SalesScreen() {
         if (itemIndex === -1) return prevCart;
 
         const item = prevCart[itemIndex];
-        const displayProduct = displayProducts.find((p) => p.id === productId);
-        const availableStock = displayProduct ? displayProduct.quantity : 0;
+        const originalProduct = products.find(p => p.id === productId);
+        if (!originalProduct) return prevCart;
 
-        if (availableStock <= 0) {
+        const stockAvailableToAdd = originalProduct.quantity - item.quantityInCart;
+
+        if (stockAvailableToAdd <= 0) {
           Alert.alert(
             "Stock Limit Reached",
-            `Cannot add more ${item.name || 'product'}${item.category ? ` (${item.category})` : ''}. No more in stock.`,
+            `Cannot add more ${item.name || 'product'}. All available stock is in the cart.`,
             [{ text: "OK" }]
           );
           return prevCart;
@@ -247,7 +360,7 @@ export default function SalesScreen() {
         return updatedCart;
       });
     },
-    [displayProducts]
+    [products]
   );
 
   const decreaseQuantity = useCallback(
@@ -315,7 +428,6 @@ export default function SalesScreen() {
     setIsClearCartDialogOpen(false);
   }, []);
 
-  // --- Calculations ---
   const { subtotal, totalAmount, totalProfit } = useMemo(() => {
     let currentSubtotal = 0;
     let currentProfit = 0;
@@ -330,7 +442,109 @@ export default function SalesScreen() {
     return { subtotal: currentSubtotal, totalAmount: currentTotalAmount, totalProfit: currentProfit };
   }, [cartItems]);
 
-  // --- Render Functions ---
+  const confirmSale = async () => {
+    if (cartItems.length === 0) return;
+    setIsProcessingSale(true);
+
+    try {
+      const saleId = uuidv4();
+      const saleTimestamp = new Date().toISOString();
+      const paymentType = 'CASH';
+
+      await db.execAsync('BEGIN TRANSACTION;');
+
+      await db.runAsync(
+        `INSERT INTO Sales (id, timestamp, totalAmount, totalProfit, subtotal, paymentType, salesStatus)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [saleId, saleTimestamp, totalAmount, totalProfit, subtotal, paymentType, 'COMPLETED']
+      );
+
+      const saleCartItems: CartItemForReceipt[] = []; // Prepare for utility
+
+      for (const item of cartItems) {
+        const saleItemId = uuidv4();
+        await db.runAsync(
+          `INSERT INTO SaleItems (id, saleId, productId, quantity, unitPrice, costPrice, subtotal, profit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            saleItemId,
+            saleId,
+            item.id,
+            item.quantityInCart,
+            item.sellingPrice,
+            item.costPrice,
+            item.sellingPrice * item.quantityInCart,
+            (item.sellingPrice - item.costPrice) * item.quantityInCart,
+          ]
+        );
+        await db.runAsync(
+          'UPDATE products SET quantity = quantity - ?, updatedAt = ? WHERE id = ?',
+          [item.quantityInCart, new Date().toISOString(), item.id]
+        );
+        saleCartItems.push({ // Collect items for receipt utility
+          name: item.name,
+          quantityInCart: item.quantityInCart,
+          sellingPrice: item.sellingPrice,
+          costPrice: item.costPrice,
+          category: item.category
+        });
+      }
+
+      // Save the main Receipt record BEFORE calling generateAndShare which might rely on it
+      // or which might just generate and share.
+      // For a clean utility, generateAndShareReceipt should not save the Receipt record itself,
+      // but rather take the generated PDF URI and allow the calling function to save it.
+      // However, for speed, the utility can save it. Let's assume it will save.
+
+      const receiptId = uuidv4();
+      const receiptNumber = `RCPT-${saleId.substring(0, 8).toUpperCase()}`;
+      // We need the PDF URI first before saving to Receipts table.
+      // So, generateAndShareReceipt will create the PDF, then we save its URI.
+
+      // Call the utility function
+      const pdfUri = await generateAndShareReceipt({
+        saleId,
+        saleTimestamp,
+        totalAmount,
+        cartItems: saleCartItems,
+      });
+
+      if (pdfUri) {
+        // Now save the receipt with the generated PDF URI
+        await db.runAsync(
+          `INSERT INTO Receipts (id, saleId, receiptNumber, format, filePath, generatedAt)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [receiptId, saleId, receiptNumber, 'PDF', pdfUri, new Date().toISOString()]
+        );
+        console.log('Receipt record saved to DB with filePath:', pdfUri);
+      } else {
+        // Handle case where PDF generation/sharing failed but sale was committed
+        Alert.alert("Sale Confirmed", "Sale completed, but there was an issue generating or sharing the receipt.");
+      }
+
+      await db.execAsync('COMMIT;');
+
+
+      setCartItems([]);
+      setSelectedQuantities({});
+      setIsCartOpen(false);
+      setIsConfirmDialogOpen(false);
+      // loadProducts(); // This will be called in finally
+
+      if (pdfUri) { // Only show full success if PDF was handled
+        Alert.alert('Sale Confirmed', `Sale completed. Receipt ready for sharing.`);
+      }
+
+    } catch (error) {
+      await db.execAsync('ROLLBACK;');
+      console.error('Error confirming sale:', error);
+      Alert.alert('Error', `Failed to confirm sale: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsProcessingSale(false);
+      loadProducts();
+    }
+  };
+
   const renderProductItem = ({ item }: { item: Product }) => (
     <Card className={`mb-2 bg-card border border-border ${item.quantity <= 0 ? 'opacity-50' : ''}`}>
       <CardContent className="p-3 flex-row items-center">
@@ -349,9 +563,8 @@ export default function SalesScreen() {
         )}
         <View className="flex-1 mr-3">
           <Text
-            className="text-sm font-medium text-foreground"
+            className="text-sm font-medium text-foreground native:text-black"
             numberOfLines={1}
-            style={{ color: '#000', backgroundColor: 'transparent' }}
           >
             {item.name || 'Unknown Product'}
           </Text>
@@ -372,15 +585,14 @@ export default function SalesScreen() {
               </View>
             )}
             <Text
-              className="text-xs text-muted-foreground"
-              style={{ color: '#6B7280', backgroundColor: 'transparent' }}
+              className="text-xs text-muted-foreground native:text-gray-600"
             >
               {item.category || 'No category'}
             </Text>
           </View>
         </View>
         <View className="flex-row items-center">
-          <Text className="text-sm font-semibold text-primary mr-2">₹{item.sellingPrice.toFixed(2)}</Text>
+          <Text className="text-sm font-semibold text-primary mr-2 native:text-blue-600">₹{item.sellingPrice.toFixed(2)}</Text>
           <TouchableOpacity
             onPress={() => decreaseListQuantity(item.id)}
             disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
@@ -389,43 +601,18 @@ export default function SalesScreen() {
             <MinusCircle size={18} color={(item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0) ? '#9CA3AF' : '#EF4444'} />
           </TouchableOpacity>
           <TextInput
-            className="bg-background rounded w-10 h-7 text-center text-sm text-foreground"
+            className="bg-background rounded w-10 h-7 text-center text-sm text-foreground border border-input native:text-black"
             keyboardType="number-pad"
             value={String(selectedQuantities[item.id] || 0)}
             onChangeText={(text) => {
               const num = parseInt(text, 10);
               if (isNaN(num) || num < 0) {
                 setSelectedQuantities((prev) => ({ ...prev, [item.id]: 0 }));
-                setCartItems((prevCart) => prevCart.filter((i) => i.id !== item.id));
+                setCartItems(prevCart => prevCart.filter(cartItem => cartItem.id !== item.id || 0 > 0));
               } else if (num <= item.quantity) {
                 setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
-                setCartItems((prevCart) => {
-                  const existingItem = prevCart.find((i) => i.id === item.id);
-                  const originalProduct = products.find((p) => p.id === item.id);
-                  if (!originalProduct) return prevCart;
-                  if (num === 0) {
-                    return prevCart.filter((i) => i.id !== item.id);
-                  }
-                  if (existingItem) {
-                    return prevCart.map((i) =>
-                      i.id === item.id ? { ...i, quantityInCart: num } : i
-                    );
-                  }
-                  return [...prevCart, { ...originalProduct, quantityInCart: num }];
-                });
               } else {
                 setSelectedQuantities((prev) => ({ ...prev, [item.id]: item.quantity }));
-                setCartItems((prevCart) => {
-                  const existingItem = prevCart.find((i) => i.id === item.id);
-                  const originalProduct = products.find((p) => p.id === item.id);
-                  if (!originalProduct) return prevCart;
-                  if (existingItem) {
-                    return prevCart.map((i) =>
-                      i.id === item.id ? { ...i, quantityInCart: item.quantity } : i
-                    );
-                  }
-                  return [...prevCart, { ...originalProduct, quantityInCart: item.quantity }];
-                });
                 Alert.alert(`Maximum quantity available is ${item.quantity}`);
               }
             }}
@@ -439,7 +626,7 @@ export default function SalesScreen() {
             <PlusCircle size={18} color={item.quantity <= 0 ? '#9CA3AF' : '#3B82F6'} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => addToCart(item.id, selectedQuantities[item.id] || 1)}
+            onPress={() => addToCart(item.id, selectedQuantities[item.id] || 0)}
             disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
             className="p-1 ml-1"
           >
@@ -451,7 +638,6 @@ export default function SalesScreen() {
   );
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
-    // console.log('Rendering CartItem:', item); // Debug log to inspect data
     const handleQuantityChange = (text: string) => {
       const newQuantity = parseInt(text.replace(/[^0-9]/g, ''), 10);
       const productInStore = products.find((p) => p.id === item.id);
@@ -459,10 +645,6 @@ export default function SalesScreen() {
         console.error(`Product with ID ${item.id} not found in store`);
         return;
       }
-
-      const currentInCart = item.quantityInCart;
-      const maxAllowed = productInStore.quantity + currentInCart;
-
       if (isNaN(newQuantity)) {
         if (text === '') {
           updateItemQuantity(item.id, 1);
@@ -470,26 +652,23 @@ export default function SalesScreen() {
         }
         return;
       }
-
       if (newQuantity === 0) {
         removeCartItem(item.id);
         return;
       }
-
-      if (newQuantity > maxAllowed) {
+      if (newQuantity > productInStore.quantity) {
         Alert.alert(
           "Stock Limit Reached",
-          `Cannot set quantity to ${newQuantity}. Only ${maxAllowed} ${item.name || 'product'}${item.category ? ` (${item.category})` : ''} in stock.`,
+          `Cannot set quantity to ${newQuantity}. Only ${productInStore.quantity} ${item.name || 'product'} originally in stock.`,
           [{
             text: "OK", onPress: () => {
-              updateItemQuantity(item.id, maxAllowed);
-              setSelectedQuantities((prev) => ({ ...prev, [item.id]: maxAllowed }));
+              updateItemQuantity(item.id, productInStore.quantity);
+              setSelectedQuantities((prev) => ({ ...prev, [item.id]: productInStore.quantity }));
             }
           }]
         );
         return;
       }
-
       updateItemQuantity(item.id, newQuantity);
       setSelectedQuantities((prev) => ({ ...prev, [item.id]: newQuantity }));
     };
@@ -503,7 +682,6 @@ export default function SalesScreen() {
               style={{ width: 40, height: 40 }}
               className="rounded-md mr-3"
               resizeMode="cover"
-              onError={(e) => console.log(`Cart image load error for ${item.name}:`, e.nativeEvent.error)}
             />
           ) : (
             <View className="w-10 h-10 rounded-md mr-3 bg-muted items-center justify-center">
@@ -511,26 +689,10 @@ export default function SalesScreen() {
             </View>
           )}
           <View className="flex-1 mr-3">
-            <Text
-              className="text-sm font-medium text-foreground"
-              numberOfLines={1}
-              style={{ color: '#000', backgroundColor: 'transparent' }}
-            >
-              {item.name}
-            </Text>
+            <Text className="text-sm font-medium text-foreground native:text-black">{item.name}</Text>
             <View className="flex-row items-center mt-0.5">
-              <Text
-                className="text-xs text-muted-foreground mr-1"
-                style={{ color: '#6B7280', backgroundColor: 'transparent' }}
-              >
-                {item.category || 'No category'}
-              </Text>
-              <Text
-                className="text-xs text-muted-foreground"
-                style={{ color: '#6B7280', backgroundColor: 'transparent' }}
-              >
-                ₹{item.sellingPrice.toFixed(2)}
-              </Text>
+              <Text className="text-xs text-muted-foreground mr-1 native:text-gray-600">{item.category || 'No category'}</Text>
+              <Text className="text-xs text-muted-foreground native:text-gray-600">₹{item.sellingPrice.toFixed(2)}</Text>
             </View>
           </View>
           <View className="flex-row items-center">
@@ -538,7 +700,7 @@ export default function SalesScreen() {
               <MinusCircle size={18} color="#EF4444" />
             </TouchableOpacity>
             <TextInput
-              className="bg-background rounded w-10 h-7 text-center text-sm text-foreground"
+              className="bg-background rounded w-10 h-7 text-center text-sm text-foreground border border-input native:text-black"
               value={item.quantityInCart.toString()}
               onChangeText={handleQuantityChange}
               keyboardType="number-pad"
@@ -548,7 +710,7 @@ export default function SalesScreen() {
             <TouchableOpacity onPress={() => increaseQuantity(item.id)} className="p-1">
               <PlusCircle size={18} color="#3B82F6" />
             </TouchableOpacity>
-            <Text className="text-sm font-semibold text-primary w-20 text-center">
+            <Text className="text-sm font-semibold text-primary w-20 text-center native:text-blue-600">
               ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
             </Text>
             <TouchableOpacity onPress={() => removeCartItem(item.id)} className="p-1">
@@ -560,25 +722,14 @@ export default function SalesScreen() {
     );
   };
 
-  // Proceed to Payment Handler
   const handleProceedToPayment = () => {
     if (cartItems.length === 0) return;
     Keyboard.dismiss();
     setIsConfirmDialogOpen(true);
   };
 
-  const confirmSale = () => {
-    console.log("Sale Confirmed");
-    setCartItems([]);
-    setSelectedQuantities({});
-    setIsCartOpen(false);
-    setIsConfirmDialogOpen(false);
-  };
-
-  // --- Main Return ---
   return (
     <SafeAreaView className="flex-1 bg-background">
-      {/* Product Selection Section */}
       <View className="flex-1 p-4 pt-2">
         <View className="mb-4 flex-row items-center bg-card border border-border rounded-lg px-3">
           <Search size={20} className="text-muted-foreground" />
@@ -593,20 +744,20 @@ export default function SalesScreen() {
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator size="large" color="#3B82F6" />
-            <Text className="text-muted-foreground mt-2">Loading Products...</Text>
+            <Text className="text-muted-foreground mt-2 native:text-gray-500">Loading Products...</Text>
           </View>
         ) : filteredProducts.length === 0 ? (
           <View className="flex-1 items-center justify-center">
             <AlertCircle size={40} color="#9CA3AF" />
-            <Text className="text-muted-foreground font-medium mt-2">No products found</Text>
+            <Text className="text-muted-foreground font-medium mt-2 native:text-gray-500">No products found</Text>
             {products.length > 0 && searchQuery !== '' && (
-              <Text className="text-muted-foreground text-center mt-1 text-sm">Try adjusting your search.</Text>
+              <Text className="text-muted-foreground text-center mt-1 text-sm native:text-gray-500">Try adjusting your search.</Text>
             )}
             {products.length === 0 && (
               <View className="items-center mt-4">
-                <Text className="text-muted-foreground text-center text-sm mb-2">Your inventory is empty.</Text>
+                <Text className="text-muted-foreground text-center text-sm mb-2 native:text-gray-500">Your inventory is empty.</Text>
                 <Button variant="outline" onPress={() => router.push('/(tabs)/products')}>
-                  <Text className="text-primary">Add Your First Product</Text>
+                  <Text className="text-primary native:text-blue-600">Add Your First Product</Text>
                 </Button>
               </View>
             )}
@@ -619,15 +770,16 @@ export default function SalesScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 80 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
+            keyboardShouldPersistTaps="handled"
           />
         )}
       </View>
 
-      {/* Floating Cart Button */}
       {cartItems.length > 0 && !isLoading && (
         <TouchableOpacity
           className="bg-primary rounded-full shadow-lg items-center justify-center absolute bottom-8 right-8 w-16 h-16"
           onPress={() => setIsCartOpen(true)}
+          activeOpacity={0.7}
         >
           <ShoppingCart size={24} color="white" />
           <View className="bg-destructive rounded-full items-center justify-center absolute -top-1 -right-1 min-w-6 h-6 px-1">
@@ -638,21 +790,22 @@ export default function SalesScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Cart Dialog */}
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
         <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-sm w-[95%] mx-auto">
           <DialogHeader className="p-4 border-b border-border">
-            <DialogTitle className="text-lg font-bold text-foreground flex-row items-center">
+            <View className="flex-row items-center">
               <ShoppingCart size={22} color="#3B82F6" className="mr-2" />
-              <Text>Current Sale</Text>
-            </DialogTitle>
+              <DialogTitle className="text-lg font-bold text-foreground native:text-black">
+                <Text>Current Sale</Text> {/* FIX APPLIED */}
+              </DialogTitle>
+            </View>
           </DialogHeader>
-          <View className="p-3" style={{ maxHeight: 250 }}>
+          <View className="p-3" style={{ maxHeight: Platform.OS === 'ios' ? 300 : 250 }}>
             {cartItems.length === 0 ? (
               <View className="items-center justify-center border border-dashed border-border rounded-lg p-6 my-4 min-h-32">
                 <ShoppingCart size={40} color="#9CA3AF" />
-                <Text className="text-muted-foreground font-medium mt-2">Cart is empty</Text>
-                <Text className="text-muted-foreground text-xs mt-1">Select products to add them here</Text>
+                <Text className="text-muted-foreground font-medium mt-2 native:text-gray-500">Cart is empty</Text>
+                <Text className="text-muted-foreground text-xs mt-1 native:text-gray-500">Select products to add them here</Text>
               </View>
             ) : (
               <FlatList
@@ -660,7 +813,6 @@ export default function SalesScreen() {
                 renderItem={renderCartItem}
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={true}
-              // contentContainerStyle={{ paddingBottom: 20 }}
               />
             )}
           </View>
@@ -668,24 +820,28 @@ export default function SalesScreen() {
             <View className="border-t border-border p-4">
               <View className="space-y-2 mb-4">
                 <View className="flex-row justify-between">
-                  <Text className="text-muted-foreground">Subtotal:</Text>
-                  <Text className="text-foreground font-medium">₹{subtotal.toFixed(2)}</Text>
+                  <Text className="text-muted-foreground native:text-gray-600">Subtotal:</Text>
+                  <Text className="text-foreground font-medium native:text-black">₹{subtotal.toFixed(2)}</Text>
                 </View>
                 <View className="flex-row justify-between">
-                  <Text className="text-lg font-bold text-foreground">Total:</Text>
-                  <Text className="text-lg font-bold text-primary">₹{totalAmount.toFixed(2)}</Text>
+                  <Text className="text-lg font-bold text-foreground native:text-black">Total:</Text>
+                  <Text className="text-lg font-bold text-primary native:text-blue-600">₹{totalAmount.toFixed(2)}</Text>
                 </View>
                 <View className="flex-row justify-between">
-                  <Text className="text-muted-foreground text-sm">Est. Profit:</Text>
+                  <Text className="text-muted-foreground text-sm native:text-gray-600">Est. Profit:</Text>
                   <Text className="text-green-600 text-sm">₹{totalProfit.toFixed(2)}</Text>
                 </View>
               </View>
               <DialogFooter className="flex-row gap-2 pt-2">
-                <Button variant="outline" className="h-10 flex-1" onPress={clearCart}>
-                  <Text className="text-muted-foreground">Clear Sale</Text>
+                <Button variant="outline" className="h-10 flex-1" onPress={clearCart} disabled={isProcessingSale}>
+                  <Text className="text-muted-foreground native:text-gray-600">Clear Sale</Text>
                 </Button>
-                <Button className="h-10 flex-1" onPress={handleProceedToPayment}>
-                  <Text className="text-white font-semibold">Proceed to Payment</Text>
+                <Button className="h-10 flex-1" onPress={handleProceedToPayment} disabled={isProcessingSale}>
+                  {isProcessingSale ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text className="text-primary-foreground font-semibold native:text-white">Proceed to Payment</Text>
+                  )}
                 </Button>
               </DialogFooter>
             </View>
@@ -693,54 +849,60 @@ export default function SalesScreen() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Sale Dialog */}
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
         <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-foreground">Confirm Sale</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground native:text-black">
+              <Text>Confirm Sale</Text> {/* FIX APPLIED */}
+            </DialogTitle>
           </DialogHeader>
           <View className="my-4">
-            <Text className="text-foreground mb-4">Please confirm the following sale:</Text>
+            <Text className="text-foreground mb-4 native:text-black">Please confirm the following sale:</Text>
             {cartItems.map((item) => (
               <View key={item.id} className="flex-row justify-between py-1">
-                <Text className="text-foreground">
+                <Text className="text-foreground native:text-black" numberOfLines={1} ellipsizeMode="tail" style={{ flex: 1, marginRight: 8 }}>
                   {item.name} {item.category ? `(${item.category})` : ''} × {item.quantityInCart}
                 </Text>
-                <Text className="text-foreground">₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}</Text>
+                <Text className="text-foreground native:text-black">₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}</Text>
               </View>
             ))}
             <Separator className="my-2" />
             <View className="flex-row justify-between py-1">
-              <Text className="text-lg font-bold text-foreground">Total:</Text>
-              <Text className="text-lg font-bold text-primary">₹{totalAmount.toFixed(2)}</Text>
+              <Text className="text-lg font-bold text-foreground native:text-black">Total:</Text>
+              <Text className="text-lg font-bold text-primary native:text-blue-600">₹{totalAmount.toFixed(2)}</Text>
             </View>
           </View>
           <DialogFooter className="flex-row justify-end gap-x-3">
-            <Button variant="outline" onPress={() => setIsConfirmDialogOpen(false)}>
-              <Text>Cancel</Text>
+            <Button variant="outline" onPress={() => setIsConfirmDialogOpen(false)} disabled={isProcessingSale}>
+              <Text className="native:text-black">Cancel</Text>
             </Button>
-            <Button onPress={confirmSale}>
-              <Text className="text-white">Confirm Sale</Text>
+            <Button onPress={confirmSale} disabled={isProcessingSale}>
+              {isProcessingSale ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text className="text-primary-foreground native:text-white">Confirm Sale</Text>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Clear Cart Confirmation Dialog */}
       <Dialog open={isClearCartDialogOpen} onOpenChange={setIsClearCartDialogOpen}>
         <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-foreground">Clear Cart</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground native:text-black">
+              <Text>Clear Cart</Text>
+            </DialogTitle>
           </DialogHeader>
           <View className="my-4">
-            <Text className="text-foreground">Are you sure you want to clear all items from the cart?</Text>
+            <Text className="text-foreground native:text-black">Are you sure you want to clear all items from the cart?</Text>
           </View>
           <DialogFooter className="flex-row justify-end gap-x-3">
-            <Button variant="outline" onPress={() => setIsClearCartDialogOpen(false)}>
-              <Text>Cancel</Text>
+            <Button variant="outline" onPress={() => setIsClearCartDialogOpen(false)} disabled={isProcessingSale}>
+              <Text className="native:text-black">Cancel</Text>
             </Button>
-            <Button variant="destructive" onPress={confirmClearCart}>
-              <Text className="text-white">Clear</Text>
+            <Button variant="destructive" onPress={confirmClearCart} disabled={isProcessingSale}>
+              <Text className="text-destructive-foreground native:text-white">Clear</Text>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -748,8 +910,3 @@ export default function SalesScreen() {
     </SafeAreaView>
   );
 }
-
-// --- StyleSheet ---
-const styles = StyleSheet.create({
-  // Add any platform-specific styles if needed
-});
