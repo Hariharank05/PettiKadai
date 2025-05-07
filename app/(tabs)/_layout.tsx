@@ -36,10 +36,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: isDarkColorScheme ? '#E5E7EB' : '#1F2937', // gray-200 for dark, gray-900 for light
-        tabBarInactiveTintColor: isDarkColorScheme ? '#6B7280' : '#9CA3AF', // gray-500 for dark, gray-400 for light
+        tabBarActiveTintColor: isDarkColorScheme ? '#E5E7EB' : '#1F2937',
+        tabBarInactiveTintColor: isDarkColorScheme ? '#6B7280' : '#9CA3AF',
         tabBarStyle: {
-          backgroundColor: isDarkColorScheme ? '#1F2937' : '#FFFFFF', // gray-900 for dark, white for light
+          backgroundColor: isDarkColorScheme ? '#1F2937' : '#FFFFFF',
         },
       }}
     >
@@ -50,19 +50,19 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
           headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
           },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937', // White text for contrast
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
-          title: 'Products',
+          title: 'Invenrtry',
           tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
           headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
           },
           headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
@@ -73,7 +73,7 @@ export default function TabsLayout() {
           title: 'Sales',
           tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />,
           headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
           },
           headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
@@ -85,7 +85,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
           headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
           },
           headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}
@@ -97,7 +97,19 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
           headerRight: () => <ThemeToggle />,
           headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF', // gray-900 for dark, gray-800 for light
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+        }}
+      />
+      <Tabs.Screen
+        name="customers"
+        options={{
+          title: 'Customers',
+          // tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />, // We can define an icon
+          href: null,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
           },
           headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
         }}

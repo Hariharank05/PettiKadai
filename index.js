@@ -1,6 +1,7 @@
 import { registerRootComponent } from "expo";
 import { ExpoRoot } from "expo-router";
 import { RefreshProvider } from "~/components/RefreshProvider";
+import "react-native-get-random-values"; // <<<< ADD THIS LINE AT THE VERY TOP
 
 // https://docs.expo.dev/router/reference/troubleshooting/#expo_router_app_root-not-defined
 
