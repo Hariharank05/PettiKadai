@@ -53,7 +53,11 @@ export default function HomeScreen() {
   const navigateToProducts = () => {
     router.push('/(tabs)/products');
   };
-
+    // Navigate to products page
+    const navigateToReports = () => {
+      router.push('/(tabs)/ReportsScreen');
+    };
+  
   if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-background">
@@ -169,9 +173,12 @@ export default function HomeScreen() {
                   <Text className="text-foreground text-sm">Add Product</Text>
                 </View>
               </TouchableOpacity>
-
-              <TouchableOpacity className="w-1/2 p-2">
-                <View className="bg-muted p-4 rounded-md items-center">
+             
+              <TouchableOpacity
+                className="w-1/2 p-2"
+                onPress={navigateToReports}
+              >
+             <View className="bg-muted p-4 rounded-md items-center">
                   <BarChart4 size={20} className="text-purple-500 dark:text-purple-300 mb-1" />
                   <Text className="text-foreground text-sm">Reports</Text>
                 </View>

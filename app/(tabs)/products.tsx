@@ -27,7 +27,7 @@ import { Input } from '~/components/ui/input';
 import { Button as ShadcnButton } from '~/components/ui/button';
 import { Filter, Pencil, Trash2, X, ListFilter } from 'lucide-react-native';
 import { useRefresh } from '~/components/RefreshProvider';
-
+import { initDatabase } from '~/lib/db';
 const ProductManagementScreen = () => {
   const { products: rawProducts, fetchProducts, addProduct, updateProduct, deleteProduct } = useProductStore();
   const { refreshForm: appRefreshForm } = useRefresh();
@@ -349,11 +349,11 @@ const ProductManagementScreen = () => {
                 <View className="flex-row">
                   <View className="w-[100px] pr-1">
                     <Text className="text-xs text-muted-foreground">Cost</Text>
-                    <Text className="text-sm text-foreground">â‚¹{item.costPrice.toFixed(2)}</Text>
+                    <Text className="text-sm text-foreground">₹{item.costPrice.toFixed(2)}</Text>
                   </View>
                   <View className="w-[100px] pl-1">
                     <Text className="text-xs text-muted-foreground">Selling</Text>
-                    <Text className="text-sm text-foreground">â‚¹{item.sellingPrice.toFixed(2)}</Text>
+                    <Text className="text-sm text-foreground">₹{item.sellingPrice.toFixed(2)}</Text>
                   </View>
                 </View>
                 <View className="flex-row gap-x-1">
@@ -667,7 +667,7 @@ const ProductManagementScreen = () => {
                 <View className="flex-row gap-x-4 mt-4">
                   <View className="flex-1">
                     <Text className="mb-2 text-base font-semibold text-muted-foreground">
-                      Cost Price (â‚¹) <Text className="text-destructive">*</Text>
+                      Cost Price (₹) <Text className="text-destructive">*</Text>
                     </Text>
                     <Input
                       placeholder="0.00"
@@ -680,7 +680,7 @@ const ProductManagementScreen = () => {
                   </View>
                   <View className="flex-1">
                     <Text className="mb-2 text-base font-semibold text-muted-foreground">
-                      Selling Price (â‚¹) <Text className="text-destructive">*</Text>
+                      Selling Price (₹) <Text className="text-destructive">*</Text>
                     </Text>
                     <Input
                       placeholder="0.00"
@@ -691,7 +691,7 @@ const ProductManagementScreen = () => {
                       editable={!isLoading}
                     />
                     <Text className={`mt-2 text-sm ${parseFloat(profit) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      Profit: â‚¹{profit} {parseFloat(profit) < 0 ? '(Loss)' : ''}
+                      Profit: ₹{profit} {parseFloat(profit) < 0 ? '(Loss)' : ''}
                     </Text>
                   </View>
                 </View>

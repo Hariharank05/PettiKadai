@@ -72,6 +72,14 @@ export default function TabsLayout() {
           headerRight: () => <ThemeToggle />,
         }}
       />
+      <Tabs.Screen
+        name="ReportsScreen"
+        options={{
+          title: 'Reports',
+          href: null,
+          headerRight: () => <ThemeToggle />,
+        }}
+      />
     </Tabs>
   );
 }
