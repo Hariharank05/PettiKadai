@@ -1,4 +1,4 @@
-import { getDb } from '../db';
+import { getDatabase as getDb } from '../db/database';
 
 // Simple ID generator for React Native
 function generateId(): string {

@@ -1,86 +1,93 @@
+// ~/lib/stores/authStore.ts
 import { create } from 'zustand';
-import { 
-  registerUser, 
-  loginUser, 
-  logoutUser, 
-  getCurrentAuthState, 
-  resetPassword, 
-  verifySecurityQuestion 
+import {
+  registerUser,
+  loginUser,
+  logoutUser,
+  getCurrentAuthState,
+  resetPassword,
+  verifySecurityQuestion
 } from '../db/authOperations';
-import { 
-  AuthState, 
-  UserRegistrationInput, 
-  UserLoginInput, 
-  PasswordResetInput 
+import {
+  AuthState,
+  UserRegistrationInput,
+  UserLoginInput,
+  PasswordResetInput,
+  User // Make sure User is imported if needed for types, though not directly stored
 } from '../models/user';
 
-interface AuthStore extends AuthState {
-  // Loading and error states
+interface AuthStoreState extends AuthState {
   isLoading: boolean;
   error: string | null;
-  
-  // Auth actions
   initialize: () => Promise<void>;
   signup: (userData: UserRegistrationInput) => Promise<boolean>;
   login: (credentials: UserLoginInput) => Promise<boolean>;
   logout: () => Promise<void>;
-  verifySecurityAnswer: (emailOrPhone: string, answer: string) => Promise<boolean>;
-  resetPassword: (resetData: PasswordResetInput) => Promise<boolean>;
+  verifySecurityAnswer: (emailOrPhone: string, answer: string) => Promise<User | null>; // Return User or null
+  resetUserPassword: (resetData: PasswordResetInput) => Promise<boolean>; // Renamed to avoid conflict with model
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
-  // Auth state
+export const useAuthStore = create<AuthStoreState>((set, get) => ({
   isAuthenticated: false,
   userId: undefined,
   userName: undefined,
   lastLoginAt: undefined,
-  
-  // UI state
   isLoading: false,
   error: null,
 
-  // Initialize auth state from database
   initialize: async () => {
+    // console.log('[AuthStore] Initializing auth state...');
     set({ isLoading: true, error: null });
     try {
       const authState = await getCurrentAuthState();
       if (authState) {
+        // console.log('[AuthStore] Auth state from DB:', authState);
         set({
           isAuthenticated: authState.isAuthenticated,
           userId: authState.userId,
           userName: authState.userName,
           lastLoginAt: authState.lastLoginAt,
         });
+      } else {
+        // console.log('[AuthStore] No persisted auth state found, defaulting.');
+        set({ // Ensure defaults are set if nothing is returned
+            isAuthenticated: false,
+            userId: undefined,
+            userName: undefined,
+            lastLoginAt: undefined,
+        });
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize auth';
-      set({ error: errorMessage });
+      console.error('[AuthStore] Initialization error:', errorMessage);
+      set({ error: errorMessage, isAuthenticated: false, userId: undefined, userName: undefined });
     } finally {
       set({ isLoading: false });
+      // console.log('[AuthStore] Initialization complete. Current state:', get());
     }
   },
 
-  // Register new user
   signup: async (userData: UserRegistrationInput) => {
     set({ isLoading: true, error: null });
     try {
       await registerUser(userData);
-      // Don't auto-login after signup to allow explicit login
+      // console.log('[AuthStore] Signup successful for:', userData.name);
       set({ isLoading: false });
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to register user';
+      console.error('[AuthStore] Signup error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
       return false;
     }
   },
 
-  // Login user
   login: async (credentials: UserLoginInput) => {
     set({ isLoading: true, error: null });
     try {
       const authState = await loginUser(credentials);
+      // console.log('[AuthStore] Login successful, new state:', authState);
       set({
         isAuthenticated: authState.isAuthenticated,
         userId: authState.userId,
@@ -91,16 +98,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to login';
+      console.error('[AuthStore] Login error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
       return false;
     }
   },
 
-  // Logout user
   logout: async () => {
     set({ isLoading: true, error: null });
     try {
       await logoutUser();
+      // console.log('[AuthStore] Logout successful, clearing state.');
       set({
         isAuthenticated: false,
         userId: undefined,
@@ -110,39 +118,39 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to logout';
+      console.error('[AuthStore] Logout error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
     }
   },
 
-  // Verify security question for password reset
   verifySecurityAnswer: async (emailOrPhone: string, answer: string) => {
     set({ isLoading: true, error: null });
     try {
       const user = await verifySecurityQuestion(emailOrPhone, answer);
       set({ isLoading: false });
-      return !!user;
+      return user; // Returns the user object if successful, or null if verifySecurityQuestion throws (which it should on failure)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to verify security answer';
+      console.error('[AuthStore] Verify security answer error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
-      return false;
+      return null; // Ensure null is returned on error
     }
   },
 
-  // Reset password
-  resetPassword: async (resetData: PasswordResetInput) => {
+  resetUserPassword: async (resetData: PasswordResetInput) => {
     set({ isLoading: true, error: null });
     try {
-      const success = await resetPassword(resetData);
+      const success = await resetPassword(resetData); // The DB operation
       set({ isLoading: false });
       return success;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to reset password';
+      console.error('[AuthStore] Reset password error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
       return false;
     }
   },
 
-  // Clear error
   clearError: () => {
     set({ error: null });
   },

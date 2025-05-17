@@ -27,7 +27,7 @@ import { Input } from '~/components/ui/input';
 import { Button as ShadcnButton } from '~/components/ui/button';
 import { Filter, Pencil, Trash2, X, ListFilter } from 'lucide-react-native';
 import { useRefresh } from '~/components/RefreshProvider';
-import { initDatabase } from '~/lib/db';
+
 const ProductManagementScreen = () => {
   const { products: rawProducts, fetchProducts, addProduct, updateProduct, deleteProduct } = useProductStore();
   const { refreshForm: appRefreshForm } = useRefresh();

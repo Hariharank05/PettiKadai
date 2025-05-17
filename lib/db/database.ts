@@ -1,15 +1,17 @@
+// ~/lib/db/database.ts
 
 import * as SQLite from 'expo-sqlite';
+import { Platform } from 'react-native'; // Import Platform
 
 // Open or create the database with type annotation
 const db: SQLite.SQLiteDatabase = SQLite.openDatabaseSync('pettiKadai.db');
 
 // Initialize database tables
 export const initDatabase = (): void => {
+  console.log("%%%% EXECUTING NEW initDatabase from UPDATED file - v2 %%%%"); // Add a version
   try {
     db.withTransactionSync(() => {
-      // ReceiptTemplates Table (moved first due to foreign key dependency)
-
+      // Users Table (No change needed here for userId itself)
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Users (
           id TEXT PRIMARY KEY,
@@ -25,7 +27,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // Add AuthState Table
+      // AuthState Table (No change needed here for userId itself)
       db.execSync(`
         CREATE TABLE IF NOT EXISTS AuthState (
           id TEXT PRIMARY KEY DEFAULT 'current_auth',
@@ -38,6 +40,7 @@ export const initDatabase = (): void => {
         );
       `);
 
+      // ReceiptTemplates Table (Assuming global, but could be user-specific if needed later)
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ReceiptTemplates (
           id TEXT PRIMARY KEY,
@@ -49,63 +52,73 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // Products Table
+      // Products Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS products (
         id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL, -- ADDED
         name TEXT NOT NULL,
         costPrice REAL NOT NULL,
         sellingPrice REAL NOT NULL,
-        quantity INTEGER NOT NULL DEFAULT 0,     
-        unit TEXT NOT NULL DEFAULT 'piece',     
-        category TEXT,                           
-        imageUri TEXT,                         
-        createdAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), 
-        updatedAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))  
+        quantity INTEGER NOT NULL DEFAULT 0,
+        unit TEXT NOT NULL DEFAULT 'piece',
+        category TEXT,
+        imageUri TEXT,
+        createdAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updatedAt TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
        );
     `);
 
-      // Categories Table
+      // Categories Table - Added userId (if categories are per-user)
+      // If categories are global, remove userId and its FOREIGN KEY
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Categories (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED (Consider if global or per-user)
           name TEXT NOT NULL,
           description TEXT,
-          createdAt TEXT DEFAULT (datetime('now'))
+          createdAt TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // Suppliers Table
+      // Suppliers Table - Added userId (if suppliers are per-user)
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Suppliers (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           name TEXT NOT NULL,
           contactPerson TEXT,
           phone TEXT,
           email TEXT,
           address TEXT,
           createdAt TEXT DEFAULT (datetime('now')),
-          updatedAt TEXT DEFAULT (datetime('now'))
+          updatedAt TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // Stock Adjustments Table
+      // Stock Adjustments Table - Added userId (links to user who made adjustment)
       db.execSync(`
         CREATE TABLE IF NOT EXISTS StockAdjustments (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           productId TEXT NOT NULL,
           previousQuantity INTEGER NOT NULL,
           newQuantity INTEGER NOT NULL,
           adjustmentReason TEXT NOT NULL,
           timestamp TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id), -- ADDED
           FOREIGN KEY (productId) REFERENCES Products(id)
         );
       `);
 
-      // Product Batches Table
+      // Product Batches Table - Added userId (links to user who added batch)
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ProductBatches (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           productId TEXT NOT NULL,
           batchNumber TEXT,
           quantity INTEGER NOT NULL,
@@ -114,15 +127,17 @@ export const initDatabase = (): void => {
           supplierId TEXT,
           purchaseDate TEXT,
           createdAt TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id), -- ADDED
           FOREIGN KEY (productId) REFERENCES Products(id),
           FOREIGN KEY (supplierId) REFERENCES Suppliers(id)
         );
       `);
 
-      // Sales Table
+      // Sales Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Sales (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           timestamp TEXT DEFAULT (datetime('now')),
           totalAmount REAL NOT NULL,
           totalProfit REAL NOT NULL,
@@ -135,11 +150,12 @@ export const initDatabase = (): void => {
           paymentType TEXT NOT NULL,
           isPaid INTEGER DEFAULT 1,
           notes TEXT,
-          salesStatus TEXT DEFAULT 'COMPLETED'
+          salesStatus TEXT DEFAULT 'COMPLETED',
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // SaleItems Table
+      // SaleItems Table (Implicitly user-specific via Sales.userId) - No direct userId needed
       db.execSync(`
         CREATE TABLE IF NOT EXISTS SaleItems (
           id TEXT PRIMARY KEY,
@@ -158,20 +174,22 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // DraftSales Table
+      // DraftSales Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS DraftSales (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           timestamp TEXT DEFAULT (datetime('now')),
           totalAmount REAL NOT NULL,
           customerName TEXT,
           customerPhone TEXT,
           notes TEXT,
-          expiryTime TEXT
+          expiryTime TEXT,
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // DraftSaleItems Table
+      // DraftSaleItems Table (Implicitly user-specific via DraftSales.userId) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS DraftSaleItems (
           id TEXT PRIMARY KEY,
@@ -185,7 +203,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // Returns Table
+      // Returns Table (Implicitly user-specific via Sales.userId) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Returns (
           id TEXT PRIMARY KEY,
@@ -197,7 +215,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // ReturnItems Table
+      // ReturnItems Table (Implicitly user-specific) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ReturnItems (
           id TEXT PRIMARY KEY,
@@ -213,7 +231,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // Receipts Table
+      // Receipts Table (Implicitly user-specific via Sales.userId) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Receipts (
           id TEXT PRIMARY KEY,
@@ -228,7 +246,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // ReceiptSharing Table
+      // ReceiptSharing Table (Implicitly user-specific) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ReceiptSharing (
           id TEXT PRIMARY KEY,
@@ -242,7 +260,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // ReceiptQRCodes Table
+      // ReceiptQRCodes Table (Implicitly user-specific) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ReceiptQRCodes (
           id TEXT PRIMARY KEY,
@@ -255,20 +273,22 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // Reports Table
+      // Reports Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Reports (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           reportType TEXT NOT NULL,
           name TEXT NOT NULL,
           parameters TEXT NOT NULL,
           createdAt TEXT DEFAULT (datetime('now')),
           lastRun TEXT,
-          runCount INTEGER DEFAULT 0
+          runCount INTEGER DEFAULT 0,
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // SavedReports Table
+      // SavedReports Table (Implicitly user-specific via Reports.userId) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS SavedReports (
           id TEXT PRIMARY KEY,
@@ -282,7 +302,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // ScheduledReports Table
+      // ScheduledReports Table (Implicitly user-specific via Reports.userId) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ScheduledReports (
           id TEXT PRIMARY KEY,
@@ -298,19 +318,21 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // ReportMetrics Table
+      // ReportMetrics Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ReportMetrics (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           metricName TEXT NOT NULL,
           metricValue REAL NOT NULL,
           calculationDate TEXT NOT NULL,
           metricType TEXT NOT NULL,
-          updatedAt TEXT DEFAULT (datetime('now'))
+          updatedAt TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // ProductPerformance Table
+      // ProductPerformance Table (Implicitly user-specific via Products.userId) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS ProductPerformance (
           id TEXT PRIMARY KEY,
@@ -327,9 +349,15 @@ export const initDatabase = (): void => {
       `);
 
       // Settings Table
+      // Option 1: Global settings (as it is now).
+      // Option 2: User-specific settings (add userId, make id non-default).
+      // For today's speed, keeping it mostly global, but user-specific preferences like darkMode could be moved.
+      // Let's add userId for potential future user-specific store settings, but the 'app_settings' ID logic will need adjustment if multiple users have their *own* settings.
+      // For now, we'll assume one primary user configures store-wide settings, and other settings like darkMode are per user instance.
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Settings (
-          id TEXT PRIMARY KEY DEFAULT 'app_settings',
+          id TEXT PRIMARY KEY, -- Can be 'app_settings' for global or a userId for user-specific
+          userId TEXT, -- ADDED (Can be NULL for global 'app_settings' row)
           storeName TEXT NOT NULL,
           storeAddress TEXT,
           storePhone TEXT,
@@ -342,26 +370,30 @@ export const initDatabase = (): void => {
           lastBackupDate TEXT,
           darkMode INTEGER DEFAULT 0,
           language TEXT DEFAULT 'en',
-          updatedAt TEXT DEFAULT (datetime('now'))
+          updatedAt TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // AppUsage Table
+      // AppUsage Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS AppUsage (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           featureName TEXT NOT NULL,
           usageCount INTEGER DEFAULT 1,
-          lastUsed TEXT DEFAULT (datetime('now'))
+          lastUsed TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
 
-      // Customers Table
+      // Customers Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS Customers (
           id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL, -- ADDED
           name TEXT NOT NULL,
-          phone TEXT NOT NULL UNIQUE,
+          phone TEXT NOT NULL, -- UNIQUE constraint will be per user now if combined with userId in logic
           email TEXT,
           address TEXT,
           totalPurchases REAL DEFAULT 0,
@@ -370,11 +402,13 @@ export const initDatabase = (): void => {
           loyaltyPoints INTEGER DEFAULT 0,
           lastPurchaseDate TEXT,
           createdAt TEXT DEFAULT (datetime('now')),
-          updatedAt TEXT DEFAULT (datetime('now'))
+          updatedAt TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
+          -- Consider adding UNIQUE(userId, phone) if phone must be unique per user
         );
       `);
 
-      // CreditSales Table
+      // CreditSales Table (Implicitly user-specific via Sales.userId or Customers.userId) - No direct userId needed
       db.execSync(`
         CREATE TABLE IF NOT EXISTS CreditSales (
           id TEXT PRIMARY KEY,
@@ -392,7 +426,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // CreditPayments Table
+      // CreditPayments Table (Implicitly user-specific) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS CreditPayments (
           id TEXT PRIMARY KEY,
@@ -407,7 +441,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // PaymentReminders Table
+      // PaymentReminders Table (Implicitly user-specific) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS PaymentReminders (
           id TEXT PRIMARY KEY,
@@ -423,7 +457,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // PaymentCommitments Table
+      // PaymentCommitments Table (Implicitly user-specific) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS PaymentCommitments (
           id TEXT PRIMARY KEY,
@@ -437,7 +471,7 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // CustomerCreditHistory Table
+      // CustomerCreditHistory Table (Implicitly user-specific via Customers.userId) - No direct userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS CustomerCreditHistory (
           id TEXT PRIMARY KEY,
@@ -452,26 +486,30 @@ export const initDatabase = (): void => {
         );
       `);
 
-      // Check if Settings has a default row
+      // Check if Settings has a default global row
       const settingsExists = db.getFirstSync<{ count: number }>(
         'SELECT COUNT(*) as count FROM Settings WHERE id = "app_settings"'
       );
-      
-      // Create default settings if none exist
+
+      // Create default global settings if none exist
       if (!settingsExists || settingsExists.count === 0) {
         db.runSync(
           `INSERT INTO Settings (
-            id, storeName, storeAddress, storePhone, storeEmail, 
-            currencySymbol, taxRate, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            id, userId, storeName, storeAddress, storePhone, storeEmail,
+            currencySymbol, taxRate, defaultDiscountRate, darkMode, language, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            'app_settings',
-            'My Store',
-            '',
-            '',
-            '',
-            '₹',
-            0,
+            'app_settings', // Primary key for this global/default row
+            null,             // userId is null for this global settings row
+            'My Store',       // Default store name
+            '',               // Default store address
+            '',               // Default store phone
+            '',               // Default store email
+            '₹',              // Default currency symbol
+            0,                // Default tax rate
+            0,                // Default discount rate
+            0,                // Default dark mode (false)
+            'en',             // Default language
             new Date().toISOString()
           ]
         );
@@ -480,9 +518,14 @@ export const initDatabase = (): void => {
       // Enable foreign keys
       db.execSync('PRAGMA foreign_keys = ON;');
     });
+    console.log("Database initialized with multi-user schema.");
   } catch (error) {
-    console.error('Failed to initialize database:', error);
-    throw error;
+    console.error('Failed to initialize database with multi-user schema:', error);
+    // If running on web, SQLite might not be fully supported by expo-sqlite in all browsers/environments
+    if (Platform.OS === 'web') {
+        console.warn("SQLite operations on web might have limitations. Ensure your environment supports it fully or consider alternative storage for web.");
+    }
+    throw error; // Re-throw to signal failure
   }
 };
 

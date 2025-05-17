@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, Alert, Switch, StyleSheet, TextInput } from 'react-native';
+// app/(tabs)/settings.tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, TouchableOpacity, Alert, Switch as RNSwitch, ActivityIndicator, StyleSheet, TextInput as RNTextInput, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '~/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '~/components/ui/dialog';
 import { Separator } from '~/components/ui/separator';
+
 import { useAuthStore } from '~/lib/stores/authStore';
 import { getDatabase } from '~/lib/db/database';
 import {
     User,
-    Settings,
     LogOut,
     Lock,
     Building,
@@ -20,768 +19,552 @@ import {
     Mail,
     Save,
     Trash,
-    RefreshCw
+    RefreshCw,
+    Settings as SettingsIcon,
+    Key,
+    Shield,
+    Info,
+    Moon,
+    Sun
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 
-// Interface for store settings
-interface StoreSettings {
+interface UserStoreSettings {
     storeName: string;
     storeAddress: string;
     storePhone: string;
     storeEmail: string;
     currencySymbol: string;
     taxRate: number;
-    discountRate?: number; // Make this optional since it might not exist
+    darkMode?: boolean; // This will hold the value from DB or user's UI interaction
+    language?: string;
+    // Flag to indicate if settings have been loaded from DB for this user
+    // This helps in deciding whether to apply DB theme to global theme
+    dbSettingsLoaded?: boolean;
 }
 
 export default function SettingsScreen() {
-    const { userName, logout } = useAuthStore();
-    const { colorScheme, toggleColorScheme } = useColorScheme();
+    const { userName, userId, logout, isLoading: authIsLoading } = useAuthStore();
+    const { setColorScheme, isDarkColorScheme } = useColorScheme();
     const router = useRouter();
     const db = getDatabase();
 
-    const [storeSettings, setStoreSettings] = useState<StoreSettings>({
-        storeName: '',
+    const [userSettings, setUserSettings] = useState<UserStoreSettings>({
+        storeName: 'My Store',
         storeAddress: '',
         storePhone: '',
         storeEmail: '',
         currencySymbol: '₹',
         taxRate: 0,
-        discountRate: 0
+        darkMode: isDarkColorScheme, // Initialize with current app theme
+        language: 'en',
+        dbSettingsLoaded: false,
     });
 
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [showResetDialog, setShowResetDialog] = useState(false);
     const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-    const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
     const [savedMessage, setSavedMessage] = useState('');
 
-    // Load store settings
-    useEffect(() => {
-        const loadSettings = async () => {
-            try {
-                // First check if the Settings table exists and create it if not
-                await db.execAsync(`
-          CREATE TABLE IF NOT EXISTS Settings (
-            id TEXT PRIMARY KEY DEFAULT 'app_settings',
-            storeName TEXT DEFAULT '',
-            storeAddress TEXT DEFAULT '',
-            storePhone TEXT DEFAULT '',
-            storeEmail TEXT DEFAULT '',
-            currencySymbol TEXT DEFAULT '₹',
-            taxRate REAL DEFAULT 0,
-            updatedAt TEXT DEFAULT (datetime('now'))
-          );
-        `);
+    // Step 1: Fetch user settings from DB. This function should be stable.
+    const fetchUserSettingsFromDb = useCallback(async (currentUserId: string) => {
+        console.log('[SettingsScreen] Fetching user settings for:', currentUserId);
+        try {
+            const settingsFromDb = await db.getFirstAsync<any>(
+                'SELECT storeName, storeAddress, storePhone, storeEmail, currencySymbol, taxRate, darkMode, language FROM Settings WHERE userId = ? AND id = ?',
+                [currentUserId, currentUserId]
+            );
 
-                // Then check for existing settings
-                const checkSettings = await db.getFirstAsync<{ count: number }>(
-                    'SELECT COUNT(*) as count FROM Settings WHERE id = "app_settings"'
-                );
-
-                // Create default settings if none exist
-                if (!checkSettings || checkSettings.count === 0) {
-                    await db.runAsync(
-                        `INSERT INTO Settings (
-              id, storeName, storeAddress, storePhone, storeEmail, 
-              currencySymbol, taxRate, updatedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            'app_settings',
-                            'My Store',
-                            '',
-                            '',
-                            '',
-                            '₹',
-                            0,
-                            new Date().toISOString()
-                        ]
-                    );
-                }
-
-                // Now get the settings
-                const settings = await db.getFirstAsync<StoreSettings>(
-                    'SELECT storeName, storeAddress, storePhone, storeEmail, currencySymbol, taxRate FROM Settings WHERE id = "app_settings"'
-                );
-
-                if (settings) {
-                    setStoreSettings({
-                        ...settings,
-                        discountRate: 0 // Default value - not stored in DB
-                    });
-                }
-            } catch (error) {
-                console.error('Failed to load settings:', error);
-                // Initialize with defaults even if there's an error
-                setStoreSettings({
+            if (settingsFromDb) {
+                console.log('[SettingsScreen] Found settings in DB:', settingsFromDb);
+                return {
+                    storeName: settingsFromDb.storeName || 'My Store',
+                    storeAddress: settingsFromDb.storeAddress || '',
+                    storePhone: settingsFromDb.storePhone || '',
+                    storeEmail: settingsFromDb.storeEmail || '',
+                    currencySymbol: settingsFromDb.currencySymbol || '₹',
+                    taxRate: settingsFromDb.taxRate || 0,
+                    darkMode: settingsFromDb.darkMode === 1,
+                    language: settingsFromDb.language || 'en',
+                    dbSettingsLoaded: true, // Mark that DB settings were loaded
+                };
+            } else {
+                console.log(`[SettingsScreen] No settings found for user ${currentUserId}. Will use defaults.`);
+                return {
                     storeName: 'My Store',
                     storeAddress: '',
                     storePhone: '',
                     storeEmail: '',
                     currencySymbol: '₹',
                     taxRate: 0,
-                    discountRate: 0
-                });
+                    darkMode: isDarkColorScheme, // Use current app theme as default for UI
+                    language: 'en',
+                    dbSettingsLoaded: true, // Mark as "loaded" even if defaults are used
+                };
             }
-        };
+        } catch (error) {
+            console.error('[SettingsScreen] Failed to load user settings:', error);
+            Alert.alert('Error', 'Could not load your settings.');
+            return { // Fallback
+                storeName: 'My Store', storeAddress: '', storePhone: '',
+                storeEmail: '', currencySymbol: '₹', taxRate: 0,
+                darkMode: isDarkColorScheme, language: 'en', dbSettingsLoaded: true,
+            };
+        }
+    }, [db, isDarkColorScheme]); // Depends on db and isDarkColorScheme (for default if no DB settings)
 
-        loadSettings();
-    }, []);
+    // Effect for fetching data when userId changes
+    useEffect(() => {
+        if (userId) {
+            setIsLoading(true);
+            fetchUserSettingsFromDb(userId)
+                .then(fetchedSettings => {
+                    setUserSettings(fetchedSettings);
+                })
+                .finally(() => {
+                    setIsLoading(false);
+                });
+        } else {
+            // Reset to defaults if no user or user logs out
+            setUserSettings({
+                storeName: 'My Store', storeAddress: '', storePhone: '',
+                storeEmail: '', currencySymbol: '₹', taxRate: 0,
+                darkMode: isDarkColorScheme, language: 'en', dbSettingsLoaded: false,
+            });
+            setIsLoading(false);
+        }
+    }, [userId, fetchUserSettingsFromDb]); // fetchUserSettingsFromDb is now stable if db and isDarkColorScheme are stable
 
-    // Save store settings
-    const saveSettings = async () => {
+    // Effect to synchronize DB darkMode to global theme ONCE after settings are loaded
+    useEffect(() => {
+        if (userSettings.dbSettingsLoaded && userSettings.darkMode !== undefined && userSettings.darkMode !== isDarkColorScheme) {
+            console.log(`[SettingsScreen] DB settings loaded. DB darkMode (${userSettings.darkMode}) differs from app theme (${isDarkColorScheme}). Syncing app theme.`);
+            setColorScheme(userSettings.darkMode ? 'dark' : 'light');
+            // Once synced, we might not want this to run again unless dbSettingsLoaded changes
+            // Or, ensure this only happens if there's a genuine difference
+        }
+    }, [userSettings.dbSettingsLoaded, userSettings.darkMode, isDarkColorScheme, setColorScheme]);
+
+    // Effect to synchronize the Switch UI with the global isDarkColorScheme
+    // This ensures the switch reflects the theme even if it's changed elsewhere
+    useEffect(() => {
+        console.log("[SettingsScreen] Global isDarkColorScheme changed to:", isDarkColorScheme, ". Updating UI switch state.");
+        setUserSettings(prev => ({ ...prev, darkMode: isDarkColorScheme }));
+    }, [isDarkColorScheme]);
+
+
+    const saveUserSettings = async () => {
+        // ... (saveUserSettings logic remains largely the same as your last version)
+        // Just ensure it uses `userSettings.darkMode` when saving to the DB
+        if (!userId) {
+            Alert.alert("Error", "User not identified. Cannot save settings.");
+            return;
+        }
         setIsLoading(true);
         try {
             const now = new Date().toISOString();
-
-            await db.runAsync(
-                `UPDATE Settings SET 
-          storeName = ?, storeAddress = ?, storePhone = ?, storeEmail = ?,
-          currencySymbol = ?, taxRate = ?, updatedAt = ?
-        WHERE id = "app_settings"`,
-                [
-                    storeSettings.storeName,
-                    storeSettings.storeAddress,
-                    storeSettings.storePhone,
-                    storeSettings.storeEmail,
-                    storeSettings.currencySymbol,
-                    storeSettings.taxRate,
-                    now
-                ]
+            const existingSettings = await db.getFirstAsync(
+                'SELECT id FROM Settings WHERE userId = ? AND id = ?', [userId, userId]
             );
+
+            const languageToSave = userSettings.language || 'en';
+            const darkModeToSave = userSettings.darkMode ? 1 : 0; // Ensure this uses the local userSettings
+
+            if (existingSettings) {
+                console.log('[SettingsScreen] Updating existing settings for user:', userId, "DarkMode to save:", darkModeToSave);
+                await db.runAsync(
+                    `UPDATE Settings SET
+                        storeName = ?, storeAddress = ?, storePhone = ?, storeEmail = ?,
+                        currencySymbol = ?, taxRate = ?, darkMode = ?, language = ?, updatedAt = ?
+                    WHERE userId = ? AND id = ?`,
+                    [
+                        userSettings.storeName, userSettings.storeAddress, userSettings.storePhone,
+                        userSettings.storeEmail, userSettings.currencySymbol, userSettings.taxRate,
+                        darkModeToSave, languageToSave, now,
+                        userId, userId
+                    ]
+                );
+            } else {
+                console.log('[SettingsScreen] Inserting new settings for user:', userId, "DarkMode to save:", darkModeToSave);
+                await db.runAsync(
+                    `INSERT INTO Settings (
+                        id, userId, storeName, storeAddress, storePhone, storeEmail,
+                        currencySymbol, taxRate, defaultDiscountRate, darkMode, language, receiptFooter, backupFrequency, updatedAt
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        userId, userId, userSettings.storeName, userSettings.storeAddress,
+                        userSettings.storePhone, userSettings.storeEmail, userSettings.currencySymbol,
+                        userSettings.taxRate, 0, darkModeToSave, languageToSave,
+                        '', 'WEEKLY', now
+                    ]
+                );
+            }
+            // After saving, refetch to ensure state is consistent with DB, especially if defaults were applied.
+            // And mark dbSettingsLoaded as true, because now they ARE loaded (or just created).
+            const updatedSettingsFromDb = await fetchUserSettingsFromDb(userId);
+            setUserSettings(updatedSettingsFromDb);
+
 
             setSavedMessage('Settings saved successfully!');
             setTimeout(() => setSavedMessage(''), 3000);
         } catch (error) {
-            console.error('Failed to save settings:', error);
-            Alert.alert('Error', 'Failed to save settings');
+            console.error('Failed to save user settings:', error);
+            Alert.alert('Error', `Failed to save settings: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Handle app data reset
-    const handleResetData = async () => {
+    const handleToggleDarkModeSwitch = () => {
+        const newDarkModeState = !userSettings.darkMode;
+        // 1. Update local UI state for the switch immediately
+        setUserSettings(prev => ({ ...prev, darkMode: newDarkModeState }));
+        // 2. Update global app theme
+        setColorScheme(newDarkModeState ? 'dark' : 'light');
+        // The change will be persisted to DB when the user clicks "Save Preferences"
+    };
+
+    // ... (handleAttemptLogout, handleConfirmLogout, handleAttemptResetData, handleConfirmResetData remain the same)
+    const handleAttemptLogout = () => {
+        setShowLogoutDialog(true);
+    };
+
+    const handleConfirmLogout = async () => {
+        setShowLogoutDialog(false);
+        await logout();
+        router.replace('/(auth)/login');
+    };
+
+    const handleAttemptResetData = () => {
+        setShowResetDialog(true);
+    };
+
+    const handleConfirmResetData = async () => {
+        setShowResetDialog(false);
+        if (!userId) {
+            Alert.alert("Error", "User not identified. Cannot reset data.");
+            return;
+        }
         setIsLoading(true);
         try {
-            // Delete all app data except auth
             await db.withTransactionSync(() => {
-                // Clear products
-                db.execSync('DELETE FROM Products');
-
-                // Clear sales if the table exists
-                try {
-                    db.execSync('DELETE FROM Sales');
-                } catch (e) {
-                    // Table might not exist, which is fine
-                }
-
-                // Clear other tables if they exist
-                const safeClearTable = (tableName: string) => {
+                const tablesToClearForUser = [
+                    'products', 'Categories', 'Suppliers', 'StockAdjustments',
+                    'ProductBatches', 'Sales', 'DraftSales', 'Reports',
+                    'ReportMetrics', 'AppUsage', 'Customers'
+                ];
+                for (const table of tablesToClearForUser) {
                     try {
-                        db.execSync(`DELETE FROM ${tableName}`);
-                    } catch (e) {
-                        // Table might not exist, which is fine
+                        const tableInfo = db.getAllSync(`PRAGMA table_info(${table});`);
+                        const hasUserIdColumn = tableInfo.some((col: any) => col.name === 'userId');
+                        if (hasUserIdColumn) {
+                            db.runSync(`DELETE FROM ${table} WHERE userId = ?`, [userId]);
+                            console.log(`Cleared ${table} for user ${userId}`);
+                        } else {
+                            console.warn(`Table ${table} does not have a userId column, not attempting user-specific delete.`);
+                        }
+                    } catch (e: any) {
+                        console.warn(`Could not clear table ${table} for user ${userId}: ${e.message}.`);
                     }
-                };
-
-                safeClearTable('SaleItems');
-                safeClearTable('Categories');
-                safeClearTable('StockAdjustments');
+                }
+                db.runSync(`DELETE FROM Settings WHERE userId = ? AND id = ?`, [userId, userId]);
+                console.log(`Cleared Settings for user ${userId}`);
             });
-
-            Alert.alert('Success', 'All app data has been reset. The app will now logout.');
-
-            // Logout after reset
-            handleLogout();
+            Alert.alert('Success', 'Your data has been reset. You will now be logged out.');
+            await handleConfirmLogout();
         } catch (error) {
             console.error('Failed to reset data:', error);
-            Alert.alert('Error', 'Failed to reset app data');
+            Alert.alert('Error', 'Failed to reset your data.');
         } finally {
             setIsLoading(false);
-            setShowResetDialog(false);
         }
     };
 
-    // Handle logout
-    const handleLogout = async () => {
-        setIsLoading(true);
-        try {
-            await logout();
-            router.replace('/(auth)/login');
-        } catch (error) {
-            console.error('Failed to logout:', error);
-            Alert.alert('Error', 'Failed to logout');
-        } finally {
-            setIsLoading(false);
-            setShowLogoutDialog(false);
-        }
-    };
-
-    // Custom styles for proper appearance
     const styles = StyleSheet.create({
-        cardStyle: {
-            backgroundColor: colorScheme === 'dark' ? '#1c1c1c' : '#ffffff',
-            borderColor: colorScheme === 'dark' ? '#333' : '#e5e5e5',
+        container: { flex: 1, paddingVertical: 16, paddingHorizontal: 12, backgroundColor: isDarkColorScheme ? '#121212' : '#f0f2f5' },
+        titleText: { fontSize: 24, fontWeight: 'bold', marginBottom: 24, color: isDarkColorScheme ? '#e0e0e0' : '#111', textAlign: 'center' },
+        card: {
+            backgroundColor: isDarkColorScheme ? '#1e1e1e' : '#ffffff',
+            borderRadius: 12,
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: isDarkColorScheme ? 0.25 : 0.08,
+            shadowRadius: 4,
+            elevation: 4,
+        },
+        cardHeader: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' },
+        cardTitleContainer: { flexDirection: 'row', alignItems: 'center' },
+        cardTitle: { fontSize: 18, fontWeight: '600', color: isDarkColorScheme ? '#dadada' : '#2c3e50', marginLeft: 10 },
+        cardContent: { padding: 16 },
+        label: { fontSize: 14, color: isDarkColorScheme ? '#909090' : '#555555', marginBottom: 6, marginTop: 10, fontWeight: '500' },
+        inputComponent: {
+            marginBottom: 12,
+        },
+        rnInput: { // Styles for RNTextInput if you use it directly
+            backgroundColor: isDarkColorScheme ? '#2c2c2c' : '#f8f8f8',
+            color: isDarkColorScheme ? '#e0e0e0' : '#333',
+            paddingHorizontal: 14,
+            paddingVertical: Platform.OS === 'ios' ? 14 : 12,
+            borderRadius: 8,
             borderWidth: 1,
-            borderRadius: 8,
-            marginBottom: 16,
+            borderColor: isDarkColorScheme ? '#3c3c3c' : '#ddd',
+            fontSize: 16,
+            height: 50,
         },
-        headerStyle: {
-            paddingVertical: 12,
-            paddingHorizontal: 16,
-        },
-        cardContentStyle: {
-            padding: 16,
-        },
-        primaryButton: {
-            backgroundColor: colorScheme === 'dark' ? '#0070f3' : '#0070f3',
-            padding: 10,
-            borderRadius: 8,
-            alignItems: 'center',
-            marginTop: 8,
-        },
-        primaryButtonText: {
-            color: '#ffffff',
-            fontWeight: '600',
-        },
-        outlineButton: {
-            backgroundColor: 'transparent',
-            padding: 10,
-            borderRadius: 8,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: colorScheme === 'dark' ? '#333' : '#e5e5e5',
-            marginTop: 8,
-        },
-        outlineButtonText: {
-            color: colorScheme === 'dark' ? '#ffffff' : '#000000',
-        },
-        destructiveButton: {
-            backgroundColor: '#ff4d4f',
-            padding: 10,
-            borderRadius: 8,
-            alignItems: 'center',
-            marginTop: 8,
-        },
-        destructiveButtonText: {
-            color: '#ffffff',
-            fontWeight: '600',
-        },
-        input: {
-            backgroundColor: colorScheme === 'dark' ? '#333' : '#f5f5f5',
-            borderColor: colorScheme === 'dark' ? '#444' : '#e5e5e5',
-            borderWidth: 1,
-            borderRadius: 8,
-            padding: 10,
-            color: colorScheme === 'dark' ? '#fff' : '#000',
-            marginTop: 4,
-        },
-        title: {
-            fontSize: 20,
-            fontWeight: 'bold',
-            color: colorScheme === 'dark' ? '#fff' : '#000',
-            marginBottom: 16,
-        },
-        cardTitle: {
-            fontSize: 18,
-            fontWeight: 'bold',
-            color: colorScheme === 'dark' ? '#fff' : '#000',
-        },
-        label: {
-            fontSize: 14,
-            marginBottom: 4,
-            color: colorScheme === 'dark' ? '#aaa' : '#666',
-        },
-        text: {
-            color: colorScheme === 'dark' ? '#fff' : '#000',
-        },
-        mutedText: {
-            color: colorScheme === 'dark' ? '#aaa' : '#666',
-            fontSize: 14,
-        },
-        separator: {
-            height: 1,
-            backgroundColor: colorScheme === 'dark' ? '#333' : '#e5e5e5',
-            marginVertical: 16,
-        },
-        iconContainer: {
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            backgroundColor: colorScheme === 'dark' ? '#333' : '#f0f0f0',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginRight: 12,
-        },
-        userProfileContainer: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 16,
-        },
-        inputContainer: {
-            marginBottom: 16,
-        },
-        inputRow: {
-            flexDirection: 'row',
-            alignItems: 'center',
-        },
-        switchContainer: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 16,
-        },
-        successMessage: {
-            color: '#52c41a',
-            textAlign: 'center',
-            marginTop: 8,
-        }
+        buttonComponent: { marginTop: 16, height: 50, borderRadius: 8 },
+        buttonTextComponent: { fontWeight: '600', fontSize: 16 },
+        settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' },
+        settingItemText: { fontSize: 16, color: isDarkColorScheme ? '#c0c0c0' : '#34495e' },
+        icon: { marginRight: 12 },
+        successMessage: { color: '#27ae60', textAlign: 'center', marginVertical: 12, fontSize: 14, fontWeight: '500' },
+        dialogOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+        dialogViewContent: { backgroundColor: isDarkColorScheme ? '#252525' : '#fff', borderRadius: 10, padding: 20, width: '100%', maxWidth: 360, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
+        dialogTitleText: { fontSize: 20, fontWeight: 'bold', marginBottom: 12, color: isDarkColorScheme ? '#e0e0e0' : '#222' },
+        dialogMessageText: { fontSize: 16, marginBottom: 24, color: isDarkColorScheme ? '#b0b0b0' : '#555', lineHeight: 23 },
+        dialogActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+        dialogButton: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 6 },
+        dialogCancelButtonText: { color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', fontSize: 16, fontWeight: '500' },
+        dialogConfirmButton: { backgroundColor: isDarkColorScheme ? '#00AEEF' : '#007AFF' },
+        dialogDestructiveButton: { backgroundColor: '#EF4444' },
+        dialogConfirmButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
     });
 
-    return (
-        <ScrollView style={{ flex: 1, backgroundColor: colorScheme === 'dark' ? '#121212' : '#f5f5f5' }}>
-            <View style={{ padding: 16 }}>
-                <Text style={styles.title}>Settings</Text>
+    if (isLoading && !userSettings.dbSettingsLoaded && !userId) { // More precise initial loading condition
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} />
+                <Text style={{ marginTop: 10, color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading Settings...</Text>
+            </View>
+        );
+    }
 
-                {/* User Profile */}
-                <View style={styles.cardStyle}>
-                    <View style={styles.headerStyle}>
+    return (
+        <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Text style={styles.titleText}>Settings</Text>
+
+            <Card style={styles.card}>
+                <CardHeader style={styles.cardHeader}>
+                    <View style={styles.cardTitleContainer}>
+                        <User size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
                         <Text style={styles.cardTitle}>User Profile</Text>
                     </View>
-                    <View style={styles.cardContentStyle}>
-                        <View style={styles.userProfileContainer}>
-                            <View style={[styles.iconContainer, { backgroundColor: colorScheme === 'dark' ? '#0070f3' : '#e6f7ff' }]}>
-                                <User size={24} color={colorScheme === 'dark' ? '#fff' : '#0070f3'} />
-                            </View>
-                            <View>
-                                <Text style={styles.text}>{userName || 'User'}</Text>
-                                <Text style={styles.mutedText}>Logged in</Text>
-                            </View>
+                </CardHeader>
+                <CardContent style={styles.cardContent}>
+                    <Text style={[styles.settingItemText, { marginBottom: 16 }]}>Logged in as: {userName || 'Store Owner'}</Text>
+                    <Button variant="outline" onPress={() => Alert.alert("Coming Soon", "Password change feature will be available in a future update.")} style={styles.buttonComponent}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Lock size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
+                            <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>Change Password</Text>
                         </View>
+                    </Button>
+                </CardContent>
+            </Card>
 
-                        <View>
-                            <TouchableOpacity
-                                style={styles.outlineButton}
-                                onPress={() => setShowChangePasswordDialog(true)}
-                            >
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Lock size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} style={{ marginRight: 8 }} />
-                                    <Text style={styles.outlineButtonText}>Change Password</Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.outlineButton}
-                                onPress={() => setShowLogoutDialog(true)}
-                            >
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <LogOut size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} style={{ marginRight: 8 }} />
-                                    <Text style={styles.outlineButtonText}>Logout</Text>
-                                </View>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Store Information */}
-                <View style={styles.cardStyle}>
-                    <View style={styles.headerStyle}>
+            <Card style={styles.card}>
+                <CardHeader style={styles.cardHeader}>
+                    <View style={styles.cardTitleContainer}>
+                        <Building size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
                         <Text style={styles.cardTitle}>Store Information</Text>
                     </View>
-                    <View style={styles.cardContentStyle}>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Store Name</Text>
-                            <View style={styles.inputRow}>
-                                <Building size={18} color={colorScheme === 'dark' ? '#aaa' : '#666'} style={{ marginRight: 8 }} />
-                                <TextInput
-                                    style={styles.input}
-                                    value={storeSettings.storeName}
-                                    onChangeText={(text) => setStoreSettings({ ...storeSettings, storeName: text })}
-                                    placeholder="Your Store Name"
-                                    placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Store Address</Text>
-                            <View style={styles.inputRow}>
-                                <Building size={18} color={colorScheme === 'dark' ? '#aaa' : '#666'} style={{ marginRight: 8 }} />
-                                <TextInput
-                                    style={styles.input}
-                                    value={storeSettings.storeAddress}
-                                    onChangeText={(text) => setStoreSettings({ ...storeSettings, storeAddress: text })}
-                                    placeholder="Store Address"
-                                    placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Phone Number</Text>
-                            <View style={styles.inputRow}>
-                                <Phone size={18} color={colorScheme === 'dark' ? '#aaa' : '#666'} style={{ marginRight: 8 }} />
-                                <TextInput
-                                    style={styles.input}
-                                    value={storeSettings.storePhone}
-                                    onChangeText={(text) => setStoreSettings({ ...storeSettings, storePhone: text })}
-                                    placeholder="Phone Number"
-                                    placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                                    keyboardType="phone-pad"
-                                />
-                            </View>
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Email</Text>
-                            <View style={styles.inputRow}>
-                                <Mail size={18} color={colorScheme === 'dark' ? '#aaa' : '#666'} style={{ marginRight: 8 }} />
-                                <TextInput
-                                    style={styles.input}
-                                    value={storeSettings.storeEmail}
-                                    onChangeText={(text) => setStoreSettings({ ...storeSettings, storeEmail: text })}
-                                    placeholder="Email Address"
-                                    placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.primaryButton}
-                            onPress={saveSettings}
-                            disabled={isLoading}
-                        >
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Save size={18} color="#fff" style={{ marginRight: 8 }} />
-                                <Text style={styles.primaryButtonText}>
-                                    {isLoading ? 'Saving...' : 'Save Information'}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
-
-                        {savedMessage ? (
-                            <Text style={styles.successMessage}>{savedMessage}</Text>
-                        ) : null}
+                </CardHeader>
+                <CardContent style={styles.cardContent}>
+                    <View style={styles.inputComponent}>
+                        <Text style={styles.label}>Store Name</Text>
+                        <Input
+                            value={userSettings.storeName}
+                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storeName: text }))}
+                            placeholder="Your Store Name"
+                            className="h-12 text-base" // Using Tailwind for shadcn Input
+                        />
                     </View>
-                </View>
+                    <View style={styles.inputComponent}>
+                        <Text style={styles.label}>Store Address</Text>
+                        <Input
+                            value={userSettings.storeAddress}
+                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storeAddress: text }))}
+                            placeholder="123 Main St, City"
+                            className="h-12 text-base"
+                        />
+                    </View>
+                    <View style={styles.inputComponent}>
+                        <Text style={styles.label}>Phone</Text>
+                        <Input
+                            value={userSettings.storePhone}
+                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storePhone: text }))}
+                            placeholder="+1234567890"
+                            keyboardType="phone-pad"
+                            className="h-12 text-base"
+                        />
+                    </View>
+                    <View style={styles.inputComponent}>
+                        <Text style={styles.label}>Email</Text>
+                        <Input
+                            value={userSettings.storeEmail}
+                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storeEmail: text }))}
+                            placeholder="store@example.com"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            className="h-12 text-base"
+                        />
+                    </View>
+                    {savedMessage ? <Text style={styles.successMessage}>{savedMessage}</Text> : null}
+                    <Button onPress={saveUserSettings} disabled={isLoading || authIsLoading} style={styles.buttonComponent}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Save size={18} color="#fff" style={styles.icon} />
+                            <Text style={[styles.buttonTextComponent, { color: '#fff' }]}>{isLoading ? 'Saving...' : 'Save Store Info'}</Text>
+                        </View>
+                    </Button>
+                </CardContent>
+            </Card>
 
-                {/* App Preferences */}
-                <View style={styles.cardStyle}>
-                    <View style={styles.headerStyle}>
+            <Card style={styles.card}>
+                <CardHeader style={styles.cardHeader}>
+                    <View style={styles.cardTitleContainer}>
+                        <SettingsIcon size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
                         <Text style={styles.cardTitle}>App Preferences</Text>
                     </View>
-                    <View style={styles.cardContentStyle}>
-                        <View style={styles.switchContainer}>
-                            <Text style={styles.text}>Dark Mode</Text>
-                            <Switch
-                                value={colorScheme === 'dark'}
-                                onValueChange={toggleColorScheme}
-                                trackColor={{ false: "#767577", true: "#0070f3" }}
-                                thumbColor="#f5f5f5"
-                            />
+                </CardHeader>
+                <CardContent style={styles.cardContent}>
+                    <View style={styles.settingItem}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {userSettings.darkMode ? <Moon size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} /> : <Sun size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />}
+                            <Text style={styles.settingItemText}>Dark Mode</Text>
                         </View>
-
-                        <View style={styles.separator} />
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Currency Symbol</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={storeSettings.currencySymbol}
-                                onChangeText={(text) => setStoreSettings({ ...storeSettings, currencySymbol: text })}
-                                placeholder="₹"
-                                placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                            />
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Default Tax Rate (%)</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={storeSettings.taxRate.toString()}
-                                onChangeText={(text) => {
-                                    const value = parseFloat(text) || 0;
-                                    setStoreSettings({ ...storeSettings, taxRate: value });
-                                }}
-                                placeholder="0"
-                                placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                                keyboardType="numeric"
-                            />
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.outlineButton}
-                            onPress={saveSettings}
-                            disabled={isLoading}
-                        >
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Save size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} style={{ marginRight: 8 }} />
-                                <Text style={styles.outlineButtonText}>Save Preferences</Text>
-                            </View>
-                        </TouchableOpacity>
+                        <RNSwitch
+                            value={userSettings.darkMode ?? false} // Ensure value is boolean
+                            onValueChange={handleToggleDarkModeSwitch}
+                            trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
+                            thumbColor={isDarkColorScheme ? (userSettings.darkMode ? "#00AEEF" : "#f4f3f4") : (userSettings.darkMode ? "#007AFF" : "#f4f3f4")}
+                        />
                     </View>
-                </View>
+                    <Separator style={{ marginVertical: 8, backgroundColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' }} />
+                    <View style={styles.inputComponent}>
+                        <Text style={styles.label}>Currency Symbol</Text>
+                        <Input
+                            value={userSettings.currencySymbol}
+                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, currencySymbol: text }))}
+                            placeholder="₹"
+                            className="h-12 text-base"
+                        />
+                    </View>
+                    <View style={styles.inputComponent}>
+                        <Text style={styles.label}>Default Tax Rate (%)</Text>
+                        <Input
+                            value={String(userSettings.taxRate)}
+                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, taxRate: parseFloat(text) || 0 }))}
+                            placeholder="0"
+                            keyboardType="numeric"
+                            className="h-12 text-base"
+                        />
+                    </View>
+                    <Button onPress={saveUserSettings} disabled={isLoading || authIsLoading} style={styles.buttonComponent}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Save size={18} color="#fff" style={styles.icon} />
+                            <Text style={[styles.buttonTextComponent, { color: '#fff' }]}>{isLoading ? 'Saving...' : 'Save Preferences'}</Text>
+                        </View>
+                    </Button>
+                </CardContent>
+            </Card>
 
-                {/* Data Management */}
-                <View style={styles.cardStyle}>
-                    <View style={styles.headerStyle}>
+            <Card style={styles.card}>
+                <CardHeader style={styles.cardHeader}>
+                    <View style={styles.cardTitleContainer}>
+                        <Shield size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
                         <Text style={styles.cardTitle}>Data Management</Text>
                     </View>
-                    <View style={styles.cardContentStyle}>
-                        <View>
-                            <TouchableOpacity
-                                style={styles.outlineButton}
-                                onPress={() => Alert.alert('Backup', 'Backup functionality will be implemented in a future version.')}
-                            >
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <RefreshCw size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} style={{ marginRight: 8 }} />
-                                    <Text style={styles.outlineButtonText}>Backup Data</Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.outlineButton}
-                                onPress={() => Alert.alert('Restore', 'Restore functionality will be implemented in a future version.')}
-                            >
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <RefreshCw size={18} color={colorScheme === 'dark' ? '#fff' : '#000'} style={{ marginRight: 8 }} />
-                                    <Text style={styles.outlineButtonText}>Restore Data</Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.destructiveButton}
-                                onPress={() => setShowResetDialog(true)}
-                            >
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Trash size={18} color="#fff" style={{ marginRight: 8 }} />
-                                    <Text style={styles.destructiveButtonText}>Reset All Data</Text>
-                                </View>
-                            </TouchableOpacity>
+                </CardHeader>
+                <CardContent style={styles.cardContent}>
+                    <Button
+                        variant="outline"
+                        onPress={() => Alert.alert('Backup Data', 'Manual backup feature coming soon!')}
+                        style={styles.buttonComponent}
+                        className="mb-3"
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <RefreshCw size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
+                            <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>Backup My Data</Text>
                         </View>
-                    </View>
-                </View>
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        onPress={handleAttemptResetData}
+                        disabled={authIsLoading || isLoading} // Consider both loading states
+                        style={styles.buttonComponent}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Trash size={18} color="#fff" style={styles.icon} />
+                            <Text className="font-semibold" style={{ color: '#fff' }}>
+                                {(authIsLoading || isLoading) ? 'Processing...' : 'Reset My Data'}
+                            </Text>
+                        </View>
+                    </Button>
+                </CardContent>
+            </Card>
 
-                {/* About */}
-                <View style={styles.cardStyle}>
-                    <View style={styles.headerStyle}>
-                        <Text style={styles.cardTitle}>About</Text>
-                    </View>
-                    <View style={styles.cardContentStyle}>
-                        <Text style={styles.text}>Petti Kadai v1.0.0</Text>
-                        <Text style={styles.mutedText}>A simple inventory management app for small stores</Text>
-                    </View>
-                </View>
-            </View>
+            <Card style={styles.card}>
+                <CardContent style={[styles.cardContent, { paddingTop: 16 }]}>
+                    <Button
+                        variant="destructive"
+                        onPress={handleAttemptLogout}
+                        disabled={authIsLoading}
+                        style={styles.buttonComponent}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <LogOut size={18} color="#fff" style={styles.icon} />
+                            <Text className="font-semibold" style={{ color: '#fff' }}>
+                                {authIsLoading ? 'Logging out...' : 'Logout'}
+                            </Text>
+                        </View>
+                    </Button>
+                </CardContent>
+            </Card>
 
-            {/* Logout Confirmation Dialog */}
+
+            <Card style={styles.card}>
+                <CardHeader style={styles.cardHeader}>
+                    <View style={styles.cardTitleContainer}>
+                        <Info size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
+                        <Text style={styles.cardTitle}>About Petti Kadai</Text>
+                    </View>
+                </CardHeader>
+                <CardContent style={styles.cardContent}>
+                    <Text style={styles.settingItemText}>Version: 1.0.1</Text>
+                    <Text style={[styles.settingItemText, { fontSize: 14, marginTop: 4, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }]}>Simple Inventory for Small Shops</Text>
+                </CardContent>
+            </Card>
+
+            {/* Dialogs using custom styled Views */}
             {showLogoutDialog && (
-                <View style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: 20,
-                }}>
-                    <View style={{
-                        backgroundColor: colorScheme === 'dark' ? '#1c1c1c' : '#ffffff',
-                        borderRadius: 8,
-                        padding: 20,
-                        width: '100%',
-                        maxWidth: 400,
-                    }}>
-                        <Text style={{
-                            fontSize: 18,
-                            fontWeight: 'bold',
-                            marginBottom: 8,
-                            color: colorScheme === 'dark' ? '#fff' : '#000',
-                        }}>Logout</Text>
-                        <Text style={{
-                            marginBottom: 16,
-                            color: colorScheme === 'dark' ? '#aaa' : '#666',
-                        }}>Are you sure you want to logout from your account?</Text>
-
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
-                            <TouchableOpacity
-                                style={{
-                                    padding: 8,
-                                    marginRight: 8,
-                                }}
-                                onPress={() => setShowLogoutDialog(false)}
-                            >
-                                <Text style={{ color: colorScheme === 'dark' ? '#aaa' : '#666' }}>Cancel</Text>
+                <View style={styles.dialogOverlay}>
+                    <View style={styles.dialogViewContent}>
+                        <Text style={styles.dialogTitleText}>Confirm Logout</Text>
+                        <Text style={styles.dialogMessageText}>Are you sure you want to log out?</Text>
+                        <View style={styles.dialogActions}>
+                            <TouchableOpacity style={styles.dialogButton} onPress={() => setShowLogoutDialog(false)}>
+                                <Text style={styles.dialogCancelButtonText}>Cancel</Text>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={{
-                                    padding: 8,
-                                    backgroundColor: '#ff4d4f',
-                                    borderRadius: 4,
-                                }}
-                                onPress={handleLogout}
-                            >
-                                <Text style={{ color: '#fff' }}>Logout</Text>
+                            <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmLogout}>
+                                <Text style={styles.dialogConfirmButtonText}>Logout</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </View>
             )}
 
-            {/* Reset Data Confirmation Dialog */}
             {showResetDialog && (
-                <View style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: 20,
-                }}>
-                    <View style={{
-                        backgroundColor: colorScheme === 'dark' ? '#1c1c1c' : '#ffffff',
-                        borderRadius: 8,
-                        padding: 20,
-                        width: '100%',
-                        maxWidth: 400,
-                    }}>
-                        <Text style={{
-                            fontSize: 18,
-                            fontWeight: 'bold',
-                            marginBottom: 8,
-                            color: colorScheme === 'dark' ? '#fff' : '#000',
-                        }}>Reset All Data</Text>
-                        <Text style={{
-                            marginBottom: 16,
-                            color: colorScheme === 'dark' ? '#aaa' : '#666',
-                        }}>This will permanently delete all your products, sales, and other data. This action cannot be undone.</Text>
-
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
-                            <TouchableOpacity
-                                style={{
-                                    padding: 8,
-                                    marginRight: 8,
-                                }}
-                                onPress={() => setShowResetDialog(false)}
-                            >
-                                <Text style={{ color: colorScheme === 'dark' ? '#aaa' : '#666' }}>Cancel</Text>
+                <View style={styles.dialogOverlay}>
+                    <View style={styles.dialogViewContent}>
+                        <Text style={styles.dialogTitleText}>Reset All Your Data?</Text>
+                        <Text style={styles.dialogMessageText}>
+                            This will permanently delete all products, sales, and other data associated with your account ({userName || 'current user'}). This action cannot be undone.
+                        </Text>
+                        <View style={styles.dialogActions}>
+                            <TouchableOpacity style={styles.dialogButton} onPress={() => setShowResetDialog(false)}>
+                                <Text style={styles.dialogCancelButtonText}>Cancel</Text>
                             </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={{
-                                    padding: 8,
-                                    backgroundColor: '#ff4d4f',
-                                    borderRadius: 4,
-                                }}
-                                onPress={handleResetData}
-                            >
-                                <Text style={{ color: '#fff' }}>Reset Data</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            )}
-
-            {/* Change Password Dialog */}
-            {showChangePasswordDialog && (
-                <View style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: 20,
-                }}>
-                    <View style={{
-                        backgroundColor: colorScheme === 'dark' ? '#1c1c1c' : '#ffffff',
-                        borderRadius: 8,
-                        padding: 20,
-                        width: '100%',
-                        maxWidth: 400,
-                    }}>
-                        <Text style={{
-                            fontSize: 18,
-                            fontWeight: 'bold',
-                            marginBottom: 16,
-                            color: colorScheme === 'dark' ? '#fff' : '#000',
-                        }}>Change Password</Text>
-
-                        <View style={{ marginBottom: 12 }}>
-                            <TextInput
-                                style={{
-                                    backgroundColor: colorScheme === 'dark' ? '#333' : '#f5f5f5',
-                                    borderColor: colorScheme === 'dark' ? '#444' : '#e5e5e5',
-                                    borderWidth: 1,
-                                    borderRadius: 8,
-                                    padding: 10,
-                                    marginBottom: 8,
-                                    color: colorScheme === 'dark' ? '#fff' : '#000',
-                                }}
-                                secureTextEntry
-                                placeholder="Current Password"
-                                placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                            />
-
-                            <TextInput
-                                style={{
-                                    backgroundColor: colorScheme === 'dark' ? '#333' : '#f5f5f5',
-                                    borderColor: colorScheme === 'dark' ? '#444' : '#e5e5e5',
-                                    borderWidth: 1,
-                                    borderRadius: 8,
-                                    padding: 10,
-                                    marginBottom: 8,
-                                    color: colorScheme === 'dark' ? '#fff' : '#000',
-                                }}
-                                secureTextEntry
-                                placeholder="New Password"
-                                placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                            />
-
-                            <TextInput
-                                style={{
-                                    backgroundColor: colorScheme === 'dark' ? '#333' : '#f5f5f5',
-                                    borderColor: colorScheme === 'dark' ? '#444' : '#e5e5e5',
-                                    borderWidth: 1,
-                                    borderRadius: 8,
-                                    padding: 10,
-                                    color: colorScheme === 'dark' ? '#fff' : '#000',
-                                }}
-                                secureTextEntry
-                                placeholder="Confirm New Password"
-                                placeholderTextColor={colorScheme === 'dark' ? '#666' : '#aaa'}
-                            />
-                        </View>
-
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
-                            <TouchableOpacity
-                                style={{
-                                    padding: 8,
-                                    marginRight: 8,
-                                }}
-                                onPress={() => setShowChangePasswordDialog(false)}
-                            >
-                                <Text style={{ color: colorScheme === 'dark' ? '#aaa' : '#666' }}>Cancel</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={{
-                                    padding: 8,
-                                    backgroundColor: '#0070f3',
-                                    borderRadius: 4,
-                                }}
-                                onPress={() => {
-                                    Alert.alert('Password Change', 'Password change functionality will be implemented in a future version.');
-                                    setShowChangePasswordDialog(false);
-                                }}
-                            >
-                                <Text style={{ color: '#fff' }}>Change Password</Text>
+                            <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmResetData}>
+                                <Text style={styles.dialogConfirmButtonText}>Yes, Reset Data</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

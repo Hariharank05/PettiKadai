@@ -9,7 +9,7 @@ import { PortalHost } from '@rn-primitives/portal';
 import { setAndroidNavigationBar } from '~/lib/android-navigation-bar';
 import { NAV_THEME } from '~/lib/constants';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { initDatabase } from '~/lib/db';
+import { initDatabase } from '~/lib/db/database';
 // Uncomment for development testing (don't use in production)
 // import { seedDatabase, loginWithTestUser } from '~/lib/utils/dbSeeder';
 
