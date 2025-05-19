@@ -39,6 +39,7 @@ import 'react-native-get-random-values'; // Required for uuid
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '~/lib/db/database'; // Ensure this path is correct
 import { generateAndShareReceipt } from '~/lib/utils/receiptUtils';
+import { useAuthStore } from '~/lib/stores/authStore';
 
 // Interface for items in the cart
 interface CartItem extends Product {
@@ -62,6 +63,11 @@ interface CartItemForReceipt {
   costPrice: number;
   category?: string | null;
 }
+
+const userId = useAuthStore.getState().userId;
+// if (!userId) {
+//   throw new Error("User not authenticated");
+// }
 
 // --- generateReceiptHtml function ---
 const generateReceiptHtml = (
@@ -443,10 +449,26 @@ export default function SalesScreen() {
   }, [cartItems]);
 
   const confirmSale = async () => {
-    if (cartItems.length === 0) return;
+    if (cartItems.length === 0) {
+      console.warn("Attempted to confirm sale with empty cart.");
+      return;
+    }
     setIsProcessingSale(true);
 
     try {
+      // Get state inside the async function scope for reliability
+      const authState = useAuthStore.getState();
+      const currentUserId = authState.userId; // Type: string | undefined
+
+      if (!currentUserId) {
+        const errorMessage = 'User not authenticated to complete sale.';
+        console.warn(errorMessage);
+        setIsProcessingSale(false); // Stop loading
+        Alert.alert('Authentication Error', errorMessage); // Inform user
+        return; // Stop process
+      }
+
+      // currentUserId is now guaranteed to be a string within this block
       const saleId = uuidv4();
       const saleTimestamp = new Date().toISOString();
       const paymentType = 'CASH';
@@ -454,12 +476,13 @@ export default function SalesScreen() {
       await db.execAsync('BEGIN TRANSACTION;');
 
       await db.runAsync(
-        `INSERT INTO Sales (id, timestamp, totalAmount, totalProfit, subtotal, paymentType, salesStatus)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [saleId, saleTimestamp, totalAmount, totalProfit, subtotal, paymentType, 'COMPLETED']
+        `INSERT INTO Sales (id, userId, timestamp, totalAmount, totalProfit, subtotal, paymentType, salesStatus)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        // Use the currentUserId which is guaranteed string
+        [saleId, currentUserId, saleTimestamp, totalAmount, totalProfit, subtotal, paymentType, 'COMPLETED']
       );
 
-      const saleCartItems: CartItemForReceipt[] = []; // Prepare for utility
+      const saleCartItems: CartItemForReceipt[] = [];
 
       for (const item of cartItems) {
         const saleItemId = uuidv4();
@@ -478,10 +501,10 @@ export default function SalesScreen() {
           ]
         );
         await db.runAsync(
-          'UPDATE products SET quantity = quantity - ?, updatedAt = ? WHERE id = ?',
-          [item.quantityInCart, new Date().toISOString(), item.id]
+          'UPDATE products SET quantity = quantity - ?, updatedAt = ? WHERE id = ? AND userId = ?',
+          [item.quantityInCart, new Date().toISOString(), item.id, currentUserId] // Add userId to UPDATE for safety
         );
-        saleCartItems.push({ // Collect items for receipt utility
+        saleCartItems.push({
           name: item.name,
           quantityInCart: item.quantityInCart,
           sellingPrice: item.sellingPrice,
@@ -490,27 +513,22 @@ export default function SalesScreen() {
         });
       }
 
-      // Save the main Receipt record BEFORE calling generateAndShare which might rely on it
-      // or which might just generate and share.
-      // For a clean utility, generateAndShareReceipt should not save the Receipt record itself,
-      // but rather take the generated PDF URI and allow the calling function to save it.
-      // However, for speed, the utility can save it. Let's assume it will save.
-
-      const receiptId = uuidv4();
-      const receiptNumber = `RCPT-${saleId.substring(0, 8).toUpperCase()}`;
-      // We need the PDF URI first before saving to Receipts table.
-      // So, generateAndShareReceipt will create the PDF, then we save its URI.
-
       // Call the utility function
       const pdfUri = await generateAndShareReceipt({
         saleId,
         saleTimestamp,
         totalAmount,
         cartItems: saleCartItems,
+        // Assuming generateAndShareReceipt might need userId or store settings based on userId
+        // If it fetches settings internally, ensure it also gets userId there.
+        // If it needs userId passed, add it here: userId: currentUserId
       });
 
       if (pdfUri) {
-        // Now save the receipt with the generated PDF URI
+        const receiptId = uuidv4();
+        const receiptNumber = `RCPT-${saleId.substring(0, 8).toUpperCase()}`;
+        // Save the receipt record with the generated PDF URI
+        // Note: The Receipt table schema does NOT have a userId. It relies on Sales.saleId.
         await db.runAsync(
           `INSERT INTO Receipts (id, saleId, receiptNumber, format, filePath, generatedAt)
            VALUES (?, ?, ?, ?, ?, ?)`,

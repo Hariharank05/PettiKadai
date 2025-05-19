@@ -68,7 +68,17 @@ export default function ReceiptsScreen() {
             sqlQuery += ` ORDER BY r.generatedAt DESC`;
 
             const result = await db.getAllAsync<ReceiptHistoryItem>(sqlQuery, params);
-            setReceipts(result);
+            const formattedResult: ReceiptHistoryItem[] = result.map(item => ({
+                id: item.id,
+                saleId: item.saleId,
+                receiptNumber: item.receiptNumber,
+                format: item.format,
+                filePath: item.filePath,
+                generatedAt: item.generatedAt,
+                totalAmount: Number(item.totalAmount) || 0, // Explicitly cast to number here
+                customerName: item.customerName,
+            }));
+            setReceipts(formattedResult);
         } catch (error) {
             console.error("Error fetching receipts:", error);
             Alert.alert("Error", "Failed to load receipt history.");
@@ -126,48 +136,78 @@ export default function ReceiptsScreen() {
         await previewExistingReceipt(filePath, receiptNumber);
     };
 
-    const renderReceiptItem = ({ item }: { item: ReceiptHistoryItem }) => (
-        <Card className="mb-3 mx-1 bg-card border border-border">
-            <CardContent className="p-4">
-                <View className="flex-row justify-between items-start">
-                    {/* ... (item details) */}
-                    <View className="flex-1">
-                        <Text className="text-base font-semibold text-foreground native:text-black">{item.receiptNumber}</Text>
-                        <Text className="text-sm text-muted-foreground native:text-gray-600">
-                            Date: {format(parseISO(item.generatedAt), 'dd MMM yyyy, hh:mm a')}
-                        </Text>
-                        <Text className="text-sm text-muted-foreground native:text-gray-600">
-                            Amount: ₹{item.totalAmount.toFixed(2)}
-                        </Text>
-                        {item.customerName && (
+    // useFocusEffect(
+    //     useCallback(() => {
+    //         fetchReceipts(searchQuery);
+
+    //         // 🔧 DEV PATCH: Log all sales with incorrect totals
+    //         (async () => {
+    //             const brokenSales = await db.getAllAsync<{ id: string, totalAmount: number, subtotal: number }>(
+    //                 `SELECT id, totalAmount, subtotal FROM Sales WHERE totalAmount IS NULL OR totalAmount = 0`
+    //             );
+
+    //             console.log("[DEV PATCH] Broken Sales Found:", brokenSales.length);
+
+    //             for (const sale of brokenSales) {
+    //                 console.log(`[FIX] Sale ID: ${sale.id}, totalAmount: ${sale.totalAmount}, fixing to subtotal: ${sale.subtotal}`);
+    //                 await db.runAsync(
+    //                     `UPDATE Sales SET totalAmount = ? WHERE id = ?`,
+    //                     [sale.subtotal, sale.id]
+    //                 );
+    //             }
+    //         })();
+
+    //     }, [fetchReceipts, searchQuery])
+    // );
+
+    const renderReceiptItem = ({ item }: { item: ReceiptHistoryItem }) => {
+        console.log(`Rendering receipt: ${item.receiptNumber}, total: ${item.totalAmount}`);
+
+        // Ensure totalAmount is handled correctly
+        const amount = typeof item.totalAmount === 'number' ? item.totalAmount : 0;
+
+        return (
+            <Card className="mb-3 mx-1 bg-card border border-border">
+                <CardContent className="p-4">
+                    <View className="flex-row justify-between items-start">
+                        <View className="flex-1">
+                            <Text className="text-base font-semibold text-foreground native:text-black">{item.receiptNumber}</Text>
                             <Text className="text-sm text-muted-foreground native:text-gray-600">
-                                Customer: {item.customerName}
+                                Date: {format(parseISO(item.generatedAt), 'dd MMM yyyy, hh:mm a')}
                             </Text>
-                        )}
+                            <Text className="text-sm text-muted-foreground native:text-gray-600">
+                                Amount: ₹{amount.toFixed(2)}
+                            </Text>
+                            {item.customerName && (
+                                <Text className="text-sm text-muted-foreground native:text-gray-600">
+                                    Customer: {item.customerName}
+                                </Text>
+                            )}
+                        </View>
+                        <View className="flex-col items-end space-y-2">
+                            <TouchableOpacity
+                                onPress={() => handlePreviewReceipt(item.filePath, item.receiptNumber)} // Pass receiptNumber
+                                className="p-2 bg-muted rounded-md"
+                                disabled={!item.filePath}
+                            >
+                                <Eye size={20} color={item.filePath ? iconColorEye : iconColorDisabled} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => handleShareReceipt(item.filePath, item.receiptNumber)}
+                                className="p-2 bg-muted rounded-md"
+                                disabled={!item.filePath}
+                            >
+                                <Share2 size={20} color={item.filePath ? iconColorShare : iconColorDisabled} />
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                    <View className="flex-col items-end space-y-2">
-                        <TouchableOpacity
-                            onPress={() => handlePreviewReceipt(item.filePath, item.receiptNumber)} // Pass receiptNumber
-                            className="p-2 bg-muted rounded-md"
-                            disabled={!item.filePath}
-                        >
-                            <Eye size={20} color={item.filePath ? iconColorEye : iconColorDisabled} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => handleShareReceipt(item.filePath, item.receiptNumber)}
-                            className="p-2 bg-muted rounded-md"
-                            disabled={!item.filePath}
-                        >
-                            <Share2 size={20} color={item.filePath ? iconColorShare : iconColorDisabled} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-                {!item.filePath && (
-                    <Text className="text-xs text-red-500 mt-2">Receipt file not found. Cannot preview or share.</Text>
-                )}
-            </CardContent>
-        </Card>
-    );
+                    {!item.filePath && (
+                        <Text className="text-xs text-red-500 mt-2">Receipt file not found. Cannot preview or share.</Text>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    };
 
     if (isLoading && !refreshing && receipts.length === 0) {
         return (
