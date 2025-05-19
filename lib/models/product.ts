@@ -10,6 +10,18 @@ function generateId(): string {
 }
 
 export interface Product {
+    rating: any;
+    rating: any;
+    discount: ReactNode;
+    discount: number;
+    discount: boolean;
+    rating: number;
+    rating: number;
+    discount: number;
+    [x: string]: number;
+    [x: string]: boolean;
+    discount: number;
+    image: string;
     isActive: boolean;
     id: string;
     userId: string; // Added userId field to match DB schema
