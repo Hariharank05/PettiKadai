@@ -61,6 +61,7 @@ export interface Product {
   }
   export interface Customer {
     id: string;
+    userId: string;
     name: string;
     phone: string;
     email?: string | null; // Make optional fields explicitly nullable

@@ -69,6 +69,16 @@ export const initDatabase = (): void => {
         FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
        );
     `);
+    // --- Patch: Add missing column 'isActive' if not exists ---
+      const columnCheck = db.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM pragma_table_info('products') WHERE name = 'isActive'`
+      );
+
+      if (columnCheck && columnCheck.count === 0) {
+        db.execSync(`ALTER TABLE products ADD COLUMN isActive INTEGER DEFAULT 1`);
+        console.log("[DB] Added missing column 'isActive' to products table");
+      }
+
 
       // Categories Table - Added userId (if categories are per-user)
       // If categories are global, remove userId and its FOREIGN KEY

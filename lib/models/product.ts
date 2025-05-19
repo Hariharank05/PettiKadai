@@ -12,6 +12,7 @@ function generateId(): string {
 export interface Product {
     isActive: boolean;
     id: string;
+    userId: string; // Added userId field to match DB schema
     name: string;
     costPrice: number;
     sellingPrice: number;
@@ -23,44 +24,49 @@ export interface Product {
     updatedAt: string;
   }
 
+// Modified to include userId in the input
 export type ProductInput = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
 
 export const ProductModel = {
-  // Get all products
-  getAll: async (): Promise<Product[]> => {
+  // Get all products for a specific user
+  getAll: async (userId: string): Promise<Product[]> => {
     const db = getDb();
-    const result = await db.getAllAsync<Product>(`SELECT * FROM products ORDER BY name`);
-    return result;
-  },
-
-  // Get product by ID
-  getById: async (id: string): Promise<Product | null> => {
-    const db = getDb();
-    const result = await db.getFirstAsync<Product | null>(
-      `SELECT * FROM products WHERE id = ?`, 
-      [id]
+    const result = await db.getAllAsync<Product>(
+      `SELECT * FROM products WHERE userId = ? AND isActive = 1 ORDER BY name`, 
+      [userId]
     );
     return result;
   },
 
-  // Create a new product
- // In ProductModel.create
-create: async (product: ProductInput): Promise<Product> => {
+  // Get product by ID (ensuring it belongs to the user)
+  getById: async (id: string, userId: string): Promise<Product | null> => {
+    const db = getDb();
+    const result = await db.getFirstAsync<Product | null>(
+      `SELECT * FROM products WHERE id = ? AND userId = ?`, 
+      [id, userId]
+    );
+    return result;
+  },
+
+  // Create a new product with userId
+  create: async (product: ProductInput): Promise<Product> => {
     const db = getDb();
     const now = new Date().toISOString();
     const newProduct: Product = {
       id: generateId(),
       ...product,
       unit: product.unit || 'piece', // Provide default value
+      isActive: true,
       createdAt: now,
       updatedAt: now,
     };
   
     await db.runAsync(
-      `INSERT INTO products (id, name, costPrice, sellingPrice, quantity, unit, category, imageUri, createdAt, updatedAt) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (id, userId, name, costPrice, sellingPrice, quantity, unit, category, imageUri, isActive, createdAt, updatedAt) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        newProduct.id, 
+        newProduct.id,
+        newProduct.userId, // Include userId in insert
         newProduct.name,
         newProduct.costPrice,
         newProduct.sellingPrice,
@@ -68,6 +74,7 @@ create: async (product: ProductInput): Promise<Product> => {
         newProduct.unit,
         newProduct.category || null,
         newProduct.imageUri || null,
+        newProduct.isActive,
         newProduct.createdAt,
         newProduct.updatedAt,
       ]
@@ -76,18 +83,18 @@ create: async (product: ProductInput): Promise<Product> => {
     return newProduct;
   },
 
-  // Modified update method to include unit and imageUri
-  update: async (id: string, product: Partial<ProductInput>): Promise<Product> => {
+  // Modified update method to include userId security check
+  update: async (id: string, product: Partial<ProductInput>, userId: string): Promise<Product> => {
     const db = getDb();
     
-    // First get the existing product
+    // First get the existing product, ensuring it belongs to the user
     const existingProduct = await db.getFirstAsync<Product>(
-      `SELECT * FROM products WHERE id = ?`, 
-      [id]
+      `SELECT * FROM products WHERE id = ? AND userId = ?`, 
+      [id, userId]
     );
     
     if (!existingProduct) {
-      throw new Error('Product not found');
+      throw new Error('Product not found or not authorized');
     }
 
     const updatedProduct: Product = {
@@ -106,8 +113,9 @@ create: async (product: ProductInput): Promise<Product> => {
         unit = ?,
         category = ?,
         imageUri = ?,
+        isActive = ?,
         updatedAt = ?
-      WHERE id = ?`,
+      WHERE id = ? AND userId = ?`,
       [
         updatedProduct.name,
         updatedProduct.costPrice,
@@ -116,25 +124,31 @@ create: async (product: ProductInput): Promise<Product> => {
         updatedProduct.unit,
         updatedProduct.category || null,
         updatedProduct.imageUri || null,
+        updatedProduct.isActive,
         updatedProduct.updatedAt,
         id,
+        userId, // Add userId for security check
       ]
     );
     
     return updatedProduct;
   },
 
-  // Delete a product
-  delete: async (id: string): Promise<void> => {
+  // Delete a product (with userId security check)
+  delete: async (id: string, userId: string): Promise<void> => {
     const db = getDb();
-    await db.runAsync('DELETE FROM products WHERE id = ?', [id]);
+    await db.runAsync(
+      `UPDATE products SET isActive = 0, updatedAt = ? WHERE id = ? AND userId = ?`,
+      [new Date().toISOString(), id, userId]
+    );
   },
 
-  // Get low stock products (quantity < 5)
-  getLowStock: async (): Promise<Product[]> => {
+  // Get low stock products for a specific user
+  getLowStock: async (userId: string): Promise<Product[]> => {
     const db = getDb();
     const result = await db.getAllAsync<Product>(
-      'SELECT * FROM products WHERE quantity < 5 ORDER BY quantity'
+      'SELECT * FROM products WHERE quantity < 5 AND userId = ? ORDER BY quantity',
+      [userId]
     );
     return result;
   },

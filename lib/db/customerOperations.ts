@@ -1,4 +1,3 @@
-// ~/lib/db/customerOperations.ts
 import { getDatabase } from './database';
 import { v4 as uuidv4 } from 'uuid';
 import { Customer } from './types';
@@ -6,7 +5,8 @@ import { Customer } from './types';
 const db = getDatabase();
 
 export const addCustomer = async (
-  customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'lastPurchaseDate'>
+  userId: string,
+  customer: Omit<Customer, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'lastPurchaseDate'>
 ): Promise<Customer> => {
   const id = uuidv4();
   const timestamp = new Date().toISOString();
@@ -14,6 +14,7 @@ export const addCustomer = async (
   // Ensure all fields for Customer are present, with defaults for non-provided ones
   const newCustomer: Customer = {
     id,
+    userId, // Add the userId to associate with the authenticated user
     name: customer.name,
     phone: customer.phone,
     email: customer.email || null,
@@ -28,9 +29,10 @@ export const addCustomer = async (
   };
 
   try {
+    // Check if phone number already exists for this user
     const existing = await db.getFirstAsync<{ id: string }>(
-      'SELECT id FROM Customers WHERE phone = ?',
-      [newCustomer.phone]
+      'SELECT id FROM Customers WHERE phone = ? AND userId = ?',
+      [newCustomer.phone, userId]
     );
     if (existing) {
       throw new Error('Phone number already exists.');
@@ -39,21 +41,22 @@ export const addCustomer = async (
     await db.runAsync(
       `
       INSERT INTO Customers (
-        id, name, phone, email, address, totalPurchases, 
+        id, userId, name, phone, email, address, totalPurchases, 
         outstandingBalance, creditLimit, loyaltyPoints, lastPurchaseDate, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         newCustomer.id,
+        newCustomer.userId, // Include userId in the INSERT
         newCustomer.name,
         newCustomer.phone,
-        newCustomer.email ?? null, // Ensure null for undefined
-        newCustomer.address ?? null, // Ensure null for undefined
+        newCustomer.email ?? null,
+        newCustomer.address ?? null,
         newCustomer.totalPurchases,
         newCustomer.outstandingBalance,
         newCustomer.creditLimit,
         newCustomer.loyaltyPoints,
-        newCustomer.lastPurchaseDate ?? null, // Ensure null for undefined
+        newCustomer.lastPurchaseDate ?? null,
         newCustomer.createdAt,
         newCustomer.updatedAt,
       ]
@@ -72,9 +75,13 @@ export const addCustomer = async (
   }
 };
 
-export const getAllCustomers = async (): Promise<Customer[]> => {
+export const getAllCustomers = async (userId: string): Promise<Customer[]> => {
   try {
-    const rows = await db.getAllAsync<Customer>('SELECT * FROM Customers ORDER BY name');
+    // Only get customers for the current user
+    const rows = await db.getAllAsync<Customer>(
+      'SELECT * FROM Customers WHERE userId = ? ORDER BY name',
+      [userId]
+    );
     // Ensure numeric fields are numbers and isActive-like fields are booleans if they exist
     return rows.map(row => ({
         ...row,
@@ -90,16 +97,27 @@ export const getAllCustomers = async (): Promise<Customer[]> => {
 };
 
 export const updateCustomer = async (
+  userId: string,
   id: string,
-  updates: Partial<Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'lastPurchaseDate'>>
+  updates: Partial<Omit<Customer, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'lastPurchaseDate'>>
 ): Promise<Customer> => {
   const timestamp = new Date().toISOString();
   try {
-    // Check for phone uniqueness if phone is being updated
+    // Verify the customer belongs to this user first
+    const customerOwnership = await db.getFirstAsync<{ id: string }>(
+      'SELECT id FROM Customers WHERE id = ? AND userId = ?',
+      [id, userId]
+    );
+    
+    if (!customerOwnership) {
+      throw new Error('Customer not found or access denied.');
+    }
+    
+    // Check for phone uniqueness if phone is being updated (within the same userId scope)
     if (updates.phone) {
       const existing = await db.getFirstAsync<{ id: string }>(
-        'SELECT id FROM Customers WHERE phone = ? AND id != ?',
-        [updates.phone, id]
+        'SELECT id FROM Customers WHERE phone = ? AND id != ? AND userId = ?',
+        [updates.phone, id, userId]
       );
       if (existing) {
         throw new Error('Phone number already exists for another customer.');
@@ -110,7 +128,10 @@ export const updateCustomer = async (
     const updateEntries = Object.entries(updates).filter(([_, value]) => value !== undefined);
     if (updateEntries.length === 0) {
       // No actual updates to perform, fetch and return current customer
-      const currentCustomer = await db.getFirstAsync<Customer>('SELECT * FROM Customers WHERE id = ?', [id]);
+      const currentCustomer = await db.getFirstAsync<Customer>(
+        'SELECT * FROM Customers WHERE id = ? AND userId = ?', 
+        [id, userId]
+      );
       if (!currentCustomer) throw new Error('Customer not found.');
       return currentCustomer;
     }
@@ -118,9 +139,15 @@ export const updateCustomer = async (
     const fields = updateEntries.map(([key]) => `${key} = ?`).join(', ');
     const values = updateEntries.map(([_, value]) => value);
 
-    await db.runAsync(`UPDATE Customers SET ${fields}, updatedAt = ? WHERE id = ?`, [...values, timestamp, id]);
+    await db.runAsync(
+      `UPDATE Customers SET ${fields}, updatedAt = ? WHERE id = ? AND userId = ?`, 
+      [...values, timestamp, id, userId]
+    );
 
-    const updatedCustomer = await db.getFirstAsync<Customer>('SELECT * FROM Customers WHERE id = ?', [id]);
+    const updatedCustomer = await db.getFirstAsync<Customer>(
+      'SELECT * FROM Customers WHERE id = ? AND userId = ?', 
+      [id, userId]
+    );
     if (!updatedCustomer) throw new Error('Customer not found after update.');
     return {
         ...updatedCustomer,
@@ -141,9 +168,15 @@ export const updateCustomer = async (
   }
 };
 
-export const deleteCustomer = async (id: string): Promise<void> => {
+export const deleteCustomer = async (userId: string, id: string): Promise<void> => {
   try {
-    await db.runAsync('DELETE FROM Customers WHERE id = ?', [id]);
+    // Only delete if the customer belongs to this user
+    await db.runAsync(
+      'DELETE FROM Customers WHERE id = ? AND userId = ?', 
+      [id, userId]
+    );
+    // Check if any rows were actually deleted (optional)
+    // If using a driver/method that returns affected rows, you could check here
   } catch (error: any) {
     console.error('Error deleting customer from DB:', error.message);
     throw new Error('Failed to delete customer.');

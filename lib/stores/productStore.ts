@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Product, ProductInput, ProductModel } from '../models/product';
+import { useAuthStore } from './authStore';
 
 interface ProductState {
   products: Product[];
@@ -10,8 +11,8 @@ interface ProductState {
   // Actions
   fetchProducts: () => Promise<void>;
   fetchLowStockProducts: () => Promise<void>;
-  addProduct: (product: ProductInput) => Promise<Product>;
-  updateProduct: (id: string, product: Partial<ProductInput>) => Promise<void>;
+  addProduct: (product: Omit<ProductInput, 'userId'>) => Promise<Product>;
+  updateProduct: (id: string, product: Partial<Omit<ProductInput, 'userId'>>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
 }
 
@@ -24,7 +25,14 @@ export const useProductStore = create<ProductState>((set, get) => ({
   fetchProducts: async () => {
     set({ loading: true, error: null });
     try {
-      const products = await ProductModel.getAll();
+      // Get current user ID from auth store
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const products = await ProductModel.getAll(userId);
       set({ products, loading: false });
     } catch (error: any) {
       console.error('Error fetching products:', error);
@@ -35,7 +43,14 @@ export const useProductStore = create<ProductState>((set, get) => ({
   fetchLowStockProducts: async () => {
     set({ loading: true, error: null });
     try {
-      const lowStockProducts = await ProductModel.getLowStock();
+      // Get current user ID from auth store
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const lowStockProducts = await ProductModel.getLowStock(userId);
       set({ lowStockProducts, loading: false });
     } catch (error: any) {
       console.error('Error fetching low stock products:', error);
@@ -43,10 +58,23 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
-  addProduct: async (product: ProductInput) => {
+  addProduct: async (productData: Omit<ProductInput, 'userId'>) => {
     set({ loading: true, error: null });
     try {
-      const newProduct = await ProductModel.create(product);
+      // Get current user ID from auth store
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Add userId to the product input
+      const productWithUserId: ProductInput = {
+        ...productData,
+        userId,
+      };
+      
+      const newProduct = await ProductModel.create(productWithUserId);
       set((state) => ({
         products: [...state.products, newProduct],
         loading: false
@@ -65,10 +93,17 @@ export const useProductStore = create<ProductState>((set, get) => ({
     }
   },
 
-  updateProduct: async (id: string, product: Partial<ProductInput>) => {
+  updateProduct: async (id: string, productData: Partial<Omit<ProductInput, 'userId'>>) => {
     set({ loading: true, error: null });
     try {
-      const updatedProduct = await ProductModel.update(id, product);
+      // Get current user ID from auth store
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const updatedProduct = await ProductModel.update(id, productData, userId);
       set((state) => ({
         products: state.products.map(p => p.id === id ? updatedProduct : p),
         loading: false
@@ -86,7 +121,14 @@ export const useProductStore = create<ProductState>((set, get) => ({
   deleteProduct: async (id: string) => {
     set({ loading: true, error: null });
     try {
-      await ProductModel.delete(id);
+      // Get current user ID from auth store
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      await ProductModel.delete(id, userId);
       set((state) => ({
         products: state.products.filter(p => p.id !== id),
         lowStockProducts: state.lowStockProducts.filter(p => p.id !== id),

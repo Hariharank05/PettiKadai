@@ -1,104 +1,115 @@
 // ~/lib/stores/customerStore.ts
 import { create } from 'zustand';
+import { getAllCustomers, addCustomer, updateCustomer, deleteCustomer } from '../db/customerOperations';
 import { Customer } from '../db/types';
-import * as customerOps from '../db/customerOperations'; // Adjust the path as needed
+import { useAuthStore } from './authStore';
 
 interface CustomerStoreState {
   customers: Customer[];
   isLoading: boolean;
   error: string | null;
-}
-
-interface CustomerStoreActions {
   fetchCustomers: () => Promise<void>;
-  addCustomer: (
-    customerData: Omit<Customer, 'id' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'createdAt' | 'updatedAt' | 'lastPurchaseDate'>
-  ) => Promise<Customer>; // Return the new customer
-  updateCustomer: (
-    id: string,
-    customerData: Partial<Omit<Customer, 'id' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'createdAt' | 'updatedAt' | 'lastPurchaseDate'>>
-  ) => Promise<Customer>; // Return the updated customer
-  deleteCustomer: (id: string) => Promise<void>;
+  addCustomer: (customer: Omit<Customer, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'lastPurchaseDate'>) => Promise<void>;
+  updateCustomer: (customerId: string, updates: Partial<Omit<Customer, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'totalPurchases' | 'outstandingBalance' | 'loyaltyPoints' | 'lastPurchaseDate'>>) => Promise<void>;
+  deleteCustomer: (customerId: string) => Promise<void>;
   clearError: () => void;
 }
 
-export const useCustomerStore = create<CustomerStoreState & CustomerStoreActions>((set, get) => ({
+export const useCustomerStore = create<CustomerStoreState>((set) => ({
   customers: [],
   isLoading: false,
   error: null,
 
-  clearError: () => set({ error: null }),
-
   fetchCustomers: async () => {
     set({ isLoading: true, error: null });
     try {
-      const fetchedCustomers = await customerOps.getAllCustomers();
-      set({ customers: fetchedCustomers, isLoading: false });
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const customers = await getAllCustomers(userId);
+      set({ customers, isLoading: false });
     } catch (error: any) {
-      console.error('Store: Error fetching customers:', error.message);
-      set({ error: error.message || 'Failed to fetch customers.', isLoading: false });
+      console.error('Failed to fetch customers:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to fetch customers', 
+        isLoading: false 
+      });
     }
   },
 
   addCustomer: async (customerData) => {
     set({ isLoading: true, error: null });
     try {
-      const newCustomer = await customerOps.addCustomer(customerData);
-      // Instead of manually adding, re-fetch to ensure consistency, or add if preferred
-      // For simplicity and to always get the latest from DB (including any defaults):
-      await get().fetchCustomers(); // Re-fetches all customers
-      // Or, if you want to optimistically update:
-      // set((state) => ({
-      //   customers: [...state.customers, newCustomer].sort((a, b) => a.name.localeCompare(b.name)),
-      //   isLoading: false,
-      // }));
-      set({ isLoading: false });
-      return newCustomer;
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const newCustomer = await addCustomer(userId, customerData);
+      set(state => ({
+        customers: [...state.customers, newCustomer],
+        isLoading: false
+      }));
     } catch (error: any) {
-      console.error('Store: Error adding customer:', error.message);
-      set({ error: error.message || 'Failed to add customer.', isLoading: false });
-      throw error; // Re-throw to be caught by the UI
+      console.error('Failed to add customer:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to add customer', 
+        isLoading: false 
+      });
     }
   },
 
-  updateCustomer: async (id, customerData) => {
+  updateCustomer: async (customerId, updates) => {
     set({ isLoading: true, error: null });
     try {
-      const updatedCustomer = await customerOps.updateCustomer(id, customerData);
-      // Re-fetch for consistency or update optimistically
-      await get().fetchCustomers();
-      // Or, optimistic update:
-      // set((state) => ({
-      //   customers: state.customers.map((c) =>
-      //     c.id === id ? { ...c, ...updatedCustomer } : c
-      //   ).sort((a, b) => a.name.localeCompare(b.name)),
-      //   isLoading: false,
-      // }));
-      set({isLoading: false});
-      return updatedCustomer;
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      const updatedCustomer = await updateCustomer(userId, customerId, updates);
+      set(state => ({
+        customers: state.customers.map(c => 
+          c.id === customerId ? updatedCustomer : c
+        ),
+        isLoading: false
+      }));
     } catch (error: any) {
-      console.error('Store: Error updating customer:', error.message);
-      set({ error: error.message || 'Failed to update customer.', isLoading: false });
-      throw error; // Re-throw
+      console.error('Failed to update customer:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to update customer', 
+        isLoading: false 
+      });
     }
   },
 
-  deleteCustomer: async (id) => {
+  deleteCustomer: async (customerId) => {
     set({ isLoading: true, error: null });
     try {
-      await customerOps.deleteCustomer(id);
-      // Re-fetch for consistency or update optimistically
-      await get().fetchCustomers();
-      // Or, optimistic update:
-      // set((state) => ({
-      //   customers: state.customers.filter((c) => c.id !== id),
-      //   isLoading: false,
-      // }));
-      set({ isLoading: false });
+      const userId = useAuthStore.getState().userId;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+      
+      await deleteCustomer(userId, customerId);
+      set(state => ({
+        customers: state.customers.filter(c => c.id !== customerId),
+        isLoading: false
+      }));
     } catch (error: any) {
-      console.error('Store: Error deleting customer:', error.message);
-      set({ error: error.message || 'Failed to delete customer.', isLoading: false });
-      throw error; // Re-throw
+      console.error('Failed to delete customer:', error);
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to delete customer', 
+        isLoading: false 
+      });
     }
   },
+
+  clearError: () => set({ error: null })
 }));
