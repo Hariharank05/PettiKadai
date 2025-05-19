@@ -2,7 +2,7 @@
 import * as SQLite from 'expo-sqlite';
 
 // Open or create the database with type annotation
-const db: SQLite.SQLiteDatabase = SQLite.openDatabaseSync('pettiKadai.db');
+export const db: SQLite.SQLiteDatabase = SQLite.openDatabaseSync('pettiKadai.db');
 
 // Initialize database tables
 export const initDatabase = (): void => {
