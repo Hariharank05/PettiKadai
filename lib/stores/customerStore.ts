@@ -1,7 +1,7 @@
 // ~/lib/stores/customerStore.ts
 import { create } from 'zustand';
 import { getAllCustomers, addCustomer, updateCustomer, deleteCustomer } from '../db/customerOperations';
-import { Customer } from '../db/types';
+import { Customer } from './types';
 import { useAuthStore } from './authStore';
 
 interface CustomerStoreState {

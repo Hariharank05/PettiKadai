@@ -5,7 +5,7 @@ import { useAuthStore } from '~/lib/stores/authStore';
 import { useProductStore } from '~/lib/stores/productStore';
 import { Text } from '~/components/ui/text';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { BarChart4, TrendingUp, Package, DollarSign, AlertTriangle, Plus, Users, ChevronDown } from 'lucide-react-native';
+import { BarChart4, TrendingUp, Package, DollarSign, AlertTriangle, Plus, Users, ChevronDown, Tag } from 'lucide-react-native';
 import { format } from 'date-fns';
 
 // Define the color palette based on theme
@@ -162,6 +162,13 @@ export default function HomeScreen() {
       // Use the first product's image if available, otherwise fall back to static image
       image: storeProducts.length > 0 ? getProductImageByCategory(storeProducts[0]) : 'https://images.pexels.com/photos/264636/pexels-photo-264636.jpeg?auto=compress&cs=tinysrgb&w=600',
       onPress: () => router.push('/(tabs)/products'),
+    },
+    {
+    title: 'Manage Categories',
+    icon: <Tag size={24} color={COLORS.secondary} />,
+    backgroundColor: COLORS.lightBlue,
+    image: 'https://images.pexels.com/photos/4483775/pexels-photo-4483775.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+    onPress: () => router.push('/(tabs)/category'),
     },
     {
       title: 'Manage Customers',

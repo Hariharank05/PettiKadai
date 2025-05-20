@@ -92,6 +92,15 @@ export const initDatabase = (): void => {
           FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
+      // --- Patch: Add missing column 'imageUri' if not exists ---
+    const categoryColumnCheck = db.getFirstSync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM pragma_table_info('Categories') WHERE name = 'imageUri'`
+    );
+
+    if (categoryColumnCheck && categoryColumnCheck.count === 0) {
+      db.execSync(`ALTER TABLE Categories ADD COLUMN imageUri TEXT`);
+      console.log("[DB] Added missing column 'imageUri' to Categories table");
+    }
 
       // Suppliers Table - Added userId (if suppliers are per-user)
       db.execSync(`
