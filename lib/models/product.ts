@@ -10,31 +10,22 @@ function generateId(): string {
 }
 
 export interface Product {
-    rating: any;
-    rating: any;
-    discount: ReactNode;
-    discount: number;
-    discount: boolean;
-    rating: number;
     rating: number;
     discount: number;
-    [x: string]: number;
-    [x: string]: boolean;
-    discount: number;
-    image: string;
+    image: string; // Note: this is 'image', not 'imageUri' consistently
     isActive: boolean;
     id: string;
-    userId: string; // Added userId field to match DB schema
-    name: string;
+    userId: string;
+    name: string;         // Correctly string
     costPrice: number;
     sellingPrice: number;
     quantity: number;
-    unit: string;      // Add unit field (kg, liter, piece, etc.)
-    category?: string;
-    imageUri?: string; // Add image URI field
+    unit: string;         // Correctly string
+    category?: string;    // Correctly string?
+    imageUri?: string;    // Correctly string?
     createdAt: string;
     updatedAt: string;
-  }
+}
 
 // Modified to include userId in the input
 export type ProductInput = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
