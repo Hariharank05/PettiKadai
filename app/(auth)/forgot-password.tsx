@@ -1,3 +1,4 @@
+// ~/screens/(auth)/forgot-password.tsx
 import React, { useState } from 'react';
 import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView } from 'react-native';
 import { Link, useRouter } from 'expo-router';
@@ -27,7 +28,7 @@ export default function ForgotPasswordScreen() {
   
   const { 
     verifySecurityAnswer, 
-    resetPassword, 
+    resetUserPassword, // Corrected: was resetPassword
     isLoading, 
     error, 
     clearError 
@@ -44,9 +45,20 @@ export default function ForgotPasswordScreen() {
     setValidationError(null);
     
     // In a real implementation, we would fetch the security question from the server
-    // For now, we'll simulate it
-    setSecurityQuestion("What was your first pet's name?");
+    // For now, we'll simulate it by trying to verify and then fetching the question if successful.
+    // Or, better, have a dedicated endpoint to fetch the question first.
+    // For this example, we'll assume `verifySecurityAnswer` (or a new method) could also return the question or user details.
+    // Let's assume for now we just set a placeholder question.
+    setSecurityQuestion("What was your first pet's name?"); // Placeholder
     setCurrentStep(ResetStep.ANSWER_QUESTION);
+    // Ideally, you'd call an API endpoint here like:
+    // const userDetails = await fetchUserForPasswordReset(emailOrPhone);
+    // if (userDetails && userDetails.securityQuestion) {
+    //   setSecurityQuestion(userDetails.securityQuestion);
+    //   setCurrentStep(ResetStep.ANSWER_QUESTION);
+    // } else {
+    //   setValidationError('User not found or no security question set.');
+    // }
   };
 
   const handleVerifySecurityAnswer = async () => {
@@ -58,9 +70,15 @@ export default function ForgotPasswordScreen() {
     clearError();
     setValidationError(null);
     
-    const success = await verifySecurityAnswer(emailOrPhone, securityAnswer);
-    if (success) {
+    // The `verifySecurityAnswer` in the store returns User | null.
+    // We are checking if it returns a user object (truthy) to proceed.
+    const user = await verifySecurityAnswer(emailOrPhone, securityAnswer);
+    if (user) { // If user is not null, verification was successful
       setCurrentStep(ResetStep.CREATE_PASSWORD);
+    } else {
+      // Error will be set in the store, which is displayed.
+      // No need to setValidationError here unless you want a specific message
+      // for this step that differs from the store's error.
     }
   };
 
@@ -83,9 +101,9 @@ export default function ForgotPasswordScreen() {
     clearError();
     setValidationError(null);
     
-    const success = await resetPassword({
+    const success = await resetUserPassword({ // Corrected: was resetPassword
       emailOrPhone,
-      securityAnswer,
+      securityAnswer, // Note: The backend `resetPassword` operation should re-verify this or use a token.
       newPassword
     });
     
@@ -119,6 +137,7 @@ export default function ForgotPasswordScreen() {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   className="h-12"
+                  editable={!isLoading}
                 />
               </View>
             </View>
@@ -149,7 +168,7 @@ export default function ForgotPasswordScreen() {
               <View>
                 <Text className="text-base text-foreground font-medium mb-2">Question</Text>
                 <Text className="text-foreground p-3 bg-muted rounded-md">
-                  {securityQuestion}
+                  {securityQuestion || "Loading question..."}
                 </Text>
               </View>
               
@@ -163,6 +182,7 @@ export default function ForgotPasswordScreen() {
                     setValidationError(null);
                   }}
                   className="h-12"
+                  editable={!isLoading}
                 />
               </View>
             </View>
@@ -202,10 +222,12 @@ export default function ForgotPasswordScreen() {
                     }}
                     secureTextEntry={!showPassword}
                     className="h-12 pr-12"
+                    editable={!isLoading}
                   />
                   <TouchableOpacity
                     onPress={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-3"
+                    disabled={isLoading}
                   >
                     {showPassword ? (
                       <EyeOff size={24} className="text-muted-foreground" />
@@ -227,6 +249,7 @@ export default function ForgotPasswordScreen() {
                   }}
                   secureTextEntry={!showPassword}
                   className="h-12"
+                  editable={!isLoading}
                 />
               </View>
             </View>
@@ -278,8 +301,10 @@ export default function ForgotPasswordScreen() {
               onPress={() => {
                 if (currentStep === ResetStep.IDENTIFY_USER) {
                   router.back();
-                } else {
+                } else if (currentStep !== ResetStep.SUCCESS) { // Don't go back from success step
                   setCurrentStep(currentStep - 1);
+                  clearError(); // Clear errors when going back a step
+                  setValidationError(null);
                 }
               }}
               className="p-2"
@@ -298,10 +323,11 @@ export default function ForgotPasswordScreen() {
           
           {getStepContent()}
           
-          {currentStep !== ResetStep.SUCCESS && (
+          {currentStep !== ResetStep.SUCCESS && currentStep !== ResetStep.IDENTIFY_USER && (
+             // Show "Back to Login" only on steps after IDENTIFY_USER and before SUCCESS
             <Link href="/(auth)/login" asChild>
-              <TouchableOpacity className="mt-4">
-                <Text className="text-center text-primary">Back to Login</Text>
+              <TouchableOpacity className="mt-4" disabled={isLoading}>
+                <Text className="text-center text-primary">Cancel and Back to Login</Text>
               </TouchableOpacity>
             </Link>
           )}
