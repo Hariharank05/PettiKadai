@@ -161,21 +161,21 @@ export default function HomeScreen() {
       backgroundColor: COLORS.lightPurple,
       // Use the first product's image if available, otherwise fall back to static image
       image: storeProducts.length > 0 ? getProductImageByCategory(storeProducts[0]) : 'https://images.pexels.com/photos/264636/pexels-photo-264636.jpeg?auto=compress&cs=tinysrgb&w=600',
-      onPress: () => router.push('/(tabs)/products'),
+      onPress: () => router.push('/(tabs)/inventory/products'),
     },
     {
-    title: 'Manage Categories',
-    icon: <Tag size={24} color={COLORS.secondary} />,
-    backgroundColor: COLORS.lightBlue,
-    image: 'https://images.pexels.com/photos/4483775/pexels-photo-4483775.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-    onPress: () => router.push('/(tabs)/category'),
+      title: 'Manage Categories',
+      icon: <Tag size={24} color={COLORS.secondary} />,
+      backgroundColor: COLORS.lightBlue,
+      image: 'https://images.pexels.com/photos/4483775/pexels-photo-4483775.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+      onPress: () => router.push('/(tabs)/inventory/category'),
     },
     {
       title: 'Manage Customers',
       icon: <Users size={24} color={COLORS.accent} />,
       backgroundColor: COLORS.lightYellow,
       image: 'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=600', // Customer at counter image
-      onPress: () => router.push('/(tabs)/customers'),
+      onPress: () => router.push('/(tabs)/inventory/customers'),
     },
     {
       title: 'Reports',
@@ -335,7 +335,7 @@ export default function HomeScreen() {
           >
             <ImageBackground
               source={{ uri: 'https://images.pexels.com/photos/7055126/pexels-photo-7055126.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1                            ' }}
-              style={{ width: '100%'}}
+              style={{ width: '100%' }}
               resizeMode="cover"
             >
               {/* Overlay for better text readability */}
@@ -366,7 +366,7 @@ export default function HomeScreen() {
           >
             <ImageBackground
               source={{ uri: 'https://images.pexels.com/photos/259165/pexels-photo-259165.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' }}
-              style={{ width: '100%'}}
+              style={{ width: '100%' }}
               resizeMode="cover"
             >
               {/* Overlay for better text readability */}

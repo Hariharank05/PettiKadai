@@ -1,9 +1,9 @@
-import { Tabs } from 'expo-router';
+// app/(tabs)/_layout.tsx
+import { Tabs, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { Home, ShoppingBag, User, Settings, ShoppingCart, HistoryIcon } from 'lucide-react-native';
+import { Home, ShoppingBag, User, Settings, ShoppingCart, HistoryIcon, Archive } from 'lucide-react-native'; // Removed UsersIcon, Tag, ClipboardList for now
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { useColorScheme } from '~/lib/useColorScheme';
 
@@ -33,6 +33,18 @@ export default function TabsLayout() {
     );
   }
 
+  // Common header options for top-level tabs
+  const tabHeaderOptions = {
+    headerRight: () => <ThemeToggle />,
+    headerStyle: {
+      backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+    },
+    headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+    headerTitleStyle: {
+      color: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+    },
+  };
+
   return (
     <Tabs
       screenOptions={{
@@ -48,23 +60,15 @@ export default function TabsLayout() {
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
-        name="products"
+        name="inventory" // This now points to the inventory stack's _layout
         options={{
-          title: 'Invenrtry',
-          tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          title: 'Inventory',
+          tabBarIcon: ({ color, size }) => <Archive color={color} size={size} />,
+          headerShown: false, // The header will be managed by the nested Stack
         }}
       />
       <Tabs.Screen
@@ -72,10 +76,7 @@ export default function TabsLayout() {
         options={{
           title: 'Sales',
           tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
@@ -83,11 +84,7 @@ export default function TabsLayout() {
         options={{
           title: 'Receipts',
           tabBarIcon: ({ color, size }) => <HistoryIcon color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
@@ -95,11 +92,7 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
@@ -107,46 +100,20 @@ export default function TabsLayout() {
         options={{
           title: 'Settings',
           tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          ...tabHeaderOptions,
         }}
       />
-      <Tabs.Screen
-        name="customers"
-        options={{
-          title: 'Customers',
-          // tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />, // We can define an icon
-          href: null,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
-        }}
-      />
-      <Tabs.Screen
-        name="ReportsScreen"
-        options={{
-          title: 'Reports',
-          href: null,
-          headerRight: () => <ThemeToggle />,
-        }}
-      />
-      <Tabs.Screen
-        name="category"
-        options={{
-          title: 'Categories',
-          // tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />, // We can define an icon
-          href: null,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
-        }}
-      />
+
+      {/* These screens are NOT direct tabs anymore if they are to be part of the inventory stack.
+          They will be defined in app/(tabs)/inventory/_layout.tsx
+          If they still need to be accessible from *other* tabs directly,
+          their `href: null` setup was fine, but they won't get back buttons to the inventory hub then.
+          For a clean inventory stack, they should be conceptually moved.
+      */}
+      <Tabs.Screen name="products" options={{ href: null }} />
+      <Tabs.Screen name="category" options={{ href: null }} />
+      <Tabs.Screen name="customers" options={{ href: null }} />
+      <Tabs.Screen name="ReportsScreen" options={{ href: null }} />
     </Tabs>
   );
 }
