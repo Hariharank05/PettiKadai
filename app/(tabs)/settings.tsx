@@ -28,46 +28,50 @@ import {
     Sun
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
+import { ChangePasswordModal } from '~/components/screens/settings-components/ChangePasswordModal';
 
-interface UserStoreSettings {
+// Shape of data fetched from DB and used for form state
+interface FormState {
     storeName: string;
     storeAddress: string;
     storePhone: string;
     storeEmail: string;
     currencySymbol: string;
     taxRate: number;
-    darkMode?: boolean; // This will hold the value from DB or user's UI interaction
+    // darkModeForSave stores the preference that will be written to DB.
+    // It's initialized from DB, then updated by switch toggles.
+    darkModeForSave?: boolean; // Can be undefined if no DB preference yet
     language?: string;
-    // Flag to indicate if settings have been loaded from DB for this user
-    // This helps in deciding whether to apply DB theme to global theme
-    dbSettingsLoaded?: boolean;
 }
 
+
 export default function SettingsScreen() {
-    const { userName, userId, logout, isLoading: authIsLoading } = useAuthStore();
-    const { setColorScheme, isDarkColorScheme } = useColorScheme();
+    const { userName, userId, logout, isLoading: authIsLoading, updateAuthStoreUserName, changeUserPassword } = useAuthStore(); // Added updateAuthStoreUserName
+    const { setColorScheme, isDarkColorScheme } = useColorScheme(); // Global theme state
     const router = useRouter();
     const db = getDatabase();
+    const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+    const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
 
-    const [userSettings, setUserSettings] = useState<UserStoreSettings>({
+    const [formState, setFormState] = useState<FormState>({
         storeName: 'My Store',
         storeAddress: '',
         storePhone: '',
         storeEmail: '',
         currencySymbol: '₹',
         taxRate: 0,
-        darkMode: isDarkColorScheme, // Initialize with current app theme
+        darkModeForSave: undefined, // Initialize as undefined
         language: 'en',
-        dbSettingsLoaded: false,
     });
 
     const [isLoading, setIsLoading] = useState(true);
+    const [initialDbFetchComplete, setInitialDbFetchComplete] = useState(false);
     const [showResetDialog, setShowResetDialog] = useState(false);
     const [showLogoutDialog, setShowLogoutDialog] = useState(false);
     const [savedMessage, setSavedMessage] = useState('');
 
-    // Step 1: Fetch user settings from DB. This function should be stable.
-    const fetchUserSettingsFromDb = useCallback(async (currentUserId: string) => {
+    // Fetches settings from DB. Should be stable.
+    const fetchUserSettingsFromDb = useCallback(async (currentUserId: string): Promise<Partial<FormState>> => {
         console.log('[SettingsScreen] Fetching user settings for:', currentUserId);
         try {
             const settingsFromDb = await db.getFirstAsync<any>(
@@ -83,79 +87,74 @@ export default function SettingsScreen() {
                     storePhone: settingsFromDb.storePhone || '',
                     storeEmail: settingsFromDb.storeEmail || '',
                     currencySymbol: settingsFromDb.currencySymbol || '₹',
-                    taxRate: settingsFromDb.taxRate || 0,
-                    darkMode: settingsFromDb.darkMode === 1,
+                    taxRate: settingsFromDb.taxRate ?? 0,
+                    // darkModeForSave is the direct preference from DB
+                    darkModeForSave: settingsFromDb.darkMode === 1 ? true : (settingsFromDb.darkMode === 0 ? false : undefined),
                     language: settingsFromDb.language || 'en',
-                    dbSettingsLoaded: true, // Mark that DB settings were loaded
                 };
             } else {
-                console.log(`[SettingsScreen] No settings found for user ${currentUserId}. Will use defaults.`);
-                return {
-                    storeName: 'My Store',
-                    storeAddress: '',
-                    storePhone: '',
-                    storeEmail: '',
-                    currencySymbol: '₹',
-                    taxRate: 0,
-                    darkMode: isDarkColorScheme, // Use current app theme as default for UI
-                    language: 'en',
-                    dbSettingsLoaded: true, // Mark as "loaded" even if defaults are used
-                };
+                console.log(`[SettingsScreen] No settings found for user ${currentUserId}.`);
+                // Return minimal object, defaults will be applied by formState initializer or later logic
+                return { darkModeForSave: undefined };
             }
         } catch (error) {
             console.error('[SettingsScreen] Failed to load user settings:', error);
             Alert.alert('Error', 'Could not load your settings.');
-            return { // Fallback
-                storeName: 'My Store', storeAddress: '', storePhone: '',
-                storeEmail: '', currencySymbol: '₹', taxRate: 0,
-                darkMode: isDarkColorScheme, language: 'en', dbSettingsLoaded: true,
-            };
+            return { darkModeForSave: undefined };
         }
-    }, [db, isDarkColorScheme]); // Depends on db and isDarkColorScheme (for default if no DB settings)
+    }, [db]);
 
-    // Effect for fetching data when userId changes
+    // Effect 1: Fetch settings on userId change / initial mount.
     useEffect(() => {
         if (userId) {
             setIsLoading(true);
+            setInitialDbFetchComplete(false); // Reset flag before fetch
             fetchUserSettingsFromDb(userId)
                 .then(fetchedSettings => {
-                    setUserSettings(fetchedSettings);
+                    // Update formState with fetched data, or keep defaults if nothing specific was fetched.
+                    // Crucially, set darkModeForSave from the fetched data.
+                    setFormState(prev => ({
+                        ...prev, // keep existing defaults for non-fetched items
+                        ...fetchedSettings, // overwrite with fetched values
+                    }));
+                    setInitialDbFetchComplete(true); // Mark fetch as complete
                 })
                 .finally(() => {
                     setIsLoading(false);
                 });
         } else {
-            // Reset to defaults if no user or user logs out
-            setUserSettings({
+            // Reset to complete defaults if no user
+            setFormState({
                 storeName: 'My Store', storeAddress: '', storePhone: '',
                 storeEmail: '', currencySymbol: '₹', taxRate: 0,
-                darkMode: isDarkColorScheme, language: 'en', dbSettingsLoaded: false,
+                darkModeForSave: undefined, // No user, no preference
+                language: 'en',
             });
+            setInitialDbFetchComplete(false);
             setIsLoading(false);
         }
-    }, [userId, fetchUserSettingsFromDb]); // fetchUserSettingsFromDb is now stable if db and isDarkColorScheme are stable
+    }, [userId, fetchUserSettingsFromDb]);
 
-    // Effect to synchronize DB darkMode to global theme ONCE after settings are loaded
+    // Effect 2: Synchronize global theme with DB preference ONCE after initial fetch.
     useEffect(() => {
-        if (userSettings.dbSettingsLoaded && userSettings.darkMode !== undefined && userSettings.darkMode !== isDarkColorScheme) {
-            console.log(`[SettingsScreen] DB settings loaded. DB darkMode (${userSettings.darkMode}) differs from app theme (${isDarkColorScheme}). Syncing app theme.`);
-            setColorScheme(userSettings.darkMode ? 'dark' : 'light');
-            // Once synced, we might not want this to run again unless dbSettingsLoaded changes
-            // Or, ensure this only happens if there's a genuine difference
+        // Only run if initial fetch is done and we have a user
+        if (initialDbFetchComplete && userId) {
+            // If DB has a preference and it's different from current global theme
+            if (formState.darkModeForSave !== undefined && formState.darkModeForSave !== isDarkColorScheme) {
+                console.log(`[SettingsScreen] Initial DB Sync: DB preference (${formState.darkModeForSave}) differs from app theme (${isDarkColorScheme}). Syncing app theme.`);
+                setColorScheme(formState.darkModeForSave ? 'dark' : 'light');
+            }
+            // If DB has no preference, the global theme (isDarkColorScheme) remains as is (e.g., system or previous session).
+            // Then, ensure `darkModeForSave` (what will be saved) is initialized to match the *effective* global theme.
+            else if (formState.darkModeForSave === undefined) {
+                console.log(`[SettingsScreen] Initial DB Sync: No DB preference. Initializing darkModeForSave (${isDarkColorScheme}) from current app theme.`);
+                setFormState(prev => ({ ...prev, darkModeForSave: isDarkColorScheme }));
+            }
         }
-    }, [userSettings.dbSettingsLoaded, userSettings.darkMode, isDarkColorScheme, setColorScheme]);
-
-    // Effect to synchronize the Switch UI with the global isDarkColorScheme
-    // This ensures the switch reflects the theme even if it's changed elsewhere
-    useEffect(() => {
-        console.log("[SettingsScreen] Global isDarkColorScheme changed to:", isDarkColorScheme, ". Updating UI switch state.");
-        setUserSettings(prev => ({ ...prev, darkMode: isDarkColorScheme }));
-    }, [isDarkColorScheme]);
+    }, [initialDbFetchComplete, userId, formState.darkModeForSave /* Rerun if this changes from fetch */, isDarkColorScheme, setColorScheme]);
 
 
     const saveUserSettings = async () => {
-        // ... (saveUserSettings logic remains largely the same as your last version)
-        // Just ensure it uses `userSettings.darkMode` when saving to the DB
         if (!userId) {
             Alert.alert("Error", "User not identified. Cannot save settings.");
             return;
@@ -167,43 +166,45 @@ export default function SettingsScreen() {
                 'SELECT id FROM Settings WHERE userId = ? AND id = ?', [userId, userId]
             );
 
-            const languageToSave = userSettings.language || 'en';
-            const darkModeToSave = userSettings.darkMode ? 1 : 0; // Ensure this uses the local userSettings
+            // Value to save to DB is formState.darkModeForSave
+            // It's explicitly set to 'undefined' if no preference, so handle that.
+            const darkModeDbValue = formState.darkModeForSave === true ? 1 : (formState.darkModeForSave === false ? 0 : null);
+            const languageToSave = formState.language || 'en';
 
             if (existingSettings) {
-                console.log('[SettingsScreen] Updating existing settings for user:', userId, "DarkMode to save:", darkModeToSave);
+                console.log('[SettingsScreen] Updating existing settings. darkMode to save:', darkModeDbValue);
                 await db.runAsync(
                     `UPDATE Settings SET
                         storeName = ?, storeAddress = ?, storePhone = ?, storeEmail = ?,
                         currencySymbol = ?, taxRate = ?, darkMode = ?, language = ?, updatedAt = ?
                     WHERE userId = ? AND id = ?`,
                     [
-                        userSettings.storeName, userSettings.storeAddress, userSettings.storePhone,
-                        userSettings.storeEmail, userSettings.currencySymbol, userSettings.taxRate,
-                        darkModeToSave, languageToSave, now,
+                        formState.storeName, formState.storeAddress, formState.storePhone,
+                        formState.storeEmail, formState.currencySymbol, formState.taxRate,
+                        darkModeDbValue, languageToSave, now,
                         userId, userId
                     ]
                 );
             } else {
-                console.log('[SettingsScreen] Inserting new settings for user:', userId, "DarkMode to save:", darkModeToSave);
+                console.log('[SettingsScreen] Inserting new settings. darkMode to save:', darkModeDbValue);
                 await db.runAsync(
                     `INSERT INTO Settings (
                         id, userId, storeName, storeAddress, storePhone, storeEmail,
                         currencySymbol, taxRate, defaultDiscountRate, darkMode, language, receiptFooter, backupFrequency, updatedAt
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
-                        userId, userId, userSettings.storeName, userSettings.storeAddress,
-                        userSettings.storePhone, userSettings.storeEmail, userSettings.currencySymbol,
-                        userSettings.taxRate, 0, darkModeToSave, languageToSave,
+                        userId, userId, formState.storeName, formState.storeAddress,
+                        formState.storePhone, formState.storeEmail, formState.currencySymbol,
+                        formState.taxRate, 0, darkModeDbValue, languageToSave,
                         '', 'WEEKLY', now
                     ]
                 );
             }
-            // After saving, refetch to ensure state is consistent with DB, especially if defaults were applied.
-            // And mark dbSettingsLoaded as true, because now they ARE loaded (or just created).
-            const updatedSettingsFromDb = await fetchUserSettingsFromDb(userId);
-            setUserSettings(updatedSettingsFromDb);
 
+            // If storeName was changed, update it in AuthStore so it reflects elsewhere (e.g. _layout welcome message)
+            if (userName !== formState.storeName) {
+                updateAuthStoreUserName(formState.storeName, userId); // Pass userId to ensure correct update
+            }
 
             setSavedMessage('Settings saved successfully!');
             setTimeout(() => setSavedMessage(''), 3000);
@@ -216,29 +217,21 @@ export default function SettingsScreen() {
     };
 
     const handleToggleDarkModeSwitch = () => {
-        const newDarkModeState = !userSettings.darkMode;
-        // 1. Update local UI state for the switch immediately
-        setUserSettings(prev => ({ ...prev, darkMode: newDarkModeState }));
-        // 2. Update global app theme
-        setColorScheme(newDarkModeState ? 'dark' : 'light');
-        // The change will be persisted to DB when the user clicks "Save Preferences"
+        const newThemeIsDark = !isDarkColorScheme; // Toggle based on current global theme
+        // 1. Update global app theme
+        setColorScheme(newThemeIsDark ? 'dark' : 'light');
+        // 2. Update formState.darkModeForSave to reflect this new choice, ready for DB.
+        setFormState(prev => ({ ...prev, darkModeForSave: newThemeIsDark }));
     };
 
-    // ... (handleAttemptLogout, handleConfirmLogout, handleAttemptResetData, handleConfirmResetData remain the same)
-    const handleAttemptLogout = () => {
-        setShowLogoutDialog(true);
-    };
-
+    // --- Other Handlers (Logout, Reset Data) ---
+    const handleAttemptLogout = () => setShowLogoutDialog(true);
     const handleConfirmLogout = async () => {
         setShowLogoutDialog(false);
         await logout();
         router.replace('/(auth)/login');
     };
-
-    const handleAttemptResetData = () => {
-        setShowResetDialog(true);
-    };
-
+    const handleAttemptResetData = () => setShowResetDialog(true);
     const handleConfirmResetData = async () => {
         setShowResetDialog(false);
         if (!userId) {
@@ -251,26 +244,42 @@ export default function SettingsScreen() {
                 const tablesToClearForUser = [
                     'products', 'Categories', 'Suppliers', 'StockAdjustments',
                     'ProductBatches', 'Sales', 'DraftSales', 'Reports',
-                    'ReportMetrics', 'AppUsage', 'Customers'
+                    'ReportMetrics', 'AppUsage', 'Customers', 'SaleItems', // Added SaleItems
+                    'Receipts', // Added Receipts
+                    // Note: Add other dependent tables like ReceiptSharing, ReceiptQRCodes etc. if they exist and need clearing.
                 ];
                 for (const table of tablesToClearForUser) {
                     try {
-                        const tableInfo = db.getAllSync(`PRAGMA table_info(${table});`);
-                        const hasUserIdColumn = tableInfo.some((col: any) => col.name === 'userId');
+                        const tableInfoPragma = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table});`);
+                        const hasUserIdColumn = tableInfoPragma.some(col => col.name === 'userId');
+
                         if (hasUserIdColumn) {
                             db.runSync(`DELETE FROM ${table} WHERE userId = ?`, [userId]);
                             console.log(`Cleared ${table} for user ${userId}`);
                         } else {
-                            console.warn(`Table ${table} does not have a userId column, not attempting user-specific delete.`);
+                            // For tables without direct userId, check for cascades or handle specific parent tables
+                            // Example for SaleItems: Delete where saleId is from a Sale belonging to the user
+                            if (table === 'SaleItems') {
+                                db.runSync(`DELETE FROM SaleItems WHERE saleId IN (SELECT id FROM Sales WHERE userId = ?)`, [userId]);
+                                console.log(`Cleared SaleItems for user ${userId} (via Sales table)`);
+                            } else if (table === 'Receipts') {
+                                db.runSync(`DELETE FROM Receipts WHERE saleId IN (SELECT id FROM Sales WHERE userId = ?)`, [userId]);
+                                console.log(`Cleared Receipts for user ${userId} (via Sales table)`);
+                            }
+                            // Add more else if blocks for other dependent tables as needed
+                            else {
+                                console.warn(`Table ${table} does not have a direct userId column and no specific clearing logic defined. Skipping direct delete. (Cascading deletes might apply if PRAGMA foreign_keys=ON and schema supports it)`);
+                            }
                         }
                     } catch (e: any) {
-                        console.warn(`Could not clear table ${table} for user ${userId}: ${e.message}.`);
+                        console.warn(`Could not clear table ${table} for user ${userId}: ${e.message}. It might not exist or issue with PRAGMA.`);
                     }
                 }
+                // Delete the user-specific settings row
                 db.runSync(`DELETE FROM Settings WHERE userId = ? AND id = ?`, [userId, userId]);
                 console.log(`Cleared Settings for user ${userId}`);
             });
-            Alert.alert('Success', 'Your data has been reset. You will now be logged out.');
+            Alert.alert('Success', 'Your application data has been reset. You will now be logged out.');
             await handleConfirmLogout();
         } catch (error) {
             console.error('Failed to reset data:', error);
@@ -279,6 +288,21 @@ export default function SettingsScreen() {
             setIsLoading(false);
         }
     };
+
+    const handleChangePasswordSubmit = async (currentPass: string, newPass: string) => {
+        setChangePasswordLoading(true);
+        const result = await changeUserPassword(currentPass, newPass);
+        setChangePasswordLoading(false);
+        if (result.success) {
+            Alert.alert('Success', result.message || 'Password changed successfully!');
+            setIsChangePasswordModalVisible(false); // Close modal on success
+        } else {
+            // Error will be shown within the modal, but you could also Alert here
+            Alert.alert('Error', result.message || 'Failed to change password.');
+        }
+        return result; // Return result so modal can also act on it
+    };
+
 
     const styles = StyleSheet.create({
         container: { flex: 1, paddingVertical: 16, paddingHorizontal: 12, backgroundColor: isDarkColorScheme ? '#121212' : '#f0f2f5' },
@@ -301,24 +325,12 @@ export default function SettingsScreen() {
         inputComponent: {
             marginBottom: 12,
         },
-        rnInput: { // Styles for RNTextInput if you use it directly
-            backgroundColor: isDarkColorScheme ? '#2c2c2c' : '#f8f8f8',
-            color: isDarkColorScheme ? '#e0e0e0' : '#333',
-            paddingHorizontal: 14,
-            paddingVertical: Platform.OS === 'ios' ? 14 : 12,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: isDarkColorScheme ? '#3c3c3c' : '#ddd',
-            fontSize: 16,
-            height: 50,
-        },
         buttonComponent: { marginTop: 16, height: 50, borderRadius: 8 },
-        buttonTextComponent: { fontWeight: '600', fontSize: 16 },
         settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' },
         settingItemText: { fontSize: 16, color: isDarkColorScheme ? '#c0c0c0' : '#34495e' },
         icon: { marginRight: 12 },
         successMessage: { color: '#27ae60', textAlign: 'center', marginVertical: 12, fontSize: 14, fontWeight: '500' },
-        dialogOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+        dialogOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, zIndex: 1000 },
         dialogViewContent: { backgroundColor: isDarkColorScheme ? '#252525' : '#fff', borderRadius: 10, padding: 20, width: '100%', maxWidth: 360, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
         dialogTitleText: { fontSize: 20, fontWeight: 'bold', marginBottom: 12, color: isDarkColorScheme ? '#e0e0e0' : '#222' },
         dialogMessageText: { fontSize: 16, marginBottom: 24, color: isDarkColorScheme ? '#b0b0b0' : '#555', lineHeight: 23 },
@@ -330,7 +342,7 @@ export default function SettingsScreen() {
         dialogConfirmButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
     });
 
-    if (isLoading && !userSettings.dbSettingsLoaded && !userId) { // More precise initial loading condition
+    if (isLoading && !initialDbFetchComplete) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
                 <ActivityIndicator size="large" color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} />
@@ -352,7 +364,17 @@ export default function SettingsScreen() {
                 </CardHeader>
                 <CardContent style={styles.cardContent}>
                     <Text style={[styles.settingItemText, { marginBottom: 16 }]}>Logged in as: {userName || 'Store Owner'}</Text>
-                    <Button variant="outline" onPress={() => Alert.alert("Coming Soon", "Password change feature will be available in a future update.")} style={styles.buttonComponent}>
+                    <Button variant="outline" onPress={() => router.push('/(tabs)/profile')} style={styles.buttonComponent} className="mb-3">
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <User size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
+                            <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>View/Edit Profile</Text>
+                        </View>
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onPress={() => setIsChangePasswordModalVisible(true)} // Open the modal
+                        style={styles.buttonComponent}
+                    >
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Lock size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
                             <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>Change Password</Text>
@@ -370,51 +392,44 @@ export default function SettingsScreen() {
                 </CardHeader>
                 <CardContent style={styles.cardContent}>
                     <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Store Name</Text>
+                        <Text style={styles.label}>Store Name (shown in app)</Text>
                         <Input
-                            value={userSettings.storeName}
-                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storeName: text }))}
+                            value={formState.storeName}
+                            onChangeText={(text) => setFormState(prev => ({ ...prev, storeName: text }))}
                             placeholder="Your Store Name"
-                            className="h-12 text-base" // Using Tailwind for shadcn Input
+                            className="h-12 text-base"
                         />
                     </View>
                     <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Store Address</Text>
+                        <Text style={styles.label}>Store Address (for receipts)</Text>
                         <Input
-                            value={userSettings.storeAddress}
-                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storeAddress: text }))}
+                            value={formState.storeAddress}
+                            onChangeText={(text) => setFormState(prev => ({ ...prev, storeAddress: text }))}
                             placeholder="123 Main St, City"
                             className="h-12 text-base"
                         />
                     </View>
                     <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Phone</Text>
+                        <Text style={styles.label}>Phone (for receipts)</Text>
                         <Input
-                            value={userSettings.storePhone}
-                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storePhone: text }))}
+                            value={formState.storePhone}
+                            onChangeText={(text) => setFormState(prev => ({ ...prev, storePhone: text }))}
                             placeholder="+1234567890"
                             keyboardType="phone-pad"
                             className="h-12 text-base"
                         />
                     </View>
                     <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Email</Text>
+                        <Text style={styles.label}>Email (for receipts)</Text>
                         <Input
-                            value={userSettings.storeEmail}
-                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, storeEmail: text }))}
+                            value={formState.storeEmail}
+                            onChangeText={(text) => setFormState(prev => ({ ...prev, storeEmail: text }))}
                             placeholder="store@example.com"
                             keyboardType="email-address"
                             autoCapitalize="none"
                             className="h-12 text-base"
                         />
                     </View>
-                    {savedMessage ? <Text style={styles.successMessage}>{savedMessage}</Text> : null}
-                    <Button onPress={saveUserSettings} disabled={isLoading || authIsLoading} style={styles.buttonComponent}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Save size={18} color="#fff" style={styles.icon} />
-                            <Text style={[styles.buttonTextComponent, { color: '#fff' }]}>{isLoading ? 'Saving...' : 'Save Store Info'}</Text>
-                        </View>
-                    </Button>
                 </CardContent>
             </Card>
 
@@ -428,22 +443,22 @@ export default function SettingsScreen() {
                 <CardContent style={styles.cardContent}>
                     <View style={styles.settingItem}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            {userSettings.darkMode ? <Moon size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} /> : <Sun size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />}
+                            {isDarkColorScheme ? <Moon size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} /> : <Sun size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />}
                             <Text style={styles.settingItemText}>Dark Mode</Text>
                         </View>
                         <RNSwitch
-                            value={userSettings.darkMode ?? false} // Ensure value is boolean
+                            value={isDarkColorScheme} // Switch reflects global theme
                             onValueChange={handleToggleDarkModeSwitch}
                             trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
-                            thumbColor={isDarkColorScheme ? (userSettings.darkMode ? "#00AEEF" : "#f4f3f4") : (userSettings.darkMode ? "#007AFF" : "#f4f3f4")}
+                            thumbColor={isDarkColorScheme ? (isDarkColorScheme ? "#00AEEF" : "#f4f3f4") : (isDarkColorScheme ? "#007AFF" : "#f4f3f4")}
                         />
                     </View>
                     <Separator style={{ marginVertical: 8, backgroundColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' }} />
                     <View style={styles.inputComponent}>
                         <Text style={styles.label}>Currency Symbol</Text>
                         <Input
-                            value={userSettings.currencySymbol}
-                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, currencySymbol: text }))}
+                            value={formState.currencySymbol}
+                            onChangeText={(text) => setFormState(prev => ({ ...prev, currencySymbol: text }))}
                             placeholder="₹"
                             className="h-12 text-base"
                         />
@@ -451,17 +466,21 @@ export default function SettingsScreen() {
                     <View style={styles.inputComponent}>
                         <Text style={styles.label}>Default Tax Rate (%)</Text>
                         <Input
-                            value={String(userSettings.taxRate)}
-                            onChangeText={(text) => setUserSettings(prev => ({ ...prev, taxRate: parseFloat(text) || 0 }))}
+                            value={String(formState.taxRate)}
+                            onChangeText={(text) => {
+                                const rate = parseFloat(text);
+                                setFormState(prev => ({ ...prev, taxRate: isNaN(rate) ? 0 : rate }));
+                            }}
                             placeholder="0"
                             keyboardType="numeric"
                             className="h-12 text-base"
                         />
                     </View>
+                    {savedMessage ? <Text style={styles.successMessage}>{savedMessage}</Text> : null}
                     <Button onPress={saveUserSettings} disabled={isLoading || authIsLoading} style={styles.buttonComponent}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Save size={18} color="#fff" style={styles.icon} />
-                            <Text style={[styles.buttonTextComponent, { color: '#fff' }]}>{isLoading ? 'Saving...' : 'Save Preferences'}</Text>
+                            <Text style={{ fontWeight: '600', fontSize: 16, color: '#fff' }}>{(isLoading || authIsLoading) ? 'Saving...' : 'Save All Settings'}</Text>
                         </View>
                     </Button>
                 </CardContent>
@@ -489,7 +508,7 @@ export default function SettingsScreen() {
                     <Button
                         variant="destructive"
                         onPress={handleAttemptResetData}
-                        disabled={authIsLoading || isLoading} // Consider both loading states
+                        disabled={authIsLoading || isLoading}
                         style={styles.buttonComponent}
                     >
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -520,7 +539,6 @@ export default function SettingsScreen() {
                 </CardContent>
             </Card>
 
-
             <Card style={styles.card}>
                 <CardHeader style={styles.cardHeader}>
                     <View style={styles.cardTitleContainer}>
@@ -529,12 +547,11 @@ export default function SettingsScreen() {
                     </View>
                 </CardHeader>
                 <CardContent style={styles.cardContent}>
-                    <Text style={styles.settingItemText}>Version: 1.0.1</Text>
+                    <Text style={styles.settingItemText}>Version: 1.0.2</Text>
                     <Text style={[styles.settingItemText, { fontSize: 14, marginTop: 4, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }]}>Simple Inventory for Small Shops</Text>
                 </CardContent>
             </Card>
 
-            {/* Dialogs using custom styled Views */}
             {showLogoutDialog && (
                 <View style={styles.dialogOverlay}>
                     <View style={styles.dialogViewContent}>
@@ -557,7 +574,7 @@ export default function SettingsScreen() {
                     <View style={styles.dialogViewContent}>
                         <Text style={styles.dialogTitleText}>Reset All Your Data?</Text>
                         <Text style={styles.dialogMessageText}>
-                            This will permanently delete all products, sales, and other data associated with your account ({userName || 'current user'}). This action cannot be undone.
+                            This will permanently delete all your application data (products, sales, etc.) associated with your account ({userName || 'current user'}). This action cannot be undone.
                         </Text>
                         <View style={styles.dialogActions}>
                             <TouchableOpacity style={styles.dialogButton} onPress={() => setShowResetDialog(false)}>
@@ -570,6 +587,14 @@ export default function SettingsScreen() {
                     </View>
                 </View>
             )}
+
+            {/* Change Password Modal */}
+            <ChangePasswordModal
+                visible={isChangePasswordModalVisible}
+                onClose={() => setIsChangePasswordModalVisible(false)}
+                onSubmit={handleChangePasswordSubmit}
+                isLoading={changePasswordLoading}
+            />
         </ScrollView>
     );
 }

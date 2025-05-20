@@ -6,7 +6,8 @@ import {
   logoutUser,
   getCurrentAuthState,
   resetPassword,
-  verifySecurityQuestion
+  verifySecurityQuestion,
+  changePassword as dbChangePassword,
 } from '../db/authOperations';
 import {
   AuthState,
@@ -15,6 +16,7 @@ import {
   PasswordResetInput,
   User // Make sure User is imported if needed for types, though not directly stored
 } from '../models/user';
+import { getDatabase } from '../db/database';
 
 interface AuthStoreState extends AuthState {
   isLoading: boolean;
@@ -26,6 +28,8 @@ interface AuthStoreState extends AuthState {
   verifySecurityAnswer: (emailOrPhone: string, answer: string) => Promise<User | null>; // Return User or null
   resetUserPassword: (resetData: PasswordResetInput) => Promise<boolean>; // Renamed to avoid conflict with model
   clearError: () => void;
+    updateAuthStoreUserName: (newName: string, userIdToUpdate: string) => Promise<void>; // New function
+    changeUserPassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
@@ -153,5 +157,45 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
   clearError: () => {
     set({ error: null });
+  },
+
+   updateAuthStoreUserName: async (newName: string, userIdToUpdate: string) => {
+    // Only update if the newName is for the currently authenticated user
+    if (get().isAuthenticated && get().userId === userIdToUpdate) {
+      set({ userName: newName });
+      // Also update the persisted AuthState table
+      try {
+        const db = getDatabase();
+        await db.runAsync(
+          'UPDATE AuthState SET userName = ?, updatedAt = ? WHERE id = "current_auth" AND userId = ?',
+          [newName, new Date().toISOString(), userIdToUpdate]
+        );
+        console.log('[AuthStore] Updated userName in AuthState table.');
+      } catch (dbError) {
+        console.error('[AuthStore] Failed to update userName in AuthState table:', dbError);
+      }
+    }
+  },
+
+  changeUserPassword: async (currentPassword: string, newPassword: string) => {
+    const userId = get().userId;
+    if (!userId) {
+      const msg = 'User not authenticated to change password.';
+      set({ error: msg });
+      return { success: false, message: msg };
+    }
+
+    set({ isLoading: true, error: null });
+    try {
+      await dbChangePassword(userId, currentPassword, newPassword);
+      set({ isLoading: false });
+      // console.log('[AuthStore] Password changed successfully.');
+      return { success: true, message: 'Password changed successfully!' };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to change password';
+      console.error('[AuthStore] Change password error:', errorMessage);
+      set({ isLoading: false, error: errorMessage });
+      return { success: false, message: errorMessage };
+    }
   },
 }));

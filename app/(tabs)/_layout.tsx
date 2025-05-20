@@ -134,6 +134,19 @@ export default function TabsLayout() {
           headerRight: () => <ThemeToggle />,
         }}
       />
+      <Tabs.Screen
+        name="category"
+        options={{
+          title: 'Categories',
+          // tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />, // We can define an icon
+          href: null,
+          headerRight: () => <ThemeToggle />,
+          headerStyle: {
+            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+          },
+          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+        }}
+      />
     </Tabs>
   );
 }

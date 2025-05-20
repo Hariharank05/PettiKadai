@@ -284,3 +284,72 @@ export const resetPassword = async (input: PasswordResetInput): Promise<boolean>
     return false; // Or throw error to be handled by store
   }
 };
+
+/**
+ * Get user by ID (needed for fetching salt during password change)
+ */
+export const getUserById = async (userId: string): Promise<User | null> => {
+  // console.log('[AuthOps] Getting user by ID:', userId);
+  try {
+    const user = await db.getFirstAsync<User>(
+      'SELECT * FROM Users WHERE id = ?',
+      [userId]
+    );
+    return user;
+  } catch (error) {
+    console.error('[AuthOps] Error getting user by ID:', error);
+    throw error; // Or return null based on how you want to handle "not found"
+  }
+};
+
+/**
+ * Change user password
+ */
+export const changePassword = async (
+  userId: string,
+  currentPasswordPlain: string,
+  newPasswordPlain: string
+): Promise<boolean> => {
+  // console.log('[AuthOps] Attempting to change password for user:', userId);
+  try {
+    const user = await getUserById(userId);
+    if (!user) {
+      throw new Error('User not found.');
+    }
+
+    const isCurrentPasswordValid = verifyPassword(
+      currentPasswordPlain,
+      user.passwordSalt,
+      user.passwordHash
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new Error('Incorrect current password.');
+    }
+
+    // Strength check for new password (can be more sophisticated)
+    if (newPasswordPlain.length < 8) {
+        throw new Error('New password must be at least 8 characters long.');
+    }
+    if (newPasswordPlain === currentPasswordPlain) {
+        throw new Error('New password cannot be the same as the current password.');
+    }
+
+
+    const newSalt = generateSalt();
+    const newPasswordHash = hashPassword(newPasswordPlain, newSalt);
+    const now = new Date().toISOString();
+
+    await db.runAsync(
+      `UPDATE Users SET
+        passwordHash = ?, passwordSalt = ?, updatedAt = ?
+      WHERE id = ?`,
+      [newPasswordHash, newSalt, now, userId]
+    );
+    // console.log('[AuthOps] Password changed successfully for user:', userId);
+    return true;
+  } catch (error) {
+    console.error('[AuthOps] Error changing password:', error);
+    throw error; // Re-throw to be caught by the calling function (in store or component)
+  }
+};
