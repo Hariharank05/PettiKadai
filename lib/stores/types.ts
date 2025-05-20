@@ -1,4 +1,7 @@
-// ~/lib/db/types.ts
+// ~/lib/stores/types.ts
+
+import { SQLiteBindValue } from "expo-sqlite";
+
 export interface Product {
     unit: string;
     imageUri: string;
@@ -17,9 +20,11 @@ export interface Product {
   }
   
   export interface Category {
+    userId: SQLiteBindValue;
     id: string;
     name: string;
     description?: string | null;
+    imageUri?: string;
     createdAt: string;
   }
   
@@ -58,4 +63,20 @@ export interface Product {
     isPaid: boolean;
     notes?: string | null;
     salesStatus: 'COMPLETED' | 'PENDING' | 'CANCELLED';
+  }
+
+     export interface Customer {
+    id: string;
+    userId: string;
+    name: string;
+    phone: string;
+    email?: string | null; // Make optional fields explicitly nullable
+    address?: string | null; // Make optional fields explicitly nullable
+    totalPurchases: number;
+    outstandingBalance: number;
+    creditLimit: number;
+    loyaltyPoints: number;
+    lastPurchaseDate?: string | null; // Make optional fields explicitly nullable
+    createdAt: string;
+    updatedAt: string;
   }
