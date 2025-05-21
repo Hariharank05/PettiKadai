@@ -4,7 +4,7 @@ import { View, Pressable, StyleSheet, Dimensions, Text } from 'react-native';
 import { BottomTabBarProps, BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, useAnimatedProps } from 'react-native-reanimated';
 import { Svg, Path } from 'react-native-svg';
-import { Home, Archive, ShoppingCart, History as HistoryIcon, User, Settings } from 'lucide-react-native';
+import { Home, Archive, ShoppingCart, Settings, NotebookText } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -30,10 +30,9 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 const iconMap: { [key: string]: { component: React.ElementType, label?: string } } = {
     home: { component: Home, label: 'Dashboard' },
     inventory: { component: Archive, label: 'Inventory' },
-    sales: { component: ShoppingCart, label: 'Sales' },
-    receipts: { component: HistoryIcon, label: 'Receipts' },
-    profile: { component: User, label: 'Profile' },
-    settings: { component: Settings, label: 'Settings' },
+    sale: { component: ShoppingCart, label: 'Sales' },
+    ReportsScreen: { component: NotebookText, label: 'Reports' },
+    setting: { component: Settings, label: 'Settings' },
 };
 
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {

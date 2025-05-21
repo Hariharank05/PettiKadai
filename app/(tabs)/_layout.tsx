@@ -70,31 +70,24 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="sales"
+        name="sale"
         options={{
           title: 'Sales',
-          ...tabHeaderOptions,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
-        name="receipts"
+        name="ReportsScreen"
         options={{
-          title: 'Receipts',
+          title: 'Reports',
           ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          ...tabHeaderOptions,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
+        name="setting"
         options={{
           title: 'Settings',
-          ...tabHeaderOptions,
+          headerShown: false,
         }}
       />
 
@@ -102,7 +95,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="products" options={{ href: null }} />
       <Tabs.Screen name="category" options={{ href: null }} />
       <Tabs.Screen name="customers" options={{ href: null }} />
-      <Tabs.Screen name="ReportsScreen" options={{ href: null }} />
+      <Tabs.Screen name="sales-management" options={{ href: null }} />
+      <Tabs.Screen name="receipts" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }
