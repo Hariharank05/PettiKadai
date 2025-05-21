@@ -153,7 +153,7 @@ export default function HomeScreen() {
       icon: <Plus size={24} color={COLORS.secondary} />,
       backgroundColor: COLORS.lightBlue,
       image: 'https://images.pexels.com/photos/4439456/pexels-photo-4439456.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1', // Shopping cart image
-      onPress: () => router.push('/(tabs)/sales'),
+      onPress: () => router.push('/(tabs)/sale/sales-management'),
     },
     {
       title: 'Add Product',
@@ -217,7 +217,7 @@ export default function HomeScreen() {
   const dateFormatted = format(today, 'EEEE, MMMM d, yyyy');
 
   const navigateToProducts = () => router.push('/(tabs)/inventory/products');
-  const navigateToNewSale = () => router.push('/(tabs)/sales');
+  const navigateToNewSale = () => router.push('/(tabs)/sale/sales-management');
   const navigateToCustomer = () => router.push('/(tabs)/inventory/customers');
   const navigateToReports = () => router.push('/(tabs)/ReportsScreen');
 

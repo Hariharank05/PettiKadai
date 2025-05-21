@@ -12,7 +12,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle} from 'lucide-react-native';
+import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle } from 'lucide-react-native';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
@@ -789,9 +789,9 @@ export default function SalesScreen() {
                   variant="outline"
                   className="border"
                   style={{ backgroundColor: `${colors.secondary}1A` }}
-                  onPress={() => router.push('/(tabs)/sales')}
+                  onPress={() => router.push('/(tabs)/sale/sales-management')}
                 >
-                  <Text className="font-semibold" style={{ color: colors.gray}}>Add Your First Product</Text>
+                  <Text className="font-semibold" style={{ color: colors.gray }}>Add Your First Product</Text>
                 </Button>
               </View>
             )}
@@ -831,7 +831,7 @@ export default function SalesScreen() {
           <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
             <View className="flex-row items-center">
               <ShoppingCart size={24} color={colors.secondary} className="mr-2" />
-              <DialogTitle className="text-xl font-bold" style={{ color: colors.gray}}>
+              <DialogTitle className="text-xl font-bold" style={{ color: colors.gray }}>
                 Current Sale
               </DialogTitle>
             </View>
@@ -901,7 +901,7 @@ export default function SalesScreen() {
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
         <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto">
           <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-            <DialogTitle className="text-xl font-bold" style={{ color: colors.gray}}>
+            <DialogTitle className="text-xl font-bold" style={{ color: colors.gray }}>
               Confirm Sale
             </DialogTitle>
           </DialogHeader>
