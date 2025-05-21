@@ -1,7 +1,7 @@
-// ~/(tabs)/products.tsx 
+
 import React, { useEffect, useState, useCallback, useMemo, useReducer } from 'react';
 import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList } from 'react-native';
-import { Product, ProductInput } from '~/lib/models/product'; // Corrected Product import
+import { Product, ProductInput } from '~/lib/models/product';
 import { useProductStore } from '~/lib/stores/productStore';
 import {
   Card,
@@ -14,7 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { Input } from '~/components/ui/input';
 import { Button as ShadcnButton } from '~/components/ui/button';
-import { Filter, Pencil, Trash2, X, ListFilter } from 'lucide-react-native';
+import { Filter, Pencil, Trash2, X, ListFilter, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { useRefresh } from '~/components/RefreshProvider';
 import throttle from 'lodash/throttle';
 
@@ -41,7 +41,7 @@ const initialFormState: FormState = {
   costPrice: '',
   sellingPrice: '',
   quantity: '',
-  unit: 'piece', // Default unit
+  unit: 'piece',
   imageUri: '',
 };
 
@@ -65,7 +65,7 @@ interface ControlledInputProps {
   placeholder?: string;
   keyboardType?: 'default' | 'numeric';
   editable?: boolean;
-  className?: string; // Added className prop
+  className?: string;
 }
 
 const ControlledInput = React.memo(
@@ -78,7 +78,7 @@ const ControlledInput = React.memo(
     );
 
     useEffect(() => {
-      if (localValue !== value) { // Sync only if prop value is different to avoid issues with throttled updates
+      if (localValue !== value) {
         setLocalValue(value);
       }
     }, [value]);
@@ -109,16 +109,21 @@ const ControlledInput = React.memo(
 );
 ControlledInput.displayName = 'ControlledInput';
 
-
 // Category section component
 interface CategorySectionProps {
   category: string;
   isNewCategory: boolean;
   setIsNewCategory: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsNewProduct: React.Dispatch<React.SetStateAction<boolean>>; // Added for consistency
+  setIsNewProduct: React.Dispatch<React.SetStateAction<boolean>>;
   dispatch: React.Dispatch<FormAction>;
   isLoading: boolean;
-  setCategoryDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isAccordionOpen: boolean;
+  setIsAccordionOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  categorySearch: string;
+  setCategorySearch: React.Dispatch<React.SetStateAction<string>>;
+  filteredCategories: string[];
+  onSelectCategory: (category: string) => void;
+  onAddNewCategory: () => void;
 }
 
 const CategorySection = React.memo(
@@ -129,7 +134,13 @@ const CategorySection = React.memo(
     setIsNewProduct,
     dispatch,
     isLoading,
-    setCategoryDialogOpen,
+    isAccordionOpen,
+    setIsAccordionOpen,
+    categorySearch,
+    setCategorySearch,
+    filteredCategories,
+    onSelectCategory,
+    onAddNewCategory,
   }: CategorySectionProps) => {
     return (
       <View>
@@ -146,8 +157,10 @@ const CategorySection = React.memo(
               setIsNewCategory(newIsNewCategory);
               setIsNewProduct(newIsNewCategory);
               dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+
               if (newIsNewCategory) {
                 dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
+                setIsAccordionOpen(false);
               }
             }}
             disabled={isLoading}
@@ -166,18 +179,54 @@ const CategorySection = React.memo(
               placeholder="Enter new category"
               editable={!isLoading}
             />
-            {/* Optional: Add validation message if category is required for new product */}
           </View>
         ) : (
-          <TouchableOpacity
-            onPress={() => setCategoryDialogOpen(true)}
-            className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-center px-4"
-            disabled={isLoading}
-          >
-            <Text className="text-base text-gray-900 dark:text-gray-100">
-              {category || 'Select a category'}
-            </Text>
-          </TouchableOpacity>
+          <View>
+            <TouchableOpacity
+              onPress={() => setIsAccordionOpen(!isAccordionOpen)}
+              className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
+              disabled={isLoading}
+            >
+              <Text className="text-base text-gray-900 dark:text-gray-100">
+                {category || 'Select a category'}
+              </Text>
+              {isAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
+            </TouchableOpacity>
+            {isAccordionOpen && (
+              <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
+                <View className="p-2">
+                  <TouchableOpacity
+                    onPress={onAddNewCategory}
+                    className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
+                  >
+                    <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Category...</Text>
+                  </TouchableOpacity>
+                  <ControlledInput
+                    value={categorySearch}
+                    onChangeText={setCategorySearch}
+                    placeholder="Search categories..."
+                    editable={!isLoading}
+                    className="mb-1 text-sm"
+                  />
+                </View>
+                <FlatList
+                  data={filteredCategories}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => onSelectCategory(item)}
+                      className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
+                    >
+                      <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No categories found.</Text>}
+                  style={{ maxHeight: 150 }}
+                  nestedScrollEnabled
+                />
+              </View>
+            )}
+          </View>
         )}
       </View>
     );
@@ -194,7 +243,13 @@ interface ProductNameSectionProps {
   setIsNewCategory: React.Dispatch<React.SetStateAction<boolean>>;
   dispatch: React.Dispatch<FormAction>;
   isLoading: boolean;
-  setProductDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isAccordionOpen: boolean;
+  setIsAccordionOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  productSearch: string;
+  setProductSearch: React.Dispatch<React.SetStateAction<string>>;
+  filteredProductNames: string[];
+  onSelectProduct: (productName: string) => void;
+  onAddNewProduct: () => void;
 }
 
 const ProductNameSection = React.memo(
@@ -206,7 +261,13 @@ const ProductNameSection = React.memo(
     setIsNewCategory,
     dispatch,
     isLoading,
-    setProductDialogOpen,
+    isAccordionOpen,
+    setIsAccordionOpen,
+    productSearch,
+    setProductSearch,
+    filteredProductNames,
+    onSelectProduct,
+    onAddNewProduct,
   }: ProductNameSectionProps) => {
     return (
       <View>
@@ -224,11 +285,17 @@ const ProductNameSection = React.memo(
               const newIsNewProduct = !isNewProduct;
               setIsNewProduct(newIsNewProduct);
               dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
-              if (newIsNewProduct && !isNewCategory) {
-                setIsNewCategory(true);
-                dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
-              } else if (!newIsNewProduct) {
-                setIsNewCategory(false);
+
+              if (newIsNewProduct) {
+                if (!isNewCategory) {
+                  setIsNewCategory(true);
+                  dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+                }
+                setIsAccordionOpen(false);
+              } else {
+                if (isNewCategory) {
+                    setIsNewCategory(false);
+                }
               }
             }}
             disabled={isLoading}
@@ -252,15 +319,52 @@ const ProductNameSection = React.memo(
             )}
           </View>
         ) : (
-          <TouchableOpacity
-            onPress={() => setProductDialogOpen(true)}
-            className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-center px-4"
-            disabled={isLoading}
-          >
-            <Text className="text-base text-gray-900 dark:text-gray-100">
-              {name || 'Select a product'}
-            </Text>
-          </TouchableOpacity>
+          <View>
+            <TouchableOpacity
+              onPress={() => setIsAccordionOpen(!isAccordionOpen)}
+              className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
+              disabled={isLoading}
+            >
+              <Text className="text-base text-gray-900 dark:text-gray-100">
+                {name || 'Select a product'}
+              </Text>
+              {isAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
+            </TouchableOpacity>
+            {isAccordionOpen && (
+              <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
+                <View className="p-2">
+                  <TouchableOpacity
+                    onPress={onAddNewProduct}
+                    className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
+                  >
+                    <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Product...</Text>
+                  </TouchableOpacity>
+                  <ControlledInput
+                    value={productSearch}
+                    onChangeText={setProductSearch}
+                    placeholder="Search products..."
+                    editable={!isLoading}
+                    className="mb-1 text-sm"
+                  />
+                </View>
+                <FlatList
+                  data={filteredProductNames}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => onSelectProduct(item)}
+                      className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
+                    >
+                      <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No products found.</Text>}
+                  style={{ maxHeight: 150 }}
+                  nestedScrollEnabled
+                />
+              </View>
+            )}
+          </View>
         )}
       </View>
     );
@@ -370,7 +474,7 @@ const QuantityUnitSection = React.memo(
             <Picker
               selectedValue={unit}
               onValueChange={(itemValue) => dispatch({ type: 'UPDATE_FIELD', field: 'unit', value: itemValue })}
-              style={{ color: Platform.OS === 'ios' ? '#000000' : (isLoading ? '#a0a0a0' : '#000000'), fontSize: 16 }} // Basic styling
+              style={{ color: Platform.OS === 'ios' ? '#000000' : (isLoading ? '#a0a0a0' : '#000000'), fontSize: 16 }}
               dropdownIconColor={Platform.OS === 'android' ? (isLoading ? '#a0a0a0' : '#000000') : undefined}
               enabled={!isLoading}
             >
@@ -393,7 +497,7 @@ QuantityUnitSection.displayName = 'QuantityUnitSection';
 
 // Image section component
 interface ImageSectionProps {
-  imageUri: string; // This comes from formState.imageUri
+  imageUri: string;
   pickImage: () => Promise<void>;
   isLoading: boolean;
 }
@@ -435,16 +539,28 @@ interface ProductFormDialogContentProps {
   isNewProduct: boolean;
   setIsNewProduct: React.Dispatch<React.SetStateAction<boolean>>;
   isLoading: boolean;
-  formError: string | null; // Renamed from error to avoid conflict
+  formError: string | null;
   pickImage: () => Promise<void>;
   profit: string;
   isFormValid: boolean;
   formMode: 'add' | 'edit';
-  handleSubmit: () => Promise<void>; // Consolidated submit handler
+  handleSubmit: () => Promise<void>;
   setDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  resetDialogState: () => void; // Function to reset all dialog related states
-  setCategoryDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setProductDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  resetDialogState: () => void;
+  isCategoryAccordionOpen: boolean;
+  setIsCategoryAccordionOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  categorySearch: string;
+  setCategorySearch: React.Dispatch<React.SetStateAction<string>>;
+  filteredCategories: string[];
+  onSelectCategory: (category: string) => void;
+  onAddNewCategory: () => void;
+  isProductAccordionOpen: boolean;
+  setIsProductAccordionOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  productSearch: string;
+  setProductSearch: React.Dispatch<React.SetStateAction<string>>;
+  filteredProductNames: string[];
+  onSelectProduct: (productName: string) => void;
+  onAddNewProduct: () => void;
 }
 
 const ProductFormDialogContent = React.memo(
@@ -464,84 +580,122 @@ const ProductFormDialogContent = React.memo(
     handleSubmit,
     setDialogOpen,
     resetDialogState,
-    setCategoryDialogOpen,
-    setProductDialogOpen,
+    isCategoryAccordionOpen,
+    setIsCategoryAccordionOpen,
+    categorySearch,
+    setCategorySearch,
+    filteredCategories,
+    onSelectCategory,
+    onAddNewCategory,
+    isProductAccordionOpen,
+    setIsProductAccordionOpen,
+    productSearch,
+    setProductSearch,
+    filteredProductNames,
+    onSelectProduct,
+    onAddNewProduct,
   }: ProductFormDialogContentProps) => {
     return (
-      <ScrollView contentContainerStyle={{ padding: 0, width: '100%' }}>
-        <DialogHeader className="p-6 pb-4 border-b border-gray-300 dark:border-gray-600">
-          <DialogTitle className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">
-            {formMode === 'edit' ? 'Edit Product' : 'Add New Product'}
-          </DialogTitle>
-        </DialogHeader>
-        <View className="space-y-4 p-4 w-[350px] mx-auto">
-          {formError && <Text className="text-red-500 dark:text-red-400 text-center mb-4">{formError}</Text>}
-          <CategorySection
-            category={formState.category}
-            isNewCategory={isNewCategory}
-            setIsNewCategory={setIsNewCategory}
-            setIsNewProduct={setIsNewProduct}
-            dispatch={dispatch}
-            isLoading={isLoading}
-            setCategoryDialogOpen={setCategoryDialogOpen}
-          />
-          <ProductNameSection
-            name={formState.name}
-            isNewProduct={isNewProduct}
-            setIsNewProduct={setIsNewProduct}
-            isNewCategory={isNewCategory}
-            setIsNewCategory={setIsNewCategory}
-            dispatch={dispatch}
-            isLoading={isLoading}
-            setProductDialogOpen={setProductDialogOpen}
-          />
-          <PriceSection
-            costPrice={formState.costPrice}
-            sellingPrice={formState.sellingPrice}
-            dispatch={dispatch}
-            isLoading={isLoading}
-            profit={profit}
-          />
-          <QuantityUnitSection
-            quantity={formState.quantity}
-            unit={formState.unit}
-            dispatch={dispatch}
-            isLoading={isLoading}
-          />
-          <ImageSection
-            imageUri={formState.imageUri}
-            pickImage={pickImage}
-            isLoading={isLoading}
-          />
-        </View>
-        <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-300 dark:border-gray-600">
-          <ShadcnButton
-            variant="outline"
-            size="lg"
-            className="h-12 px-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
-            onPress={() => {
-              setDialogOpen(false);
-              // resetDialogState will be called by onOpenChange of Dialog
-            }}
-            disabled={isLoading}
-          >
-            <Text className="text-base text-gray-900 dark:text-gray-100">Cancel</Text>
-          </ShadcnButton>
-          <ShadcnButton
-            size="lg"
-            className="h-12 px-6 bg-[#00b9f1] dark:bg-[#00b9f1]"
-            onPress={handleSubmit}
-            disabled={isLoading || !isFormValid}
-          >
-            <Text className="text-white dark:text-white">{formMode === 'edit' ? 'Save Changes' : 'Add Product'}</Text>
-          </ShadcnButton>
-        </DialogFooter>
-      </ScrollView>
+      <FlatList
+        data={[1]}
+        keyExtractor={() => 'form'}
+        renderItem={() => (
+          <View>
+            <DialogHeader className="p-6 pb-4 border-b border-gray-300 dark:border-gray-600">
+              <DialogTitle>
+                <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">
+                  {formMode === 'edit' ? 'Edit Product' : 'Add New Product'}
+                </Text>
+              </DialogTitle>
+            </DialogHeader>
+            <View className="space-y-4 p-4 w-[350px] mx-auto" style={{ zIndex: 0 }}>
+              {formError && <Text className="text-red-500 dark:text-red-400 text-center mb-4">{formError}</Text>}
+              <View style={{ zIndex: isCategoryAccordionOpen ? 20 : 1 }}>
+                <CategorySection
+                  category={formState.category}
+                  isNewCategory={isNewCategory}
+                  setIsNewCategory={setIsNewCategory}
+                  setIsNewProduct={setIsNewProduct}
+                  dispatch={dispatch}
+                  isLoading={isLoading}
+                  isAccordionOpen={isCategoryAccordionOpen}
+                  setIsAccordionOpen={setIsCategoryAccordionOpen}
+                  categorySearch={categorySearch}
+                  setCategorySearch={setCategorySearch}
+                  filteredCategories={filteredCategories}
+                  onSelectCategory={onSelectCategory}
+                  onAddNewCategory={onAddNewCategory}
+                />
+              </View>
+              <View style={{ zIndex: isProductAccordionOpen ? 20 : 1 }}>
+                <ProductNameSection
+                  name={formState.name}
+                  isNewProduct={isNewProduct}
+                  setIsNewProduct={setIsNewProduct}
+                  isNewCategory={isNewCategory}
+                  setIsNewCategory={setIsNewCategory}
+                  dispatch={dispatch}
+                  isLoading={isLoading}
+                  isAccordionOpen={isProductAccordionOpen}
+                  setIsAccordionOpen={setIsProductAccordionOpen}
+                  productSearch={productSearch}
+                  setProductSearch={setProductSearch}
+                  filteredProductNames={filteredProductNames}
+                  onSelectProduct={onSelectProduct}
+                  onAddNewProduct={onAddNewProduct}
+                />
+              </View>
+              <PriceSection
+                costPrice={formState.costPrice}
+                sellingPrice={formState.sellingPrice}
+                dispatch={dispatch}
+                isLoading={isLoading}
+                profit={profit}
+              />
+              <QuantityUnitSection
+                quantity={formState.quantity}
+                unit={formState.unit}
+                dispatch={dispatch}
+                isLoading={isLoading}
+              />
+              <ImageSection
+                imageUri={formState.imageUri}
+                pickImage={pickImage}
+                isLoading={isLoading}
+              />
+            </View>
+            <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-300 dark:border-gray-600">
+              <ShadcnButton
+                variant="outline"
+                size="lg"
+                className="h-12 px-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                onPress={() => {
+                  setDialogOpen(false);
+                }}
+                disabled={isLoading}
+              >
+                <Text className="text-base text-gray-900 dark:text-gray-100">Cancel</Text>
+              </ShadcnButton>
+              <ShadcnButton
+                size="lg"
+                className="h-12 px-6 bg-[#00b9f1] dark:bg-[#00b9f1]"
+                onPress={handleSubmit}
+                disabled={isLoading || !isFormValid}
+              >
+                <Text className="text-white dark:text-white">{formMode === 'edit' ? 'Save Changes' : 'Add Product'}</Text>
+              </ShadcnButton>
+            </DialogFooter>
+          </View>
+        )}
+        contentContainerStyle={{ padding: 0, width: '100%' }}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      />
     );
   }
 );
 ProductFormDialogContent.displayName = 'ProductFormDialogContent';
-
 
 const ProductManagementScreen = () => {
   const {
@@ -555,8 +709,6 @@ const ProductManagementScreen = () => {
   } = useProductStore();
 
   const { refreshForm: appRefreshForm } = useRefresh();
-
-  // Use formReducer for form state
   const [formState, dispatch] = useReducer(formReducer, initialFormState);
 
   const products = useMemo(
@@ -574,8 +726,10 @@ const ProductManagementScreen = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
-  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
-  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [isFilterAccordionOpen, setIsFilterAccordionOpen] = useState(false); // New state for filter accordion
+
+  const [isCategoryAccordionOpen, setIsCategoryAccordionOpen] = useState(false);
+  const [isProductAccordionOpen, setIsProductAccordionOpen] = useState(false);
 
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -594,22 +748,21 @@ const ProductManagementScreen = () => {
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort();
-    return cats;
+    return ['All Categories', ...cats]; // Include "All Categories" for filter
   }, [products]);
 
   const productNamesForSelection = useMemo(() => {
     return Array.from(new Set(products.map((p) => p.name).filter(Boolean))).sort();
   }, [products]);
 
-
-  const filteredCategoriesForDialog = useMemo(() => {
+  const filteredCategoriesForAccordion = useMemo(() => {
     if (!categorySearch) return categories;
     return categories.filter((cat) =>
       cat?.toLowerCase().includes(categorySearch.toLowerCase())
     );
   }, [categories, categorySearch]);
 
-  const filteredProductNamesForDialog = useMemo(() => {
+  const filteredProductNamesForAccordion = useMemo(() => {
     if (!productSearch) return productNamesForSelection;
     return productNamesForSelection.filter((name) =>
       name.toLowerCase().includes(productSearch.toLowerCase())
@@ -617,7 +770,7 @@ const ProductManagementScreen = () => {
   }, [productNamesForSelection, productSearch]);
 
   const filteredProductsDisplay = useMemo(() => {
-    if (!selectedCategoryFilter || selectedCategoryFilter === 'All') return products;
+    if (!selectedCategoryFilter || selectedCategoryFilter === 'All Categories') return products;
     return products.filter((p) => p.category === selectedCategoryFilter);
   }, [products, selectedCategoryFilter]);
 
@@ -646,13 +799,11 @@ const ProductManagementScreen = () => {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Effect to clear formError when dialog closes or form changes
   useEffect(() => {
     if (formError) {
       setFormError(null);
     }
   }, [formState, dialogOpen]);
-
 
   const pickImage = useCallback(async () => {
     try {
@@ -687,8 +838,9 @@ const ProductManagementScreen = () => {
     setProductSearch('');
     setIsNewCategory(false);
     setIsNewProduct(false);
+    setIsCategoryAccordionOpen(false);
+    setIsProductAccordionOpen(false);
   }, [dispatch]);
-
 
   const handleAddProductSubmit = async () => {
     if (!isFormValid) {
@@ -750,7 +902,6 @@ const ProductManagementScreen = () => {
     }
   };
 
-
   const handleEditClick = useCallback((product: Product) => {
     setSelectedProduct(product);
     dispatch({
@@ -768,6 +919,8 @@ const ProductManagementScreen = () => {
     setFormMode('edit');
     setIsNewCategory(false);
     setIsNewProduct(false);
+    setIsCategoryAccordionOpen(false);
+    setIsProductAccordionOpen(false);
     setFormError(null);
     setDialogOpen(true);
   }, [dispatch]);
@@ -785,7 +938,7 @@ const ProductManagementScreen = () => {
       await deleteProduct(selectedProduct.id);
       setDeleteDialogOpen(false);
       setSelectedProduct(null);
-      fetchProducts(); // Refresh list
+      fetchProducts();
     } catch (e: any) {
       console.error('Failed to delete product:', e);
       alert(e.message || 'Failed to delete product. Please try again.');
@@ -807,60 +960,46 @@ const ProductManagementScreen = () => {
     }
   }, [fetchProducts]);
 
-  const renderCategoryItemForDialog = useCallback(
-    ({ item }: { item: string }) => (
-      <TouchableOpacity
-        onPress={() => {
-          setIsNewCategory(false);
-          // If a product was also selected, and this category doesn't match, maybe clear product?
-          // For now, just update category.
-          dispatch({ type: 'UPDATE_FIELD', field: 'category', value: item });
-          setCategorySearch('');
-          setCategoryDialogOpen(false);
-        }}
-        className="py-3 px-4 border-b border-gray-200 dark:border-gray-700"
-      >
-        <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
-      </TouchableOpacity>
-    ),
-    [dispatch, setIsNewCategory]
-  );
+  const handleSelectCategoryFromAccordion = useCallback((item: string) => {
+    setIsNewCategory(false);
+    dispatch({ type: 'UPDATE_FIELD', field: 'category', value: item });
+    setCategorySearch('');
+    setIsCategoryAccordionOpen(false);
+  }, [dispatch, setIsNewCategory]);
 
-  const renderProductItemForDialog = useCallback(
-    ({ item }: { item: string }) => {
-      const productDetails = products.find(p => p.name === item);
-      return (
-        <TouchableOpacity
-          onPress={() => {
-            setIsNewProduct(false);
-            if (productDetails) {
-              dispatch({
-                type: 'SET_FORM',
-                payload: {
-                  name: productDetails.name,
-                  category: productDetails.category || formState.category,
-                  costPrice: productDetails.costPrice.toString(),
-                  sellingPrice: productDetails.sellingPrice.toString(),
-                  quantity: productDetails.quantity.toString(),
-                  unit: productDetails.unit || 'piece',
-                  imageUri: productDetails.imageUri || '',
-                }
-              });
-              if (productDetails.category) setIsNewCategory(false);
-            } else {
-              dispatch({ type: 'UPDATE_FIELD', field: 'name', value: item });
-            }
-            setProductSearch('');
-            setProductDialogOpen(false);
-          }}
-          className="py-3 px-4 border-b border-gray-200 dark:border-gray-700"
-        >
-          <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
-        </TouchableOpacity>
-      );
-    },
-    [dispatch, products, formState.category, setIsNewProduct, setIsNewCategory]
-  );
+  const handleAddNewCategoryFromAccordion = useCallback(() => {
+    setIsNewCategory(true);
+    setIsNewProduct(true);
+    dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
+    setCategorySearch('');
+    setIsCategoryAccordionOpen(false);
+  }, [dispatch, setIsNewCategory, setIsNewProduct]);
+
+  const handleSelectProductFromAccordion = useCallback((itemName: string) => {
+    const productDetails = products.find(p => p.name === itemName);
+    
+    setIsNewProduct(false);
+    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: itemName });
+
+    if (productDetails && productDetails.category) {
+      dispatch({ type: 'UPDATE_FIELD', field: 'category', value: productDetails.category });
+      setIsNewCategory(false); 
+    }
+    setProductSearch('');
+    setIsProductAccordionOpen(false);
+  }, [dispatch, products, setIsNewProduct, setIsNewCategory]);
+
+  const handleAddNewProductFromAccordion = useCallback(() => {
+    setIsNewProduct(true);
+    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
+    if (!formState.category || !isNewCategory) {
+        setIsNewCategory(true);
+        dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+    }
+    setProductSearch('');
+    setIsProductAccordionOpen(false);
+  }, [dispatch, formState.category, isNewCategory, setIsNewProduct, setIsNewCategory]);
 
   const renderMainProductItem = useCallback(
     ({ item }: { item: Product }) => (
@@ -871,12 +1010,11 @@ const ProductManagementScreen = () => {
               {item.imageUri ? (
                 <Image
                   source={{ uri: item.imageUri }}
-                  style={{ width: 48, height: 48 }} // Slightly larger image
+                  style={{ width: 48, height: 48 }}
                   className="rounded-lg mr-3"
                 />
               ) : (
                 <View className="w-12 h-12 rounded-lg mr-3 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                  {/* Placeholder icon or initials can go here */}
                 </View>
               )}
               <View className="flex-1">
@@ -907,7 +1045,7 @@ const ProductManagementScreen = () => {
             <View className="flex-row gap-x-1">
               <ShadcnButton
                 variant="ghost"
-                size="icon" // Use "icon" for compact buttons
+                size="icon"
                 onPress={() => handleEditClick(item)}
                 disabled={isLoading}
                 className="p-1.5"
@@ -1017,24 +1155,44 @@ const ProductManagementScreen = () => {
       {/* Filter Dialog */}
       <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
         <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto">
-          <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700">
-            <DialogTitle><Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Filter by Category </Text></DialogTitle>
+          <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700 w-80">
+            <DialogTitle>
+              <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Filter by Category</Text>
+            </DialogTitle>
           </DialogHeader>
           <View className="p-5">
-            <View className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 h-12 justify-center">
-              <Picker
-                selectedValue={selectedCategoryFilter || 'All'}
-                onValueChange={(value) => setSelectedCategoryFilter(value === 'All' ? null : value)}
-                style={{ color: Platform.OS === 'ios' ? (isLoading ? '#a0a0a0' : '#000000') : (isLoading ? '#a0a0a0' : '#000000'), fontSize: 16 }}
-                dropdownIconColor={Platform.OS === 'android' ? (isLoading ? '#a0a0a0' : '#000000') : undefined}
-                enabled={!isLoading}
-              >
-                <Picker.Item label="All Categories" value="All" />
-                {categories.map((cat) => (
-                  <Picker.Item key={cat} label={cat} value={cat} />
-                ))}
-              </Picker>
-            </View>
+            <TouchableOpacity
+              onPress={() => setIsFilterAccordionOpen(!isFilterAccordionOpen)}
+              className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
+              disabled={isLoading}
+            >
+              <Text className="text-base text-gray-900 dark:text-gray-100">
+                {selectedCategoryFilter || 'All Categories'}
+              </Text>
+              {isFilterAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
+            </TouchableOpacity>
+            {isFilterAccordionOpen && (
+              <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
+                <FlatList
+                  data={categories}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedCategoryFilter(item === 'All Categories' ? null : item);
+                        setIsFilterAccordionOpen(false);
+                      }}
+                      className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
+                    >
+                      <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No categories found.</Text>}
+                  style={{ maxHeight: 150 }}
+                  nestedScrollEnabled
+                />
+              </View>
+            )}
           </View>
           <DialogFooter className="p-5 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
             <ShadcnButton
@@ -1057,94 +1215,6 @@ const ProductManagementScreen = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Category Selection Dialog (for Form) */}
-      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-        <DialogContent
-          className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto"
-          style={{ maxHeight: '80%' }} // Allow content to scroll
-        >
-          <DialogHeader className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-            <DialogTitle>
-              <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Select Category</Text>
-            </DialogTitle>
-          </DialogHeader>
-          <View className="p-3">
-            <TouchableOpacity
-              onPress={() => {
-                setIsNewCategory(true);
-                setIsNewProduct(true); // If adding new category, usually for a new product
-                dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
-                dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
-                setCategorySearch('');
-                setCategoryDialogOpen(false);
-              }}
-              className="py-3 px-2 mb-2 border-b border-gray-200 dark:border-gray-700"
-            >
-              <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Category...</Text>
-            </TouchableOpacity>
-            <ControlledInput
-              value={categorySearch}
-              onChangeText={setCategorySearch}
-              placeholder="Search categories..."
-              editable={!isLoading}
-              className="mb-2"
-            />
-          </View>
-          <FlatList
-            data={filteredCategoriesForDialog}
-            keyExtractor={(item) => item}
-            renderItem={renderCategoryItemForDialog}
-            showsVerticalScrollIndicator={true}
-            contentContainerStyle={{ paddingBottom: 10, paddingHorizontal: 12 }}
-            ListEmptyComponent={<Text className="text-center py-4 text-gray-500 dark:text-gray-400">No categories found.</Text>}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Product Selection Dialog (for Form) */}
-      <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-        <DialogContent
-          className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto"
-          style={{ maxHeight: '80%' }}
-        >
-          <DialogHeader className="p-4 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-            <DialogTitle>
-              <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Select Product</Text>
-            </DialogTitle>
-          </DialogHeader>
-          <View className="p-3">
-            <TouchableOpacity
-              onPress={() => {
-                setIsNewProduct(true);
-                // If adding new product, also make category new unless one is already typed/selected
-                if (!formState.category) setIsNewCategory(true);
-                dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
-                setProductSearch('');
-                setProductDialogOpen(false);
-              }}
-              className="py-3 px-2 mb-2 border-b border-gray-200 dark:border-gray-700"
-            >
-              <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Product...</Text>
-            </TouchableOpacity>
-            <ControlledInput
-              value={productSearch}
-              onChangeText={setProductSearch}
-              placeholder="Search products..."
-              editable={!isLoading}
-              className="mb-2"
-            />
-          </View>
-          <FlatList
-            data={filteredProductNamesForDialog}
-            keyExtractor={(item) => item}
-            renderItem={renderProductItemForDialog}
-            showsVerticalScrollIndicator={true}
-            contentContainerStyle={{ paddingBottom: 10, paddingHorizontal: 12 }}
-            ListEmptyComponent={<Text className="text-center py-4 text-gray-500 dark:text-gray-400">No products found.</Text>}
-          />
-        </DialogContent>
-      </Dialog>
-
       {/* Add/Edit Product Dialog */}
       <Dialog
         open={dialogOpen}
@@ -1164,7 +1234,7 @@ const ProductManagementScreen = () => {
         >
           <DialogContent
             className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
-            style={{ maxHeight: '90%' }}
+            style={{ maxHeight: '95%' }}
           >
             <ProductFormDialogContent
               formState={formState}
@@ -1182,8 +1252,20 @@ const ProductManagementScreen = () => {
               handleSubmit={formMode === 'edit' ? handleEditProductSubmit : handleAddProductSubmit}
               setDialogOpen={setDialogOpen}
               resetDialogState={resetFormAndDialogState}
-              setCategoryDialogOpen={setCategoryDialogOpen}
-              setProductDialogOpen={setProductDialogOpen}
+              isCategoryAccordionOpen={isCategoryAccordionOpen}
+              setIsCategoryAccordionOpen={setIsCategoryAccordionOpen}
+              categorySearch={categorySearch}
+              setCategorySearch={setCategorySearch}
+              filteredCategories={filteredCategoriesForAccordion}
+              onSelectCategory={handleSelectCategoryFromAccordion}
+              onAddNewCategory={handleAddNewCategoryFromAccordion}
+              isProductAccordionOpen={isProductAccordionOpen}
+              setIsProductAccordionOpen={setIsProductAccordionOpen}
+              productSearch={productSearch}
+              setProductSearch={setProductSearch}
+              filteredProductNames={filteredProductNamesForAccordion}
+              onSelectProduct={handleSelectProductFromAccordion}
+              onAddNewProduct={handleAddNewProductFromAccordion}
             />
           </DialogContent>
         </KeyboardAvoidingView>
