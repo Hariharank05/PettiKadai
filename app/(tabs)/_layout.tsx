@@ -3,10 +3,9 @@ import { Tabs, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { Home, ShoppingBag, User, Settings, ShoppingCart, HistoryIcon, Archive } from 'lucide-react-native'; // Removed UsersIcon, Tag, ClipboardList for now
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { useColorScheme } from '~/lib/useColorScheme';
-
+import CustomTabBar from '~/components/CustomTabBar';
 export default function TabsLayout() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -47,6 +46,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />} 
       screenOptions={{
         tabBarActiveTintColor: isDarkColorScheme ? '#E5E7EB' : '#1F2937',
         tabBarInactiveTintColor: isDarkColorScheme ? '#6B7280' : '#9CA3AF',
@@ -58,24 +58,21 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+          title: 'Dashboard', // Title for header
           ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
-        name="inventory" // This now points to the inventory stack's _layout
+        name="inventory"
         options={{
-          title: 'Inventory',
-          tabBarIcon: ({ color, size }) => <Archive color={color} size={size} />,
-          headerShown: false, // The header will be managed by the nested Stack
+          title: 'Inventory', // Title for header (if stack header is used)
+          headerShown: false, // Assuming inventory stack has its own header
         }}
       />
       <Tabs.Screen
         name="sales"
         options={{
           title: 'Sales',
-          tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />,
           ...tabHeaderOptions,
         }}
       />
@@ -83,7 +80,6 @@ export default function TabsLayout() {
         name="receipts"
         options={{
           title: 'Receipts',
-          tabBarIcon: ({ color, size }) => <HistoryIcon color={color} size={size} />,
           ...tabHeaderOptions,
         }}
       />
@@ -91,7 +87,6 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
           ...tabHeaderOptions,
         }}
       />
@@ -99,17 +94,11 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
           ...tabHeaderOptions,
         }}
       />
 
-      {/* These screens are NOT direct tabs anymore if they are to be part of the inventory stack.
-          They will be defined in app/(tabs)/inventory/_layout.tsx
-          If they still need to be accessible from *other* tabs directly,
-          their `href: null` setup was fine, but they won't get back buttons to the inventory hub then.
-          For a clean inventory stack, they should be conceptually moved.
-      */}
+      {/* Hidden screens (not direct tabs) */}
       <Tabs.Screen name="products" options={{ href: null }} />
       <Tabs.Screen name="category" options={{ href: null }} />
       <Tabs.Screen name="customers" options={{ href: null }} />
