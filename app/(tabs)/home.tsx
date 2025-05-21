@@ -216,9 +216,9 @@ export default function HomeScreen() {
   const today = new Date();
   const dateFormatted = format(today, 'EEEE, MMMM d, yyyy');
 
-  const navigateToProducts = () => router.push('/(tabs)/products');
+  const navigateToProducts = () => router.push('/(tabs)/inventory/products');
   const navigateToNewSale = () => router.push('/(tabs)/sales');
-  const navigateToCustomer = () => router.push('/(tabs)/customers');
+  const navigateToCustomer = () => router.push('/(tabs)/inventory/customers');
   const navigateToReports = () => router.push('/(tabs)/ReportsScreen');
 
   if (isScreenLoading) {
@@ -463,7 +463,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={index}
                   className="mr-4 items-center"
-                  onPress={() => router.push({ pathname: '/(tabs)/products', params: { category: category.name } })}
+                  onPress={() => router.push({ pathname: '/(tabs)/inventory/products', params: { category: category.name } })}
                 >
                   <ImageBackground
                     source={{ uri: category.image }}
@@ -562,7 +562,7 @@ export default function HomeScreen() {
                       <TouchableOpacity
                         key={index}
                         className="w-40 mr-3"
-                        onPress={() => router.push({ pathname: '/(tabs)/products', params: { productId: product.id } })}
+                        onPress={() => router.push({ pathname: '/(tabs)/inventory/products', params: { productId: product.id } })}
                       >
                         <Card
                           style={{
