@@ -1,8 +1,6 @@
-// ~/app/(tabs)/sales.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
-  // Text, // Using custom Text from ~/components/ui/text
   SafeAreaView,
   TouchableOpacity,
   FlatList,
@@ -10,19 +8,17 @@ import {
   Image,
   RefreshControl,
   Alert,
-  StyleSheet,
-  TextInput, // Standard TextInput
-  Keyboard,
   Platform,
+  useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle } from 'lucide-react-native';
-import { Text } from '~/components/ui/text'; // Using your custom Text component
-import { Input } from '~/components/ui/input'; // Your custom Input component
-import { Button } from '~/components/ui/button'; // Your custom Button component
-import { Card, CardContent } from '~/components/ui/card';
+import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle} from 'lucide-react-native';
+import { Text } from '~/components/ui/text';
+import { Input } from '~/components/ui/input';
+import { Button } from '~/components/ui/button';
+import { Card, CardHeader, CardContent } from '~/components/ui/card';
 import { useProductStore } from '~/lib/stores/productStore';
-import { Product } from '~/lib/models/product'; // Ensure this path is correct
+import { Product } from '~/lib/models/product';
 import { Separator } from '~/components/ui/separator';
 import {
   Dialog,
@@ -31,22 +27,18 @@ import {
   DialogTitle,
   DialogFooter,
 } from '~/components/ui/dialog';
-
-// --- Database and Utility Imports ---
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import 'react-native-get-random-values'; // Required for uuid
+import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
-import { getDatabase } from '~/lib/db/database'; // Ensure this path is correct
+import { getDatabase } from '~/lib/db/database';
 import { generateAndShareReceipt } from '~/lib/utils/receiptUtils';
 import { useAuthStore } from '~/lib/stores/authStore';
 
-// Interface for items in the cart
 interface CartItem extends Product {
   quantityInCart: number;
 }
 
-// Interface for Store Settings (fetched for receipt)
 interface ReceiptStoreSettings {
   storeName?: string;
   storeAddress?: string;
@@ -55,7 +47,6 @@ interface ReceiptStoreSettings {
   currencySymbol?: string;
 }
 
-// Interface for simplified cart item for receipt generation
 interface CartItemForReceipt {
   name: string;
   quantityInCart: number;
@@ -64,12 +55,24 @@ interface CartItemForReceipt {
   category?: string | null;
 }
 
-const userId = useAuthStore.getState().userId;
-// if (!userId) {
-//   throw new Error("User not authenticated");
-// }
+// Define the color palette based on theme
+const getColors = (colorScheme: 'light' | 'dark') => ({
+  primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+  secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+  accent: '#f9c00c',
+  danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+  lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+  lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+  lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+  lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+  white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+  dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+  gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+  green: colorScheme === 'dark' ? '#4ade80' : '#22c55e',
+});
 
-// --- generateReceiptHtml function ---
+const userId = useAuthStore.getState().userId;
+
 const generateReceiptHtml = (
   cartItems: CartItemForReceipt[],
   totalAmount: number,
@@ -98,7 +101,7 @@ const generateReceiptHtml = (
   return `
     <html>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale:1.0">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; font-size: 12px; color: #333; }
           .container { max-width: 300px; margin: auto; border: 1px solid #ddd; padding: 15px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
@@ -156,8 +159,9 @@ const generateReceiptHtml = (
   `;
 };
 
-
 export default function SalesScreen() {
+  const colorScheme = useColorScheme() || 'light';
+  const colors = getColors(colorScheme);
   const router = useRouter();
   const { products, fetchProducts } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -456,105 +460,88 @@ export default function SalesScreen() {
     setIsProcessingSale(true);
 
     try {
-      // Get state inside the async function scope for reliability
       const authState = useAuthStore.getState();
-      const currentUserId = authState.userId; // Type: string | undefined
+      const currentUserId = authState.userId;
 
       if (!currentUserId) {
         const errorMessage = 'User not authenticated to complete sale.';
         console.warn(errorMessage);
-        setIsProcessingSale(false); // Stop loading
-        Alert.alert('Authentication Error', errorMessage); // Inform user
-        return; // Stop process
+        setIsProcessingSale(false);
+        Alert.alert('Authentication Error', errorMessage);
+        return;
       }
 
-      // currentUserId is now guaranteed to be a string within this block
       const saleId = uuidv4();
       const saleTimestamp = new Date().toISOString();
       const paymentType = 'CASH';
 
-      await db.execAsync('BEGIN TRANSACTION;');
-
-      await db.runAsync(
-        `INSERT INTO Sales (id, userId, timestamp, totalAmount, totalProfit, subtotal, paymentType, salesStatus)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        // Use the currentUserId which is guaranteed string
-        [saleId, currentUserId, saleTimestamp, totalAmount, totalProfit, subtotal, paymentType, 'COMPLETED']
-      );
-
-      const saleCartItems: CartItemForReceipt[] = [];
-
-      for (const item of cartItems) {
-        const saleItemId = uuidv4();
+      await db.withTransactionAsync(async () => {
         await db.runAsync(
-          `INSERT INTO SaleItems (id, saleId, productId, quantity, unitPrice, costPrice, subtotal, profit)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            saleItemId,
-            saleId,
-            item.id,
-            item.quantityInCart,
-            item.sellingPrice,
-            item.costPrice,
-            item.sellingPrice * item.quantityInCart,
-            (item.sellingPrice - item.costPrice) * item.quantityInCart,
-          ]
+          `INSERT INTO Sales (id, userId, timestamp, totalAmount, totalProfit, subtotal, paymentType, salesStatus)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [saleId, currentUserId, saleTimestamp, totalAmount, totalProfit, subtotal, paymentType, 'COMPLETED']
         );
-        await db.runAsync(
-          'UPDATE products SET quantity = quantity - ?, updatedAt = ? WHERE id = ? AND userId = ?',
-          [item.quantityInCart, new Date().toISOString(), item.id, currentUserId] // Add userId to UPDATE for safety
-        );
-        saleCartItems.push({
-          name: item.name,
-          quantityInCart: item.quantityInCart,
-          sellingPrice: item.sellingPrice,
-          costPrice: item.costPrice,
-          category: item.category
+
+        const saleCartItems: CartItemForReceipt[] = [];
+
+        for (const item of cartItems) {
+          const saleItemId = uuidv4();
+          await db.runAsync(
+            `INSERT INTO SaleItems (id, saleId, productId, quantity, unitPrice, costPrice, subtotal, profit)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              saleItemId,
+              saleId,
+              item.id,
+              item.quantityInCart,
+              item.sellingPrice,
+              item.costPrice,
+              item.sellingPrice * item.quantityInCart,
+              (item.sellingPrice - item.costPrice) * item.quantityInCart,
+            ]
+          );
+          await db.runAsync(
+            'UPDATE products SET quantity = quantity - ?, updatedAt = ? WHERE id = ? AND userId = ?',
+            [item.quantityInCart, new Date().toISOString(), item.id, currentUserId]
+          );
+          saleCartItems.push({
+            name: item.name,
+            quantityInCart: item.quantityInCart,
+            sellingPrice: item.sellingPrice,
+            costPrice: item.costPrice,
+            category: item.category
+          });
+        }
+
+        const pdfUri = await generateAndShareReceipt({
+          saleId,
+          saleTimestamp,
+          totalAmount,
+          cartItems: saleCartItems,
         });
-      }
 
-      // Call the utility function
-      const pdfUri = await generateAndShareReceipt({
-        saleId,
-        saleTimestamp,
-        totalAmount,
-        cartItems: saleCartItems,
-        // Assuming generateAndShareReceipt might need userId or store settings based on userId
-        // If it fetches settings internally, ensure it also gets userId there.
-        // If it needs userId passed, add it here: userId: currentUserId
+        if (pdfUri) {
+          const receiptId = uuidv4();
+          const receiptNumber = `RCPT-${saleId.substring(0, 8).toUpperCase()}`;
+          await db.runAsync(
+            `INSERT INTO Receipts (id, saleId, receiptNumber, format, filePath, generatedAt)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [receiptId, saleId, receiptNumber, 'PDF', pdfUri, new Date().toISOString()]
+          );
+          console.log('Receipt record saved to DB with filePath:', pdfUri);
+        } else {
+          Alert.alert("Sale Confirmed", "Sale completed, but there was an issue generating or sharing the receipt.");
+        }
       });
-
-      if (pdfUri) {
-        const receiptId = uuidv4();
-        const receiptNumber = `RCPT-${saleId.substring(0, 8).toUpperCase()}`;
-        // Save the receipt record with the generated PDF URI
-        // Note: The Receipt table schema does NOT have a userId. It relies on Sales.saleId.
-        await db.runAsync(
-          `INSERT INTO Receipts (id, saleId, receiptNumber, format, filePath, generatedAt)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [receiptId, saleId, receiptNumber, 'PDF', pdfUri, new Date().toISOString()]
-        );
-        console.log('Receipt record saved to DB with filePath:', pdfUri);
-      } else {
-        // Handle case where PDF generation/sharing failed but sale was committed
-        Alert.alert("Sale Confirmed", "Sale completed, but there was an issue generating or sharing the receipt.");
-      }
-
-      await db.execAsync('COMMIT;');
-
 
       setCartItems([]);
       setSelectedQuantities({});
       setIsCartOpen(false);
       setIsConfirmDialogOpen(false);
-      // loadProducts(); // This will be called in finally
 
-      if (pdfUri) { // Only show full success if PDF was handled
-        Alert.alert('Sale Confirmed', `Sale completed. Receipt ready for sharing.`);
-      }
+      Alert.alert('Sale Confirmed', `Sale completed. Receipt ready for sharing.`);
 
     } catch (error) {
-      await db.execAsync('ROLLBACK;');
       console.error('Error confirming sale:', error);
       Alert.alert('Error', `Failed to confirm sale: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -564,95 +551,86 @@ export default function SalesScreen() {
   };
 
   const renderProductItem = ({ item }: { item: Product }) => (
-    <Card className={`mb-2 bg-card border border-border ${item.quantity <= 0 ? 'opacity-50' : ''}`}>
-      <CardContent className="p-3 flex-row items-center">
+    <TouchableOpacity
+      onPress={() => addToCart(item.id, selectedQuantities[item.id] || 0)}
+      disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
+      className={`w-[48%] m-1 rounded-xl overflow-hidden shadow-sm ${item.quantity <= 0 ? 'opacity-50' : ''}`}
+      style={{ backgroundColor: colors.white }}
+    >
+      <View className="relative">
         {item.imageUri ? (
           <Image
             source={{ uri: item.imageUri }}
-            style={{ width: 40, height: 40 }}
-            className="rounded-md mr-3"
+            style={{ width: '100%', height: 120 }}
+            className="rounded-t-xl"
             resizeMode="cover"
             onError={(e) => console.log(`Image load error for ${item.name}:`, e.nativeEvent.error)}
           />
         ) : (
-          <View className="w-10 h-10 rounded-md mr-3 bg-muted items-center justify-center">
-            <Package size={20} className="text-muted-foreground" />
+          <View className="w-full h-32 rounded-t-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+            <Package size={32} color={colors.primary} />
           </View>
         )}
-        <View className="flex-1 mr-3">
-          <Text
-            className="text-sm font-medium text-foreground native:text-black"
-            numberOfLines={1}
-          >
-            {item.name || 'Unknown Product'}
+
+      </View>
+      <View className="p-3">
+        <Text
+          className="text-sm font-semibold"
+          numberOfLines={1}
+          style={{ color: colors.dark }}
+        >
+          {item.name || 'Unknown Product'}
+        </Text>
+        {item.category && (
+          <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {item.category}
           </Text>
-          <View className="flex-row items-center mt-0.5">
-            {item.quantity > 0 ? (
-              <View
-                className={`mr-1 px-1.5 py-0.5 rounded ${item.quantity > 5 ? 'bg-green-100 dark:bg-green-900' : 'bg-yellow-100 dark:bg-yellow-900'}`}
-              >
-                <Text
-                  className={`text-xs ${item.quantity > 5 ? 'text-green-700 dark:text-green-200' : 'text-yellow-700 dark:text-yellow-200'}`}
-                >
-                  {item.quantity}
-                </Text>
-              </View>
-            ) : (
-              <View className="mr-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900">
-                <Text className="text-xs text-red-700 dark:text-red-200">Out</Text>
-              </View>
-            )}
-            <Text
-              className="text-xs text-muted-foreground native:text-gray-600"
+        )}
+        <View className="flex-row justify-between items-center mt-1">
+          <Text className="text-sm font-bold" style={{ color: colors.dark }}>
+            ₹{item.sellingPrice.toFixed(2)}
+          </Text>
+          <View className="flex-row items-center">
+            <TouchableOpacity
+              onPress={() => decreaseListQuantity(item.id)}
+              disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
+              className="p-1"
             >
-              {item.category || 'No category'}
-            </Text>
+              <MinusCircle size={16} color={(item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0) ? colors.gray : colors.danger} />
+            </TouchableOpacity>
+            <Input
+              className="w-10 h-8 mx-2 text-center text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600"
+              keyboardType="number-pad"
+              value={String(selectedQuantities[item.id] || 0)}
+              onChangeText={(text) => {
+                const num = parseInt(text, 10);
+                if (isNaN(num) || num < 0) {
+                  setSelectedQuantities((prev) => ({ ...prev, [item.id]: 0 }));
+                  setCartItems(prevCart => prevCart.filter(cartItem => cartItem.id !== item.id || 0 > 0));
+                } else if (num <= item.quantity) {
+                  setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
+                } else {
+                  setSelectedQuantities((prev) => ({ ...prev, [item.id]: item.quantity }));
+                  Alert.alert(`Maximum quantity available is ${item.quantity}`);
+                }
+              }}
+              editable={item.quantity > 0}
+              style={{ backgroundColor: colors.white, color: colors.primary }}
+            />
+            <TouchableOpacity
+              onPress={() => increaseListQuantity(item.id, item.quantity)}
+              disabled={item.quantity <= 0}
+              className="p-1"
+            >
+              <PlusCircle size={16} color={item.quantity <= 0 ? colors.gray : colors.gray} />
+            </TouchableOpacity>
           </View>
         </View>
-        <View className="flex-row items-center">
-          <Text className="text-sm font-semibold text-primary mr-2 native:text-blue-600">₹{item.sellingPrice.toFixed(2)}</Text>
-          <TouchableOpacity
-            onPress={() => decreaseListQuantity(item.id)}
-            disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
-            className="p-1"
-          >
-            <MinusCircle size={18} color={(item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0) ? '#9CA3AF' : '#EF4444'} />
-          </TouchableOpacity>
-          <TextInput
-            className="bg-background rounded w-10 h-7 text-center text-sm text-foreground border border-input native:text-black"
-            keyboardType="number-pad"
-            value={String(selectedQuantities[item.id] || 0)}
-            onChangeText={(text) => {
-              const num = parseInt(text, 10);
-              if (isNaN(num) || num < 0) {
-                setSelectedQuantities((prev) => ({ ...prev, [item.id]: 0 }));
-                setCartItems(prevCart => prevCart.filter(cartItem => cartItem.id !== item.id || 0 > 0));
-              } else if (num <= item.quantity) {
-                setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
-              } else {
-                setSelectedQuantities((prev) => ({ ...prev, [item.id]: item.quantity }));
-                Alert.alert(`Maximum quantity available is ${item.quantity}`);
-              }
-            }}
-            editable={item.quantity > 0}
-          />
-          <TouchableOpacity
-            onPress={() => increaseListQuantity(item.id, item.quantity)}
-            disabled={item.quantity <= 0}
-            className="p-1"
-          >
-            <PlusCircle size={18} color={item.quantity <= 0 ? '#9CA3AF' : '#3B82F6'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => addToCart(item.id, selectedQuantities[item.id] || 0)}
-            disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
-            className="p-1 ml-1"
-          >
-            <ShoppingCart size={20} color={(item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0) ? '#9CA3AF' : '#3B82F6'} />
-          </TouchableOpacity>
-        </View>
-      </CardContent>
-    </Card>
+        <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Stock: {item.quantity} {item.unit || 'piece'}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
@@ -692,48 +670,81 @@ export default function SalesScreen() {
     };
 
     return (
-      <Card className="mb-2 bg-card border border-border">
-        <CardContent className="p-3 flex-row items-center">
-          {item.imageUri ? (
-            <Image
-              source={{ uri: item.imageUri }}
-              style={{ width: 40, height: 40 }}
-              className="rounded-md mr-3"
-              resizeMode="cover"
-            />
-          ) : (
-            <View className="w-10 h-10 rounded-md mr-3 bg-muted items-center justify-center">
-              <Package size={20} className="text-muted-foreground" />
+      <Card className="mb-3 bg-white dark:bg-gray-800 shadow-md rounded-xl overflow-hidden">
+        <CardHeader className="py-3 px-4">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center flex-1 mr-2">
+              {item.imageUri ? (
+                <Image
+                  source={{ uri: item.imageUri }}
+                  style={{ width: 48, height: 48 }}
+                  className="rounded-lg mr-3"
+                  resizeMode="cover"
+                />
+              ) : (
+                <View className="w-12 h-12 rounded-lg mr-3 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                  <Package size={24} color={colors.primary} />
+                </View>
+              )}
+              <View className="flex-1">
+                <Text className="text-base font-semibold" style={{ color: colors.gray }}>
+                  {item.name}
+                </Text>
+                {item.category && (
+                  <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {item.category}
+                  </Text>
+                )}
+              </View>
             </View>
-          )}
-          <View className="flex-1 mr-3">
-            <Text className="text-sm font-medium text-foreground native:text-black">{item.name}</Text>
-            <View className="flex-row items-center mt-0.5">
-              <Text className="text-xs text-muted-foreground mr-1 native:text-gray-600">{item.category || 'No category'}</Text>
-              <Text className="text-xs text-muted-foreground native:text-gray-600">₹{item.sellingPrice.toFixed(2)}</Text>
+            <View className="items-end">
+              <Text className="text-xs text-gray-500 dark:text-gray-400">Price</Text>
+              <Text className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                ₹{item.sellingPrice.toFixed(2)}
+              </Text>
             </View>
           </View>
-          <View className="flex-row items-center">
-            <TouchableOpacity onPress={() => decreaseQuantity(item.id)} className="p-1">
-              <MinusCircle size={18} color="#EF4444" />
-            </TouchableOpacity>
-            <TextInput
-              className="bg-background rounded w-10 h-7 text-center text-sm text-foreground border border-input native:text-black"
-              value={item.quantityInCart.toString()}
-              onChangeText={handleQuantityChange}
-              keyboardType="number-pad"
-              selectTextOnFocus
-              maxLength={3}
-            />
-            <TouchableOpacity onPress={() => increaseQuantity(item.id)} className="p-1">
-              <PlusCircle size={18} color="#3B82F6" />
-            </TouchableOpacity>
-            <Text className="text-sm font-semibold text-primary w-20 text-center native:text-blue-600">
-              ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
-            </Text>
-            <TouchableOpacity onPress={() => removeCartItem(item.id)} className="p-1">
-              <XCircle size={18} color="#9CA3AF" />
-            </TouchableOpacity>
+        </CardHeader>
+        <CardContent className="py-2 px-4 border-t border-gray-200 dark:border-gray-700">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-x-1">
+              <TouchableOpacity onPress={() => decreaseQuantity(item.id)} className="p-1.5">
+                <MinusCircle size={18} color={item.quantityInCart <= 1 ? colors.gray : colors.danger} />
+              </TouchableOpacity>
+              <Input
+                className="w-10 h-8 text-center text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600"
+                value={item.quantityInCart.toString()}
+                onChangeText={handleQuantityChange}
+                keyboardType="number-pad"
+                selectTextOnFocus
+                maxLength={3}
+                style={{ backgroundColor: colors.white, color: colors.primary }}
+              />
+              <TouchableOpacity
+                onPress={() => increaseQuantity(item.id)}
+                className="p-1.5"
+                disabled={
+                  (products.find((p) => p.id === item.id)?.quantity ?? 0) <= item.quantityInCart
+                }
+              >
+                <PlusCircle
+                  size={18}
+                  color={
+                    (products.find((p) => p.id === item.id)?.quantity ?? 0) <= item.quantityInCart
+                      ? colors.gray
+                      : colors.gray
+                  }
+                />
+              </TouchableOpacity>
+            </View>
+            <View className="flex-row items-center gap-x-1">
+              <Text className="text-sm font-bold" style={{ color: colors.green }}>
+                ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
+              </Text>
+              <TouchableOpacity onPress={() => removeCartItem(item.id)} className="p-1.5">
+                <XCircle size={18} color={colors.danger} />
+              </TouchableOpacity>
+            </View>
           </View>
         </CardContent>
       </Card>
@@ -742,40 +753,45 @@ export default function SalesScreen() {
 
   const handleProceedToPayment = () => {
     if (cartItems.length === 0) return;
-    Keyboard.dismiss();
     setIsConfirmDialogOpen(true);
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <View className="flex-1 p-4 pt-2">
-        <View className="mb-4 flex-row items-center bg-card border border-border rounded-lg px-3">
-          <Search size={20} className="text-muted-foreground" />
+    <SafeAreaView className="flex-1" style={{ backgroundColor: `${colors.white}1A` }}>
+      <View className="flex-1 p-4 pt-2 bg-gray-100 dark:bg-gray-900">
+        <View className="mb-4 flex-row items-center rounded-lg px-3 shadow-md" style={{ backgroundColor: colors.white }}>
+          <Search size={20} color={colors.secondary} />
           <Input
             placeholder="Search products..."
-            className="flex-1 h-12 border-0 bg-transparent ml-2 text-base text-foreground"
-            placeholderTextColor="#9CA3AF"
+            className="flex-1 h-12 border-0 bg-transparent ml-2 text-base font-medium"
+            placeholderTextColor={colors.gray}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            style={{ color: colors.dark }}
           />
         </View>
         {isLoading ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color="#3B82F6" />
-            <Text className="text-muted-foreground mt-2 native:text-gray-500">Loading Products...</Text>
+            <ActivityIndicator size="large" color={colors.secondary} />
+            <Text className="font-medium mt-2" style={{ color: colors.dark }}>Loading Products...</Text>
           </View>
         ) : filteredProducts.length === 0 ? (
           <View className="flex-1 items-center justify-center">
-            <AlertCircle size={40} color="#9CA3AF" />
-            <Text className="text-muted-foreground font-medium mt-2 native:text-gray-500">No products found</Text>
+            <AlertCircle size={40} color={colors.danger} />
+            <Text className="font-semibold mt-2" style={{ color: colors.dark }}>No products found</Text>
             {products.length > 0 && searchQuery !== '' && (
-              <Text className="text-muted-foreground text-center mt-1 text-sm native:text-gray-500">Try adjusting your search.</Text>
+              <Text className="text-center mt-1 text-sm" style={{ color: colors.gray }}>Try adjusting your search.</Text>
             )}
             {products.length === 0 && (
               <View className="items-center mt-4">
-                <Text className="text-muted-foreground text-center text-sm mb-2 native:text-gray-500">Your inventory is empty.</Text>
-                <Button variant="outline" onPress={() => router.push('/(tabs)/products')}>
-                  <Text className="text-primary native:text-blue-600">Add Your First Product</Text>
+                <Text className="text-center text-sm mb-2" style={{ color: colors.gray }}>Your inventory is empty.</Text>
+                <Button
+                  variant="outline"
+                  className="border"
+                  style={{ backgroundColor: `${colors.secondary}1A` }}
+                  onPress={() => router.push('/(tabs)/sales')}
+                >
+                  <Text className="font-semibold" style={{ color: colors.gray}}>Add Your First Product</Text>
                 </Button>
               </View>
             )}
@@ -785,9 +801,10 @@ export default function SalesScreen() {
             data={filteredProducts}
             renderItem={renderProductItem}
             keyExtractor={(item) => item.id}
+            numColumns={2}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 80 }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3B82F6" />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />}
             keyboardShouldPersistTaps="handled"
           />
         )}
@@ -795,12 +812,13 @@ export default function SalesScreen() {
 
       {cartItems.length > 0 && !isLoading && (
         <TouchableOpacity
-          className="bg-primary rounded-full shadow-lg items-center justify-center absolute bottom-8 right-8 w-16 h-16"
+          className="rounded-full shadow-lg items-center justify-center absolute bottom-8 right-8 w-16 h-16"
+          style={{ backgroundColor: colors.secondary }}
           onPress={() => setIsCartOpen(true)}
           activeOpacity={0.7}
         >
-          <ShoppingCart size={24} color="white" />
-          <View className="bg-destructive rounded-full items-center justify-center absolute -top-1 -right-1 min-w-6 h-6 px-1">
+          <ShoppingCart size={24} color={colors.white} />
+          <View className="rounded-full items-center justify-center absolute -top-1 -right-1 min-w-6 h-6 px-1" style={{ backgroundColor: colors.danger }}>
             <Text className="text-white font-bold text-xs">
               {cartItems.reduce((sum, item) => sum + item.quantityInCart, 0)}
             </Text>
@@ -809,96 +827,127 @@ export default function SalesScreen() {
       )}
 
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-sm w-[95%] mx-auto">
-          <DialogHeader className="p-4 border-b border-border">
+        <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto" style={{ maxHeight: '90%' }}>
+          <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
             <View className="flex-row items-center">
-              <ShoppingCart size={22} color="#3B82F6" className="mr-2" />
-              <DialogTitle className="text-lg font-bold text-foreground native:text-black">
-                <Text>Current Sale</Text> {/* FIX APPLIED */}
+              <ShoppingCart size={24} color={colors.secondary} className="mr-2" />
+              <DialogTitle className="text-xl font-bold" style={{ color: colors.gray}}>
+                Current Sale
               </DialogTitle>
             </View>
           </DialogHeader>
-          <View className="p-3" style={{ maxHeight: Platform.OS === 'ios' ? 300 : 250 }}>
+          <View style={{ padding: 16, width: '100%' }}>
             {cartItems.length === 0 ? (
-              <View className="items-center justify-center border border-dashed border-border rounded-lg p-6 my-4 min-h-32">
-                <ShoppingCart size={40} color="#9CA3AF" />
-                <Text className="text-muted-foreground font-medium mt-2 native:text-gray-500">Cart is empty</Text>
-                <Text className="text-muted-foreground text-xs mt-1 native:text-gray-500">Select products to add them here</Text>
+              <View className="items-center justify-center rounded-lg p-6 my-4">
+                <ShoppingCart size={40} color={colors.danger} />
+                <Text className="font-semibold mt-2" style={{ color: colors.dark }}>Cart is empty</Text>
+                <Text className="text-xs mt-1" style={{ color: colors.gray }}>Select products to add them here</Text>
               </View>
             ) : (
-              <FlatList
-                data={cartItems}
-                renderItem={renderCartItem}
-                keyExtractor={(item) => item.id}
-                showsVerticalScrollIndicator={true}
-              />
+              <>
+                <Text className="text-base font-semibold mb-3" style={{ color: colors.dark }}>Items in Cart:</Text>
+                <FlatList
+                  data={cartItems}
+                  renderItem={renderCartItem}
+                  keyExtractor={(item) => item.id}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 16 }}
+                />
+                <View className="pt-2 px-3 h-80 w-80">
+                  <View className="mb-2">
+                    <View className="flex-row justify-between items-center">
+                      <Text className="text-sm" style={{ color: colors.gray }}>Subtotal:</Text>
+                      <Text className="text-sm font-semibold" style={{ color: colors.dark }}>₹{subtotal.toFixed(2)}</Text>
+                    </View>
+                    <View className="flex-row justify-between items-center mt-2">
+                      <Text className="text-base font-bold" style={{ color: colors.dark }}>Total:</Text>
+                      <Text className="text-base font-bold" style={{ color: colors.green }}>₹{totalAmount.toFixed(2)}</Text>
+                    </View>
+                    <View className="flex-row justify-between items-center mt-2">
+                      <Text className="text-xs" style={{ color: colors.gray }}>Est. Profit:</Text>
+                      <Text className="text-xs font-semibold" style={{ color: colors.accent }}>₹{totalProfit.toFixed(2)}</Text>
+                    </View>
+                  </View>
+                  <DialogFooter className="flex-row gap-x-2 mt-4">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-10 border border-gray-300 dark:border-gray-600 mt-1"
+                      style={{ backgroundColor: colors.white }}
+                      onPress={clearCart}
+                      disabled={isProcessingSale}
+                    >
+                      <Text className="font-semibold text-sm" style={{ color: colors.dark }}>Clear Sale</Text>
+                    </Button>
+                    <Button
+                      className="flex-1 h-10 mt-1"
+                      style={{ backgroundColor: colors.secondary }}
+                      onPress={handleProceedToPayment}
+                      disabled={isProcessingSale}
+                    >
+                      {isProcessingSale ? (
+                        <ActivityIndicator size="small" color={colors.white} />
+                      ) : (
+                        <Text className="font-semibold text-sm" style={{ color: colors.white }}>Proceed to Payment</Text>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </View>
+              </>
             )}
           </View>
-          {cartItems.length > 0 && (
-            <View className="border-t border-border p-4">
-              <View className="space-y-2 mb-4">
-                <View className="flex-row justify-between">
-                  <Text className="text-muted-foreground native:text-gray-600">Subtotal:</Text>
-                  <Text className="text-foreground font-medium native:text-black">₹{subtotal.toFixed(2)}</Text>
-                </View>
-                <View className="flex-row justify-between">
-                  <Text className="text-lg font-bold text-foreground native:text-black">Total:</Text>
-                  <Text className="text-lg font-bold text-primary native:text-blue-600">₹{totalAmount.toFixed(2)}</Text>
-                </View>
-                <View className="flex-row justify-between">
-                  <Text className="text-muted-foreground text-sm native:text-gray-600">Est. Profit:</Text>
-                  <Text className="text-green-600 text-sm">₹{totalProfit.toFixed(2)}</Text>
-                </View>
-              </View>
-              <DialogFooter className="flex-row gap-2 pt-2">
-                <Button variant="outline" className="h-10 flex-1" onPress={clearCart} disabled={isProcessingSale}>
-                  <Text className="text-muted-foreground native:text-gray-600">Clear Sale</Text>
-                </Button>
-                <Button className="h-10 flex-1" onPress={handleProceedToPayment} disabled={isProcessingSale}>
-                  {isProcessingSale ? (
-                    <ActivityIndicator size="small" color="white" />
-                  ) : (
-                    <Text className="text-primary-foreground font-semibold native:text-white">Proceed to Payment</Text>
-                  )}
-                </Button>
-              </DialogFooter>
-            </View>
-          )}
         </DialogContent>
       </Dialog>
 
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
-        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-foreground native:text-black">
-              <Text>Confirm Sale</Text> {/* FIX APPLIED */}
+        <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto">
+          <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <DialogTitle className="text-xl font-bold" style={{ color: colors.gray}}>
+              Confirm Sale
             </DialogTitle>
           </DialogHeader>
-          <View className="my-4">
-            <Text className="text-foreground mb-4 native:text-black">Please confirm the following sale:</Text>
+          <View className="p-4 h-80 w-80">
+            <Text className="mb-4 text-base font-medium" style={{ color: colors.dark }}>Please confirm the following sale:</Text>
             {cartItems.map((item) => (
               <View key={item.id} className="flex-row justify-between py-1">
-                <Text className="text-foreground native:text-black" numberOfLines={1} ellipsizeMode="tail" style={{ flex: 1, marginRight: 8 }}>
+                <Text
+                  className="text-sm font-medium"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={{ flex: 1, marginRight: 8, color: colors.gray }}
+                >
                   {item.name} {item.category ? `(${item.category})` : ''} × {item.quantityInCart}
                 </Text>
-                <Text className="text-foreground native:text-black">₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}</Text>
+                <Text className="text-sm font-semibold" style={{ color: colors.accent }}>
+                  ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
+                </Text>
               </View>
             ))}
-            <Separator className="my-2" />
+            <Separator className="my-2" style={{ backgroundColor: colors.gray }} />
             <View className="flex-row justify-between py-1">
-              <Text className="text-lg font-bold text-foreground native:text-black">Total:</Text>
-              <Text className="text-lg font-bold text-primary native:text-blue-600">₹{totalAmount.toFixed(2)}</Text>
+              <Text className="text-lg font-bold" style={{ color: colors.dark }}>Total:</Text>
+              <Text className="text-lg font-bold" style={{ color: colors.green }}>₹{totalAmount.toFixed(2)}</Text>
             </View>
           </View>
-          <DialogFooter className="flex-row justify-end gap-x-3">
-            <Button variant="outline" onPress={() => setIsConfirmDialogOpen(false)} disabled={isProcessingSale}>
-              <Text className="native:text-black">Cancel</Text>
+          <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
+            <Button
+              variant="outline"
+              className="h-12 px-6 border border-gray-300 dark:border-gray-600"
+              style={{ backgroundColor: colors.white }}
+              onPress={() => setIsConfirmDialogOpen(false)}
+              disabled={isProcessingSale}
+            >
+              <Text className="font-semibold" style={{ color: colors.dark }}>Cancel</Text>
             </Button>
-            <Button onPress={confirmSale} disabled={isProcessingSale}>
+            <Button
+              className="h-12 px-6"
+              style={{ backgroundColor: colors.secondary }}
+              onPress={confirmSale}
+              disabled={isProcessingSale}
+            >
               {isProcessingSale ? (
-                <ActivityIndicator size="small" color="white" />
+                <ActivityIndicator size="small" color={colors.white} />
               ) : (
-                <Text className="text-primary-foreground native:text-white">Confirm Sale</Text>
+                <Text className="font-semibold" style={{ color: colors.white }}>Confirm Sale</Text>
               )}
             </Button>
           </DialogFooter>
@@ -906,21 +955,35 @@ export default function SalesScreen() {
       </Dialog>
 
       <Dialog open={isClearCartDialogOpen} onOpenChange={setIsClearCartDialogOpen}>
-        <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-foreground native:text-black">
-              <Text>Clear Cart</Text>
+        <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto">
+          <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <DialogTitle className="text-xl font-bold" style={{ color: colors.primary }}>
+              Clear Cart
             </DialogTitle>
           </DialogHeader>
-          <View className="my-4">
-            <Text className="text-foreground native:text-black">Are you sure you want to clear all items from the cart?</Text>
+          <View className="p-4">
+            <Text className="text-base font-medium" style={{ color: colors.dark }}>
+              Are you sure you want to clear all items from the cart?
+            </Text>
           </View>
-          <DialogFooter className="flex-row justify-end gap-x-3">
-            <Button variant="outline" onPress={() => setIsClearCartDialogOpen(false)} disabled={isProcessingSale}>
-              <Text className="native:text-black">Cancel</Text>
+          <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
+            <Button
+              variant="outline"
+              className="h-12 px-6 border border-gray-300 dark:border-gray-600"
+              style={{ backgroundColor: colors.white }}
+              onPress={() => setIsClearCartDialogOpen(false)}
+              disabled={isProcessingSale}
+            >
+              <Text className="font-semibold" style={{ color: colors.dark }}>Cancel</Text>
             </Button>
-            <Button variant="destructive" onPress={confirmClearCart} disabled={isProcessingSale}>
-              <Text className="text-destructive-foreground native:text-white">Clear</Text>
+            <Button
+              variant="destructive"
+              className="h-12 px-6"
+              style={{ backgroundColor: colors.danger }}
+              onPress={confirmClearCart}
+              disabled={isProcessingSale}
+            >
+              <Text className="font-semibold" style={{ color: colors.white }}>Clear</Text>
             </Button>
           </DialogFooter>
         </DialogContent>
