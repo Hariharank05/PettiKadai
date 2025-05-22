@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
@@ -14,13 +13,15 @@ import {
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle, Heart } from 'lucide-react-native';
+import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle, UserPlus, UserCheck, Edit3 } from 'lucide-react-native';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { Card, CardHeader, CardContent } from '~/components/ui/card';
 import { useProductStore } from '~/lib/stores/productStore';
 import { Product } from '~/lib/models/product';
+import { Customer } from '~/lib/stores/types';
+import { useCustomerStore } from '~/lib/stores/customerStore';
 import { Separator } from '~/components/ui/separator';
 import {
   Dialog,
@@ -29,32 +30,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from '~/components/ui/dialog';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import { Picker } from '@react-native-picker/picker';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '~/lib/db/database';
-import { generateAndShareReceipt } from '~/lib/utils/receiptUtils';
+import { CartItemForReceipt, generateAndShareReceipt, SaleDetailsForReceipt } from '~/lib/utils/receiptUtils';
 import { useAuthStore } from '~/lib/stores/authStore';
 
 interface CartItem extends Product {
   quantityInCart: number;
-}
-
-interface ReceiptStoreSettings {
-  storeName?: string;
-  storeAddress?: string;
-  storePhone?: string;
-  storeEmail?: string;
-  currencySymbol?: string;
-}
-
-interface CartItemForReceipt {
-  name: string;
-  quantityInCart: number;
-  sellingPrice: number;
-  costPrice: number;
-  category?: string | null;
 }
 
 const getColors = (colorScheme: 'light' | 'dark') => ({
@@ -74,141 +58,65 @@ const getColors = (colorScheme: 'light' | 'dark') => ({
   inputBackground: colorScheme === 'dark' ? '#374151' : '#f3f4f6',
 });
 
-const generateReceiptHtml = (
-  cartItems: CartItemForReceipt[],
-  totalAmount: number,
-  saleId: string,
-  saleTimestamp: string,
-  storeSettings?: ReceiptStoreSettings | null
-): string => {
-  const storeName = storeSettings?.storeName || 'Petti Kadai';
-  const storeAddress = storeSettings?.storeAddress || '';
-  const storePhone = storeSettings?.storePhone || '';
-  const currency = storeSettings?.currencySymbol || '₹';
-
-  const itemsHtml = cartItems
-    .map(
-      (item) => `
-    <tr>
-      <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name} ${item.category ? `(${item.category})` : ''}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantityInCart}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${currency}${item.sellingPrice.toFixed(2)}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${currency}${(item.sellingPrice * item.quantityInCart).toFixed(2)}</td>
-    </tr>
-  `
-    )
-    .join('');
-
-  return `
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale:1.0">
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; font-size: 12px; color: #333; }
-          .container { max-width: 300px; margin: auto; border: 1px solid #ddd; padding: 15px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
-          .header { text-align: center; margin-bottom: 15px; }
-          .store-name { font-size: 16px; font-weight: bold; margin-bottom: 3px; }
-          .store-details { font-size: 10px; color: #555; margin-bottom: 3px; }
-          .info-section { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #ccc; }
-          .info-section p { margin: 2px 0; font-size: 10px; }
-          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-          .items-table th { font-size: 11px; text-align: left; padding: 8px 4px; border-bottom: 1px solid #555; }
-          .items-table td { font-size: 11px; padding: 6px 4px; vertical-align: top; }
-          .totals-section { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc; }
-          .totals-section p { margin: 4px 0; font-size: 12px; display: flex; justify-content: space-between; }
-          .totals-section .grand-total { font-weight: bold; font-size: 14px; }
-          .footer { text-align: center; margin-top: 15px; font-size: 10px; color: #777; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <div class="store-name">${storeName}</div>
-            ${storeAddress ? `<div class="store-details">${storeAddress}</div>` : ''}
-            ${storePhone ? `<div class="store-details">Phone: ${storePhone}</div>` : ''}
-          </div>
-
-          <div class="info-section">
-            <p><strong>Receipt No:</strong> RCPT-${saleId.substring(0, 8).toUpperCase()}</p>
-            <p><strong>Date:</strong> ${new Date(saleTimestamp).toLocaleString()}</p>
-          </div>
-
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th style="text-align: center;">Qty</th>
-                <th style="text-align: right;">Price</th>
-                <th style="text-align: right;">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-
-          <div class="totals-section">
-            <p class="grand-total"><span>GRAND TOTAL:</span> <span>${currency}${totalAmount.toFixed(2)}</span></p>
-          </div>
-
-          <div class="footer">
-            Thank you for your purchase!
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
-};
+const PAYMENT_METHODS = [
+  { label: 'Cash', value: 'CASH' },
+  { label: 'UPI', value: 'UPI' },
+  { label: 'Credit Card', value: 'CREDIT_CARD' },
+  { label: 'Debit Card', value: 'DEBIT_CARD' },
+  { label: 'Credit (Khata)', value: 'CREDIT_KHATA' },
+  { label: 'Other', value: 'OTHER' },
+];
 
 export default function SalesScreen() {
   const colorScheme = useColorScheme() || 'light';
   const colors = getColors(colorScheme);
   const router = useRouter();
   const { products, fetchProducts } = useProductStore();
+  const { customers, fetchCustomers, addCustomer: addStoreCustomer } = useCustomerStore();
   const currentUserId = useAuthStore((state) => state.userId);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isProcessingSale, setIsProcessingSale] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isClearCartDialogOpen, setIsClearCartDialogOpen] = useState(false);
   const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [isAddingNewCustomer, setIsAddingNewCustomer] = useState(false);
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '', email: '' });
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>(PAYMENT_METHODS[0].value);
 
   const db = getDatabase();
 
-  // Debug logging for dialog rendering
-  useEffect(() => {
-    if (isCartOpen) {
-      console.log('Current Sale Dialog Rendered:', { isCartOpen, cartItemsLength: cartItems.length });
-    }
-  }, [isCartOpen, cartItems]);
-
-  const loadProducts = useCallback(async () => {
+  const loadInitialData = useCallback(async () => {
+    setIsLoading(true);
     try {
-      await fetchProducts();
+      await Promise.all([fetchProducts(), fetchCustomers()]);
     } catch (error) {
-      console.error("Error fetching products:", error);
-      Alert.alert("Error", "Failed to load products. Please try again.", [{ text: "OK" }]);
+      console.error("Error fetching initial data:", error);
+      Alert.alert("Error", "Failed to load initial data. Please try again.", [{ text: "OK" }]);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchProducts]);
+  }, [fetchProducts, fetchCustomers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadProducts().finally(() => setRefreshing(false));
-  }, [loadProducts]);
+    loadInitialData().finally(() => setRefreshing(false));
+  }, [loadInitialData]);
 
   useEffect(() => {
-    setIsLoading(true);
-    loadProducts();
-  }, [loadProducts]);
+    loadInitialData();
+  }, [loadInitialData]);
 
   useEffect(() => {
-    if (products.length > 0) {
+    if (products.length > 0 || cartItems.length > 0) {
       const updatedDisplayProducts = products.map((product) => {
         const itemInCart = cartItems.find((item) => item.id === product.id);
         const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
@@ -240,6 +148,15 @@ export default function SalesScreen() {
     );
   }, [displayProducts, searchQuery]);
 
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearchQuery) return customers;
+    return customers.filter(
+      (customer) =>
+        customer.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(customerSearchQuery))
+    );
+  }, [customers, customerSearchQuery]);
+
   const updateItemQuantity = useCallback((productId: string, quantity: number) => {
     setCartItems((prevCart) =>
       prevCart.map((cartItem) =>
@@ -262,9 +179,10 @@ export default function SalesScreen() {
       if (quantityToSet <= 0) {
         setCartItems((prev) => prev.filter((item) => item.id !== productId));
         setSelectedQuantities((prev) => ({ ...prev, [productId]: 0 }));
+        if (cartItems.length === 1 && cartItems[0].id === productId) setIsCartOpen(false);
         return;
       }
-      
+
       if (quantityToSet > originalProduct.quantity) {
         Alert.alert(`Only ${originalProduct.quantity} of ${originalProduct.name} available in stock. Setting to max.`);
         quantityToSet = originalProduct.quantity;
@@ -279,7 +197,7 @@ export default function SalesScreen() {
               : item
           );
         } else {
-           return [...prev, { ...originalProduct, quantityInCart: quantityToSet }];
+          return [...prev, { ...originalProduct, quantityInCart: quantityToSet }];
         }
       });
 
@@ -287,64 +205,43 @@ export default function SalesScreen() {
         ...prev,
         [productId]: quantityToSet,
       }));
+      if (quantityToSet > 0 && !isCartOpen) setIsCartOpen(true);
     },
-    [products]
+    [products, isCartOpen, cartItems]
   );
 
   const increaseListQuantity = useCallback(
-    (productId: string, _maxStockIgnored: number) => {
-        const originalProduct = products.find((p) => p.id === productId);
-        if (!originalProduct) return;
-
-        setSelectedQuantities((prevSelected) => {
-            let currentSelectedQty = prevSelected[productId] || 0;
-            
-            if (currentSelectedQty >= originalProduct.quantity) {
-                Alert.alert(`Maximum stock for ${originalProduct.name} is ${originalProduct.quantity}.`);
-                return prevSelected;
-            }
-            
-            const newSelectedQty = currentSelectedQty + 1;
-            
-            setCartItems((prevCart) => {
-                const existingItem = prevCart.find((item) => item.id === productId);
-                if (existingItem) {
-                    return prevCart.map((item) =>
-                        item.id === productId ? { ...item, quantityInCart: newSelectedQty } : item
-                    );
-                } else {
-                    return [...prevCart, { ...originalProduct, quantityInCart: newSelectedQty }];
-                }
-            });
-            return { ...prevSelected, [productId]: newSelectedQty };
-        });
-    },
-    [products]
-);
-
-const decreaseListQuantity = useCallback(
     (productId: string) => {
-        setSelectedQuantities((prevSelected) => {
-            let currentSelectedQty = prevSelected[productId] || 0;
-            if (currentSelectedQty <= 0) {
-                return prevSelected;
-            }
+      const originalProduct = products.find((p) => p.id === productId);
+      if (!originalProduct) return;
 
-            const newSelectedQty = currentSelectedQty - 1;
-
-            setCartItems((prevCart) => {
-                if (newSelectedQty === 0) {
-                    return prevCart.filter((item) => item.id === productId);
-                }
-                return prevCart.map((item) =>
-                    item.id === productId ? { ...item, quantityInCart: newSelectedQty } : item
-                );
-            });
-            return { ...prevSelected, [productId]: newSelectedQty };
-        });
+      setSelectedQuantities((prevSelected) => {
+        let currentSelectedQty = prevSelected[productId] || 0;
+        if (currentSelectedQty >= originalProduct.quantity) {
+          Alert.alert(`Maximum stock for ${originalProduct.name} is ${originalProduct.quantity}.`);
+          return prevSelected;
+        }
+        const newSelectedQty = currentSelectedQty + 1;
+        addToCart(productId, newSelectedQty);
+        return { ...prevSelected, [productId]: newSelectedQty };
+      });
     },
-    []
-);
+    [products, addToCart]
+  );
+
+  const decreaseListQuantity = useCallback(
+    (productId: string) => {
+      setSelectedQuantities((prevSelected) => {
+        let currentSelectedQty = prevSelected[productId] || 0;
+        if (currentSelectedQty <= 0) return prevSelected;
+
+        const newSelectedQty = currentSelectedQty - 1;
+        addToCart(productId, newSelectedQty);
+        return { ...prevSelected, [productId]: newSelectedQty };
+      });
+    },
+    [addToCart]
+  );
 
   const increaseQuantity = useCallback(
     (productId: string) => {
@@ -357,20 +254,12 @@ const decreaseListQuantity = useCallback(
 
         const item = prevCart[itemIndex];
         if (item.quantityInCart >= originalProduct.quantity) {
-          Alert.alert(
-            "Stock Limit Reached",
-            `Cannot add more ${item.name || 'product'}. Max stock is ${originalProduct.quantity}.`,
-            [{ text: "OK" }]
-          );
+          Alert.alert("Stock Limit Reached", `Max stock for ${item.name} is ${originalProduct.quantity}.`);
           return prevCart;
         }
-
         const newQty = item.quantityInCart + 1;
-        const updatedCart = [...prevCart];
-        updatedCart[itemIndex] = { ...item, quantityInCart: newQty };
-        
-        setSelectedQuantities((prev) => ({ ...prev, [productId]: newQty }));
-        return updatedCart;
+        setSelectedQuantities(prev => ({ ...prev, [productId]: newQty }));
+        return prevCart.map(ci => ci.id === productId ? { ...ci, quantityInCart: newQty } : ci);
       });
     },
     [products]
@@ -386,15 +275,13 @@ const decreaseListQuantity = useCallback(
         const newQty = item.quantityInCart - 1;
 
         if (newQty <= 0) {
-          const newCart = prevCart.filter((i) => i.id !== productId);
           setSelectedQuantities((prev) => ({ ...prev, [productId]: 0 }));
-          if (newCart.length === 0 && prevCart.length > 0) setIsCartOpen(false);
+          const newCart = prevCart.filter((i) => i.id !== productId);
+          if (newCart.length === 0) setIsCartOpen(false);
           return newCart;
         } else {
-          const updatedCart = [...prevCart];
-          updatedCart[itemIndex] = { ...item, quantityInCart: newQty };
           setSelectedQuantities((prev) => ({ ...prev, [productId]: newQty }));
-          return updatedCart;
+          return prevCart.map(ci => ci.id === productId ? { ...ci, quantityInCart: newQty } : ci);
         }
       });
     },
@@ -404,9 +291,9 @@ const decreaseListQuantity = useCallback(
   const removeCartItem = useCallback(
     (productId: string) => {
       setCartItems((prevCart) => {
-        const newCart = prevCart.filter((item) => item.id === productId);
+        const newCart = prevCart.filter((item) => item.id !== productId);
         setSelectedQuantities((prev) => ({ ...prev, [productId]: 0 }));
-        if (newCart.length === 0 && prevCart.length > 0) {
+        if (newCart.length === 0) {
           setIsCartOpen(false);
         }
         return newCart;
@@ -422,6 +309,8 @@ const decreaseListQuantity = useCallback(
   const confirmClearCart = useCallback(() => {
     setCartItems([]);
     setSelectedQuantities({});
+    setSelectedCustomer(null);
+    setSelectedPaymentMethod(PAYMENT_METHODS[0].value);
     setIsCartOpen(false);
     setIsClearCartDialogOpen(false);
   }, []);
@@ -439,31 +328,84 @@ const decreaseListQuantity = useCallback(
     return { subtotal: currentSubtotal, totalAmount: currentSubtotal, totalProfit: currentProfit };
   }, [cartItems]);
 
-  const confirmSale = async () => {
-    if (cartItems.length === 0) {
-      console.warn("Attempted to confirm sale with empty cart.");
+  const handleAddNewCustomer = async () => {
+    if (!newCustomerForm.name.trim() || !newCustomerForm.phone.trim()) {
+      Alert.alert("Validation Error", "Customer name and phone are required.");
       return;
     }
-    setIsProcessingSale(true);
+    if (!currentUserId) {
+      Alert.alert("Error", "User not authenticated to add customer.");
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const newCustData = {
+        name: newCustomerForm.name,
+        phone: newCustomerForm.phone,
+        email: newCustomerForm.email || undefined,
+        creditLimit: 0
+      };
+      await addStoreCustomer(newCustData);
+      await fetchCustomers();
+
+      const justAddedCustomer = customers.find(c => c.phone === newCustomerForm.phone && c.name === newCustomerForm.name);
+
+      if (justAddedCustomer) {
+        setSelectedCustomer(justAddedCustomer);
+      } else {
+        setSelectedCustomer({
+          id: 'temp-' + uuidv4(),
+          userId: currentUserId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          totalPurchases: 0,
+          outstandingBalance: 0,
+          loyaltyPoints: 0,
+          ...newCustomerForm,
+          creditLimit: 0
+        });
+      }
+
+      setNewCustomerForm({ name: '', phone: '', email: '' });
+      setIsAddingNewCustomer(false);
+    } catch (error) {
+      Alert.alert("Error", `Failed to add customer: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const confirmSale = async () => {
+    if (cartItems.length === 0) {
+      Alert.alert("Empty Cart", "Please add items to the cart before proceeding.");
+      return;
+    }
+    if (!selectedPaymentMethod) {
+      Alert.alert("Payment Method Required", "Please select a payment method.");
+      return;
+    }
+    setIsProcessing(true);
 
     try {
       if (!currentUserId) {
         const errorMessage = 'User not authenticated to complete sale.';
-        console.warn(errorMessage);
-        setIsProcessingSale(false);
+        setIsProcessing(false);
         Alert.alert('Authentication Error', errorMessage);
         return;
       }
 
       const saleId = uuidv4();
       const saleTimestamp = new Date().toISOString();
-      const paymentType = 'CASH';
 
       await db.withTransactionAsync(async () => {
         await db.runAsync(
-          `INSERT INTO Sales (id, userId, timestamp, totalAmount, totalProfit, subtotal, paymentType, salesStatus)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [saleId, currentUserId, saleTimestamp, totalAmount, totalProfit, subtotal, paymentType, 'COMPLETED']
+          `INSERT INTO Sales (id, userId, customerId, timestamp, totalAmount, totalProfit, subtotal, paymentType, salesStatus, customerName, customerPhone, customerEmail)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            saleId, currentUserId, selectedCustomer?.id.startsWith('temp-') ? null : selectedCustomer?.id || null,
+            saleTimestamp, totalAmount, totalProfit, subtotal, selectedPaymentMethod, 'COMPLETED',
+            selectedCustomer?.name || null, selectedCustomer?.phone || null, selectedCustomer?.email || null
+          ]
         );
 
         const saleCartItems: CartItemForReceipt[] = [];
@@ -474,12 +416,8 @@ const decreaseListQuantity = useCallback(
             `INSERT INTO SaleItems (id, saleId, productId, quantity, unitPrice, costPrice, subtotal, profit)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              saleItemId,
-              saleId,
-              item.id,
-              item.quantityInCart,
-              item.sellingPrice,
-              item.costPrice || 0,
+              saleItemId, saleId, item.id, item.quantityInCart,
+              item.sellingPrice, item.costPrice || 0,
               item.sellingPrice * item.quantityInCart,
               (item.sellingPrice - (item.costPrice || 0)) * item.quantityInCart,
             ]
@@ -497,12 +435,16 @@ const decreaseListQuantity = useCallback(
           });
         }
 
-        const pdfUri = await generateAndShareReceipt({
+        const saleDetails: SaleDetailsForReceipt = {
           saleId,
           saleTimestamp,
           totalAmount,
           cartItems: saleCartItems,
-        });
+          customer: selectedCustomer ? { name: selectedCustomer.name, phone: selectedCustomer.phone, email: selectedCustomer.email } : null,
+          paymentMethod: selectedPaymentMethod,
+        };
+
+        const pdfUri = await generateAndShareReceipt(saleDetails);
 
         if (pdfUri) {
           const receiptId = uuidv4();
@@ -512,34 +454,25 @@ const decreaseListQuantity = useCallback(
              VALUES (?, ?, ?, ?, ?, ?)`,
             [receiptId, saleId, receiptNumber, 'PDF', pdfUri, new Date().toISOString()]
           );
-          console.log('Receipt record saved to DB with filePath:', pdfUri);
           Alert.alert('Sale Confirmed', 'Sale completed. Receipt ready for sharing.', [
-            {
-              text: 'OK',
-              onPress: () => router.push(`/sale/receipts?saleId=${saleId}`),
-            },
+            { text: 'OK', onPress: () => router.push({ pathname: '/(tabs)/sale/receipts', params: { highlightSaleId: saleId } }) },
           ]);
         } else {
           Alert.alert('Sale Confirmed', 'Sale completed, but there was an issue generating or sharing the receipt.', [
-            {
-              text: 'OK',
-              onPress: () => router.push(`/sale/receipts?saleId=${saleId}`),
-            },
+            { text: 'OK', onPress: () => router.push({ pathname: '/(tabs)/sale/receipts', params: { highlightSaleId: saleId } }) },
           ]);
         }
       });
 
-      setCartItems([]);
-      setSelectedQuantities({});
-      setIsCartOpen(false);
-      setIsConfirmDialogOpen(false);
+      confirmClearCart();
 
     } catch (error) {
       console.error('Error confirming sale:', error);
       Alert.alert('Error', `Failed to confirm sale: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      setIsProcessingSale(false);
-      loadProducts();
+      setIsProcessing(false);
+      setIsConfirmDialogOpen(false);
+      loadInitialData();
     }
   };
 
@@ -549,107 +482,90 @@ const decreaseListQuantity = useCallback(
     const currentSelectedQtyOnCard = selectedQuantities[item.id] || 0;
 
     return (
-    <TouchableOpacity
-      onPress={() => addToCart(item.id, selectedQuantities[item.id] || 0)}
-      disabled={(originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0 || (selectedQuantities[item.id] || 0) === 0 }
-      className={`w-[48%] m-1 rounded-xl overflow-hidden shadow-sm ${
-        (originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0 ? 'opacity-50' : ''
-      }`}
-      style={{ backgroundColor: colors.white }}
-    >
-      <View className="relative">
-        {item.imageUri ? (
-          <Image
-            source={{ uri: item.imageUri }}
-            style={{ width: '100%', height: 120 }}
-            className="rounded-t-xl"
-            resizeMode="cover"
-            onError={(e) => console.log(`Image load error for ${item.name}:`, e.nativeEvent.error)}
-          />
-        ) : (
-          <View className="w-full h-[120px] rounded-t-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-            <Package size={32} color={colors.primary} />
-          </View>
-        )}
-      </View>
-      <View className="p-3">
-        <Text
-          className="text-sm font-semibold"
-          numberOfLines={1}
-          style={{ color: colors.dark }}
-        >
-          {item.name || 'Unknown Product'}
-        </Text>
-        {item.category && (
-          <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {item.category}
-          </Text>
-        )}
-        <View className="flex-row justify-between items-center mt-1">
-          <Text className="text-sm font-bold" style={{ color: colors.dark }}>
-            ₹{item.sellingPrice.toFixed(2)}
-          </Text>
-          <View className="flex-row items-center">
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); decreaseListQuantity(item.id); }}
-              disabled={currentSelectedQtyOnCard <= 0}
-              className="p-1"
-            >
-              <MinusCircle size={16} color={currentSelectedQtyOnCard <= 0 ? colors.gray : colors.danger} />
-            </TouchableOpacity>
-            <Input
-              className="w-10 h-8 mx-2 text-center text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600"
-              keyboardType="number-pad"
-              value={String(currentSelectedQtyOnCard)}
-              onTouchStart={(e) => e.stopPropagation()}
-              onFocus={(e) => e.stopPropagation()}
-              onChangeText={(text) => {
-                const op = products.find(p => p.id === item.id);
-                const maxStock = op ? op.quantity : 0;
-                let num = parseInt(text, 10);
-
-                if (isNaN(num) || num < 0 || text === '') {
-                  num = 0;
-                }
-                
-                if (num > maxStock) {
-                  num = maxStock;
-                  Alert.alert(`Maximum quantity available is ${maxStock}`);
-                }
-                setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
-                if (num === 0) {
-                    setCartItems(prevCart => prevCart.filter(cartItem => cartItem.id !== item.id));
-                } else if (op) {
-                    setCartItems((prevCart) => {
-                        const existingItem = prevCart.find((ci) => ci.id === item.id);
-                        if (existingItem) {
-                            return prevCart.map((ci) =>
-                                ci.id === item.id ? { ...ci, quantityInCart: num } : ci
-                            );
-                        } else {
-                            return [...prevCart, { ...op, quantityInCart: num }];
-                        }
-                    });
-                }
-              }}
-              editable={totalOriginalStock > 0}
-              style={{ backgroundColor: colors.white, color: colors.primary }}
+      <TouchableOpacity
+        onPress={() => addToCart(item.id, selectedQuantities[item.id] || 0)}
+        disabled={(originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0}
+        className={`w-[48%] m-1 rounded-xl overflow-hidden shadow-sm ${(originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0 ? 'opacity-50' : ''
+          }`}
+        style={{ backgroundColor: colors.white }}
+      >
+        <View className="relative">
+          {item.imageUri ? (
+            <Image
+              source={{ uri: item.imageUri }}
+              style={{ width: '100%', height: 120 }}
+              className="rounded-t-xl"
+              resizeMode="cover"
+              onError={(e) => console.log(`Image load error for ${item.name}:`, e.nativeEvent.error)}
             />
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); increaseListQuantity(item.id, totalOriginalStock);}}
-              disabled={currentSelectedQtyOnCard >= totalOriginalStock}
-              className="p-1"
-            >
-              <PlusCircle size={16} color={currentSelectedQtyOnCard >= totalOriginalStock ? colors.gray : colors.dark} />
-            </TouchableOpacity>
-          </View>
+          ) : (
+            <View className="w-full h-[120px] rounded-t-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+              <Package size={32} color={colors.primary} />
+            </View>
+          )}
         </View>
-        <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Stock: {totalOriginalStock} {item.unit || 'piece'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+        <View className="p-3">
+          <Text
+            className="text-sm font-semibold"
+            numberOfLines={1}
+            style={{ color: colors.dark }}
+          >
+            {item.name || 'Unknown Product'}
+          </Text>
+          {item.category && (
+            <Text className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {item.category}
+            </Text>
+          )}
+          <View className="flex-row justify-between items-center mt-1">
+            <Text className="text-sm font-bold" style={{ color: colors.dark }}>
+              ₹{item.sellingPrice.toFixed(2)}
+            </Text>
+            <View className="flex-row items-center">
+              <TouchableOpacity
+                onPress={(e) => { e.stopPropagation(); decreaseListQuantity(item.id); }}
+                disabled={currentSelectedQtyOnCard <= 0}
+                className="p-1"
+              >
+                <MinusCircle size={16} color={currentSelectedQtyOnCard <= 0 ? colors.gray : colors.danger} />
+              </TouchableOpacity>
+              <Input
+                className="w-10 h-8 mx-2 text-center text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600"
+                keyboardType="number-pad"
+                value={String(currentSelectedQtyOnCard)}
+                onTouchStart={(e) => e.stopPropagation()}
+                onFocus={(e) => e.stopPropagation()}
+                onChangeText={(text) => {
+                  const op = products.find(p => p.id === item.id);
+                  const maxStock = op ? op.quantity : 0;
+                  let num = parseInt(text, 10);
+
+                  if (isNaN(num) || num < 0 || text === '') num = 0;
+                  if (num > maxStock) {
+                    num = maxStock;
+                    Alert.alert("Stock Limit", `Maximum available stock for ${op?.name} is ${maxStock}.`);
+                  }
+                  setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
+                  addToCart(item.id, num);
+                }}
+                editable={totalOriginalStock > 0}
+                style={{ backgroundColor: colors.white, color: colors.primary }}
+              />
+              <TouchableOpacity
+                onPress={(e) => { e.stopPropagation(); increaseListQuantity(item.id); }}
+                disabled={currentSelectedQtyOnCard >= totalOriginalStock}
+                className="p-1"
+              >
+                <PlusCircle size={16} color={currentSelectedQtyOnCard >= totalOriginalStock ? colors.gray : colors.dark} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Stock: {totalOriginalStock} {item.unit || 'piece'}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
@@ -660,10 +576,8 @@ const decreaseListQuantity = useCallback(
         console.error(`Product with ID ${item.id} not found in store`);
         return;
       }
-      if (isNaN(newQuantity)) {
-        if (text === '') {
-          updateItemQuantity(item.id, 1);
-        }
+      if (isNaN(newQuantity) || text === '') {
+        updateItemQuantity(item.id, 1);
         return;
       }
       if (newQuantity === 0) {
@@ -671,15 +585,8 @@ const decreaseListQuantity = useCallback(
         return;
       }
       if (newQuantity > productInStore.quantity) {
-        Alert.alert(
-          "Stock Limit Reached",
-          `Cannot set quantity to ${newQuantity}. Only ${productInStore.quantity} ${item.name || 'product'} originally in stock.`,
-          [{
-            text: "OK", onPress: () => {
-              updateItemQuantity(item.id, productInStore.quantity);
-            }
-          }]
-        );
+        Alert.alert("Stock Limit Reached", `Max stock is ${productInStore.quantity}.`);
+        updateItemQuantity(item.id, productInStore.quantity);
         return;
       }
       updateItemQuantity(item.id, newQuantity);
@@ -687,7 +594,7 @@ const decreaseListQuantity = useCallback(
 
     return (
       <Card className="mb-3 bg-white dark:bg-gray-800 shadow-md rounded-xl overflow-hidden">
-        <CardHeader className="py-3 px-4">
+        <CardHeader className="py-1 px-4">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center flex-1 mr-2">
               {item.imageUri ? (
@@ -805,9 +712,9 @@ const decreaseListQuantity = useCallback(
                   variant="outline"
                   className="border"
                   style={{ backgroundColor: `${colors.secondary}1A` }}
-                  onPress={() => router.push('/(tabs)/sale/sales-management')}
+                  onPress={() => router.push('/(tabs)/inventory/products')}
                 >
-                  <Text className="font-semibold" style={{ color: colors.gray}}>Add Your First Product</Text>
+                  <Text className="font-semibold" style={{ color: colors.gray }}>Add Your First Product</Text>
                 </Button>
               </View>
             )}
@@ -845,9 +752,9 @@ const decreaseListQuantity = useCallback(
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
         <DialogContent
           className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
-          style={{ maxHeight: '100%', minHeight: 600 }}
+          style={{ maxHeight: '100%', minHeight: 720 }}
         >
-          <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <DialogHeader className="p-6 pb-1 border-b border-gray-200 dark:border-gray-700">
             <View className="flex-row items-center">
               <ShoppingCart size={24} color={colors.secondary} className="mr-2" />
               <DialogTitle className="text-xl font-bold" style={{ color: colors.gray }}>
@@ -863,19 +770,63 @@ const decreaseListQuantity = useCallback(
                 <Text className="text-xs mt-1" style={{ color: colors.gray }}>Select products to add them here</Text>
               </View>
             ) : (
-              <View style={{ height: 600, width: 280 }}>
+              <View style={{ flex: 1, width: 320 }}>
+                {/* Customer Section */}
+                <View className="mb-3 border-b" style={{ borderColor: colors.border }}>
+                  <Text className="text-sm font-medium mb-1" style={{ color: colors.gray }}>Customer</Text>
+                  {selectedCustomer ? (
+                    <View className="flex-row justify-between items-center p-2 rounded-md" style={{ backgroundColor: colors.inputBackground }}>
+                      <View>
+                        <Text className="text-base font-semibold" style={{ color: colors.dark }}>{selectedCustomer.name}</Text>
+                        {selectedCustomer.phone && <Text className="text-xs" style={{ color: colors.gray }}>{selectedCustomer.phone}</Text>}
+                      </View>
+                      <Button variant="ghost" size="sm" onPress={() => setIsCustomerModalOpen(true)}>
+                        <Edit3 size={16} color={colors.primary} />
+                      </Button>
+                    </View>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full h-10 justify-start px-3 border"
+                      style={{ borderColor: colors.border, backgroundColor: colors.inputBackground }}
+                      onPress={() => setIsCustomerModalOpen(true)}
+                    >
+                      <View className="flex-row justify-between items-center">
+                        <UserPlus size={18} color={colors.primary} className='mr-3' />
+                        <Text style={{ color: colors.primary }}>Add / Select Customer</Text>
+                      </View>
+                    </Button>
+                  )}
+                </View>
+                {/* Cart Items */}
                 <Text className="text-base font-semibold mt-0 mb-4" style={{ color: colors.dark }}>Items in Cart:</Text>
-                <View style={{ flex: 1, maxHeight: 280 }}>
+                <View style={{ flex: 1, minHeight: cartItems.length === 0 ? 100 : 80, maxHeight: 400 }}>
                   <FlatList
                     data={cartItems}
                     renderItem={renderCartItem}
                     keyExtractor={(item) => item.id}
                     showsVerticalScrollIndicator={true}
-                    contentContainerStyle={{ paddingBottom: 16 }}
+                    contentContainerStyle={{ paddingBottom: 16, flexGrow: 1 }}
                     key={cartItems.length}
                   />
                 </View>
-                <View style={{ paddingTop: 8, paddingHorizontal: 12, flexShrink: 0 }}>
+                {/* Payment Method and Totals */}
+                <View style={{ paddingTop: 2, paddingHorizontal: 12 }}>
+                  <View className="mb-3">
+                    <Text className="text-sm font-medium mb-1" style={{ color: colors.gray }}>Payment Method</Text>
+                    <View className="rounded-md border" style={{ borderColor: colors.border, backgroundColor: colors.inputBackground, width: '100%' }}>
+                      <Picker
+                        selectedValue={selectedPaymentMethod}
+                        onValueChange={(itemValue) => setSelectedPaymentMethod(itemValue)}
+                        style={{ height: Platform.OS === 'ios' ? 120 : 44, color: colors.dark, width: '100%', paddingHorizontal: 8 }}
+                        itemStyle={{ color: colors.dark, fontSize: 14, paddingHorizontal: 8 }}
+                      >
+                        {PAYMENT_METHODS.map(method => (
+                          <Picker.Item key={method.value} label={method.label} value={method.value} />
+                        ))}
+                      </Picker>
+                    </View>
+                  </View>
                   <View className="mb-2">
                     <View className="flex-row justify-between items-center mt-4">
                       <Text className="text-sm" style={{ color: colors.gray }}>Subtotal:</Text>
@@ -896,7 +847,7 @@ const decreaseListQuantity = useCallback(
                       className="flex-1 h-10 border border-gray-300 dark:border-gray-600 mt-1"
                       style={{ backgroundColor: colors.white }}
                       onPress={clearCart}
-                      disabled={isProcessingSale}
+                      disabled={isProcessing}
                     >
                       <Text className="font-semibold text-sm" style={{ color: colors.dark }}>Clear Sale</Text>
                     </Button>
@@ -904,9 +855,9 @@ const decreaseListQuantity = useCallback(
                       className="flex-1 h-10 mt-1"
                       style={{ backgroundColor: colors.secondary }}
                       onPress={handleProceedToPayment}
-                      disabled={isProcessingSale}
+                      disabled={isProcessing}
                     >
-                      {isProcessingSale ? (
+                      {isProcessing ? (
                         <ActivityIndicator size="small" color={colors.white} />
                       ) : (
                         <Text className="font-semibold text-sm" style={{ color: colors.white }}>Proceed to Payment</Text>
@@ -914,6 +865,143 @@ const decreaseListQuantity = useCallback(
                     </Button>
                   </DialogFooter>
                 </View>
+              </View>
+            )}
+          </View>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isCustomerModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsAddingNewCustomer(false);
+            setNewCustomerForm({ name: '', phone: '', email: '' });
+            setCustomerSearchQuery('');
+          }
+          setIsCustomerModalOpen(open);
+        }}
+      >
+        <DialogContent
+          className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-xl w-11/12 mx-auto"
+          style={{ maxHeight: '90%', minHeight: 600 }}
+        >
+          <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <View className="flex-row items-center justify-between">
+              <DialogTitle className="text-lg font-bold" style={{ color: colors.gray }}>
+                {isAddingNewCustomer ? 'Add New Customer' : 'Select Customer'}
+              </DialogTitle>
+              {/* <TouchableOpacity
+                onPress={() => {
+                  setIsCustomerModalOpen(false);
+                  setIsAddingNewCustomer(false);
+                  setNewCustomerForm({ name: '', phone: '', email: '' });
+                  setCustomerSearchQuery('');
+                }}
+              >
+                <XCircle size={22} color={colors.gray} />
+              </TouchableOpacity> */}
+            </View>
+          </DialogHeader>
+          <View className="p-4 h-80 w-80">
+            {isAddingNewCustomer ? (
+              <View>
+                <Input
+                  placeholder="Customer Name*"
+                  value={newCustomerForm.name}
+                  onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, name: text }))}
+                  className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
+                  style={{ backgroundColor: colors.inputBackground, color: colors.dark }}
+                  placeholderTextColor={colors.gray}
+                />
+                <Input
+                  placeholder="Phone Number*"
+                  value={newCustomerForm.phone}
+                  onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, phone: text }))}
+                  keyboardType="phone-pad"
+                  className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
+                  style={{ backgroundColor: colors.inputBackground, color: colors.dark }}
+                  placeholderTextColor={colors.gray}
+                />
+                <Input
+                  placeholder="Email (Optional)"
+                  value={newCustomerForm.email}
+                  onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, email: text }))}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  className="mb-4 h-11 border border-gray-300 dark:border-gray-600"
+                  style={{ backgroundColor: colors.inputBackground, color: colors.dark }}
+                  placeholderTextColor={colors.gray}
+                />
+                <View className="flex-row justify-end gap-x-2">
+                  <Button variant="ghost" onPress={() => setIsAddingNewCustomer(false)}>
+                    <Text style={{ color: colors.gray }}>Cancel</Text>
+                  </Button>
+                  <Button
+                    onPress={handleAddNewCustomer}
+                    disabled={isProcessing}
+                    style={{ backgroundColor: colors.secondary }}
+                  >
+                    {isProcessing ? (
+                      <ActivityIndicator color={colors.white} size="small" />
+                    ) : (
+                      <Text className="text-white">Save Customer</Text>
+                    )}
+                  </Button>
+                </View>
+              </View>
+            ) : (
+              <View style={{ flex: 1, minHeight: 500 }}>
+                <View
+                  className="mb-5 flex-row items-center rounded-md px-3 border border-gray-300 dark:border-gray-600"
+                  style={{ backgroundColor: colors.inputBackground }}
+                >
+                  <Search size={18} color={colors.gray} />
+                  <Input
+                    placeholder="Search by name or phone..."
+                    value={customerSearchQuery}
+                    onChangeText={setCustomerSearchQuery}
+                    className="flex-1 h-10 border-0 bg-transparent ml-2 text-sm"
+                    style={{ color: colors.dark }}
+                    placeholderTextColor={colors.gray}
+                  />
+                </View>
+                <FlatList
+                  data={filteredCustomers}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      className="py-3 px-2 border-b border-gray-200 dark:border-gray-700"
+                      onPress={() => {
+                        setSelectedCustomer(item);
+                        setIsCustomerModalOpen(false);
+                        setCustomerSearchQuery('');
+                      }}
+                    >
+                      <Text className="text-base font-medium" style={{ color: colors.dark }}>
+                        {item.name}
+                      </Text>
+                      <Text className="text-xs" style={{ color: colors.gray }}>
+                        {item.phone}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    <View className="items-center py-4">
+                      <Text style={{ color: colors.gray }}>No customers found.</Text>
+                    </View>
+                  }
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  variant="outline"
+                  className="mt-4 h-10 border border-gray-300 dark:border-gray-600"
+                  style={{ backgroundColor: colors.white }}
+                  onPress={() => setIsAddingNewCustomer(true)}
+                >
+                  <UserPlus size={18} color={colors.primary} className="mr-2" />
+                  <Text style={{ color: colors.primary }}>Add New Customer</Text>
+                </Button>
               </View>
             )}
           </View>
@@ -931,10 +1019,19 @@ const decreaseListQuantity = useCallback(
             <Text className="mb-4 text-base font-medium" style={{ color: colors.dark }}>
               Please confirm the following sale:
             </Text>
+            {selectedCustomer && (
+              <View className="mb-2 p-2 rounded-md" style={{ backgroundColor: colors.inputBackground }}>
+                <Text className="text-sm font-semibold" style={{ color: colors.dark }}>Customer: {selectedCustomer.name}</Text>
+                {selectedCustomer.phone && <Text className="text-xs" style={{ color: colors.gray }}>{selectedCustomer.phone}</Text>}
+              </View>
+            )}
+            <Text className="text-sm font-medium mb-2" style={{ color: colors.dark }}>
+              Payment Method: <Text className="font-semibold">{PAYMENT_METHODS.find(p => p.value === selectedPaymentMethod)?.label || selectedPaymentMethod}</Text>
+            </Text>
             <ScrollView
-              style={{ flexGrow: 1, maxHeight: 256 }}
+              style={{ flexGrow: 1, maxHeight: 200 }}
               showsVerticalScrollIndicator={true}
-              contentContainerStyle={{ paddingVertical: 4 }}
+            // contentContainerStyle={{ paddingVertical: 4 }}
             >
               {cartItems.map((item) => (
                 <View key={item.id} className="flex-row justify-between py-1">
@@ -966,7 +1063,7 @@ const decreaseListQuantity = useCallback(
               className="h-12 px-6 border border-gray-300 dark:border-gray-600"
               style={{ backgroundColor: colors.white }}
               onPress={() => setIsConfirmDialogOpen(false)}
-              disabled={isProcessingSale}
+              disabled={isProcessing}
             >
               <Text className="font-semibold" style={{ color: colors.dark }}>Cancel</Text>
             </Button>
@@ -974,9 +1071,9 @@ const decreaseListQuantity = useCallback(
               className="h-12 px-6"
               style={{ backgroundColor: colors.secondary }}
               onPress={confirmSale}
-              disabled={isProcessingSale}
+              disabled={isProcessing}
             >
-              {isProcessingSale ? (
+              {isProcessing ? (
                 <ActivityIndicator size="small" color={colors.white} />
               ) : (
                 <Text className="font-semibold" style={{ color: colors.white }}>Confirm Sale</Text>
@@ -995,7 +1092,7 @@ const decreaseListQuantity = useCallback(
           </DialogHeader>
           <View className="p-4">
             <Text className="text-base font-medium" style={{ color: colors.dark }}>
-              Are you sure you want to clear all items from the cart?
+              Are you sure you want to clear all items from the cart? This will also remove any selected customer.
             </Text>
           </View>
           <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
@@ -1004,7 +1101,7 @@ const decreaseListQuantity = useCallback(
               className="h-12 px-6 border border-gray-300 dark:border-gray-600"
               style={{ backgroundColor: colors.white }}
               onPress={() => setIsClearCartDialogOpen(false)}
-              disabled={isProcessingSale}
+              disabled={isProcessing}
             >
               <Text className="font-semibold" style={{ color: colors.dark }}>Cancel</Text>
             </Button>
@@ -1013,7 +1110,7 @@ const decreaseListQuantity = useCallback(
               className="h-12 px-6"
               style={{ backgroundColor: colors.danger }}
               onPress={confirmClearCart}
-              disabled={isProcessingSale}
+              disabled={isProcessing}
             >
               <Text className="font-semibold" style={{ color: colors.white }}>Clear</Text>
             </Button>
