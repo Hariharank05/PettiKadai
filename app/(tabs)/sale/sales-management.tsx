@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
@@ -10,9 +11,10 @@ import {
   Alert,
   Platform,
   useColorScheme,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle } from 'lucide-react-native';
+import { Package, PlusCircle, MinusCircle, XCircle, Search, ShoppingCart, AlertCircle, Heart } from 'lucide-react-native';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
@@ -55,7 +57,6 @@ interface CartItemForReceipt {
   category?: string | null;
 }
 
-// Define the color palette based on theme
 const getColors = (colorScheme: 'light' | 'dark') => ({
   primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
   secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
@@ -69,9 +70,9 @@ const getColors = (colorScheme: 'light' | 'dark') => ({
   dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
   gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
   green: colorScheme === 'dark' ? '#4ade80' : '#22c55e',
+  border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+  inputBackground: colorScheme === 'dark' ? '#374151' : '#f3f4f6',
 });
-
-const userId = useAuthStore.getState().userId;
 
 const generateReceiptHtml = (
   cartItems: CartItemForReceipt[],
@@ -164,6 +165,7 @@ export default function SalesScreen() {
   const colors = getColors(colorScheme);
   const router = useRouter();
   const { products, fetchProducts } = useProductStore();
+  const currentUserId = useAuthStore((state) => state.userId);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -176,6 +178,13 @@ export default function SalesScreen() {
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
 
   const db = getDatabase();
+
+  // Debug logging for dialog rendering
+  useEffect(() => {
+    if (isCartOpen) {
+      console.log('Current Sale Dialog Rendered:', { isCartOpen, cartItemsLength: cartItems.length });
+    }
+  }, [isCartOpen, cartItems]);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -190,35 +199,35 @@ export default function SalesScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchProducts().finally(() => setRefreshing(false));
-  }, [fetchProducts]);
+    loadProducts().finally(() => setRefreshing(false));
+  }, [loadProducts]);
 
   useEffect(() => {
     setIsLoading(true);
-    fetchProducts().finally(() => setIsLoading(false));
-  }, [fetchProducts]);
+    loadProducts();
+  }, [loadProducts]);
 
   useEffect(() => {
     if (products.length > 0) {
-      const updatedProducts = products.map((product) => {
-        const inCart = cartItems.find((item) => item.id === product.id);
-        if (inCart) {
-          return {
-            ...product,
-            quantity: product.quantity - inCart.quantityInCart,
-          };
-        }
-        return product;
+      const updatedDisplayProducts = products.map((product) => {
+        const itemInCart = cartItems.find((item) => item.id === product.id);
+        const quantityInCart = itemInCart ? itemInCart.quantityInCart : 0;
+        return {
+          ...product,
+          quantity: product.quantity - quantityInCart,
+        };
       });
-      setDisplayProducts(updatedProducts);
+      setDisplayProducts(updatedDisplayProducts);
 
-      const updatedQuantities: Record<string, number> = {};
-      cartItems.forEach((item) => {
-        updatedQuantities[item.id] = item.quantityInCart;
+      const newSelectedQuantities: Record<string, number> = {};
+      products.forEach(p => {
+        const cartItem = cartItems.find(ci => ci.id === p.id);
+        newSelectedQuantities[p.id] = cartItem ? cartItem.quantityInCart : 0;
       });
-      setSelectedQuantities(updatedQuantities);
+      setSelectedQuantities(newSelectedQuantities);
     } else {
       setDisplayProducts([]);
+      setSelectedQuantities({});
     }
   }, [products, cartItems]);
 
@@ -237,121 +246,120 @@ export default function SalesScreen() {
         cartItem.id === productId ? { ...cartItem, quantityInCart: quantity } : cartItem
       )
     );
+    setSelectedQuantities(prev => ({ ...prev, [productId]: quantity }));
   }, []);
 
   const addToCart = useCallback(
-    (productId: string, quantityToAdd: number) => {
-      if (quantityToAdd <= 0) return;
+    (productId: string, newTotalQuantityInCart: number) => {
       const originalProduct = products.find((p) => p.id === productId);
       if (!originalProduct) {
         console.error(`Product with ID ${productId} not found`);
         return;
       }
-      const displayProduct = displayProducts.find((p) => p.id === productId);
-      if (!displayProduct) {
-        console.error(`Display product with ID ${productId} not found`);
+
+      let quantityToSet = newTotalQuantityInCart;
+
+      if (quantityToSet <= 0) {
+        setCartItems((prev) => prev.filter((item) => item.id !== productId));
+        setSelectedQuantities((prev) => ({ ...prev, [productId]: 0 }));
         return;
       }
-      if (quantityToAdd > displayProduct.quantity) {
-        Alert.alert(`Only ${displayProduct.quantity} left in stock`);
-        return;
+      
+      if (quantityToSet > originalProduct.quantity) {
+        Alert.alert(`Only ${originalProduct.quantity} of ${originalProduct.name} available in stock. Setting to max.`);
+        quantityToSet = originalProduct.quantity;
       }
+
       setCartItems((prev) => {
         const existingItem = prev.find((item) => item.id === productId);
         if (existingItem) {
           return prev.map((item) =>
             item.id === productId
-              ? { ...item, quantityInCart: item.quantityInCart + quantityToAdd }
+              ? { ...item, quantityInCart: quantityToSet }
               : item
           );
         } else {
-          return [...prev, { ...originalProduct, quantityInCart: quantityToAdd }];
+           return [...prev, { ...originalProduct, quantityInCart: quantityToSet }];
         }
       });
+
       setSelectedQuantities((prev) => ({
         ...prev,
-        [productId]: (prev[productId] || 0) + quantityToAdd,
+        [productId]: quantityToSet,
       }));
-      setIsCartOpen(true);
     },
-    [products, displayProducts]
+    [products]
   );
 
   const increaseListQuantity = useCallback(
-    (productId: string, maxStock: number) => {
-      const displayProduct = displayProducts.find((p) => p.id === productId);
-      if (!displayProduct) return;
-      setSelectedQuantities((prev) => {
-        const currentQty = prev[productId] || 0;
-        if (currentQty >= maxStock) {
-          Alert.alert(`Maximum quantity available is ${maxStock}`);
-          return prev;
-        }
-        const newQty = currentQty + 1;
-        if (newQty > 0) {
-          setCartItems((prevCart) => {
-            const existingItem = prevCart.find((item) => item.id === productId);
-            const originalProduct = products.find((p) => p.id === productId);
-            if (!originalProduct) return prevCart;
-            if (existingItem) {
-              return prevCart.map((item) =>
-                item.id === productId
-                  ? { ...item, quantityInCart: newQty }
-                  : item
-              );
-            } else {
-              return [...prevCart, { ...originalProduct, quantityInCart: newQty }];
-            }
-          });
-        }
-        return { ...prev, [productId]: newQty };
-      });
-    },
-    [products, displayProducts]
-  );
+    (productId: string, _maxStockIgnored: number) => {
+        const originalProduct = products.find((p) => p.id === productId);
+        if (!originalProduct) return;
 
-  const decreaseListQuantity = useCallback(
-    (productId: string) => {
-      setSelectedQuantities((prev) => {
-        const currentQty = prev[productId] || 0;
-        if (currentQty <= 0) {
-          return prev;
-        }
-        const newQty = currentQty - 1;
-        setCartItems((prevCart) => {
-          if (newQty === 0) {
-            const newCart = prevCart.filter((item) => item.id !== productId);
-            if (newCart.length === 0) setIsCartOpen(false);
-            return newCart;
-          }
-          return prevCart.map((item) =>
-            item.id === productId
-              ? { ...item, quantityInCart: newQty }
-              : item
-          );
+        setSelectedQuantities((prevSelected) => {
+            let currentSelectedQty = prevSelected[productId] || 0;
+            
+            if (currentSelectedQty >= originalProduct.quantity) {
+                Alert.alert(`Maximum stock for ${originalProduct.name} is ${originalProduct.quantity}.`);
+                return prevSelected;
+            }
+            
+            const newSelectedQty = currentSelectedQty + 1;
+            
+            setCartItems((prevCart) => {
+                const existingItem = prevCart.find((item) => item.id === productId);
+                if (existingItem) {
+                    return prevCart.map((item) =>
+                        item.id === productId ? { ...item, quantityInCart: newSelectedQty } : item
+                    );
+                } else {
+                    return [...prevCart, { ...originalProduct, quantityInCart: newSelectedQty }];
+                }
+            });
+            return { ...prevSelected, [productId]: newSelectedQty };
         });
-        return { ...prev, [productId]: newQty };
-      });
+    },
+    [products]
+);
+
+const decreaseListQuantity = useCallback(
+    (productId: string) => {
+        setSelectedQuantities((prevSelected) => {
+            let currentSelectedQty = prevSelected[productId] || 0;
+            if (currentSelectedQty <= 0) {
+                return prevSelected;
+            }
+
+            const newSelectedQty = currentSelectedQty - 1;
+
+            setCartItems((prevCart) => {
+                if (newSelectedQty === 0) {
+                    return prevCart.filter((item) => item.id === productId);
+                }
+                return prevCart.map((item) =>
+                    item.id === productId ? { ...item, quantityInCart: newSelectedQty } : item
+                );
+            });
+            return { ...prevSelected, [productId]: newSelectedQty };
+        });
     },
     []
-  );
+);
 
   const increaseQuantity = useCallback(
     (productId: string) => {
+      const originalProduct = products.find(p => p.id === productId);
+      if (!originalProduct) return;
+
       setCartItems((prevCart) => {
         const itemIndex = prevCart.findIndex((item) => item.id === productId);
         if (itemIndex === -1) return prevCart;
 
         const item = prevCart[itemIndex];
-        const originalProduct = products.find(p => p.id === productId);
-        if (!originalProduct) return prevCart;
-
-        const stockAvailableToAdd = originalProduct.quantity - item.quantityInCart;
-
-        if (stockAvailableToAdd <= 0) {
+        if (item.quantityInCart >= originalProduct.quantity) {
           Alert.alert(
             "Stock Limit Reached",
-            `Cannot add more ${item.name || 'product'}. All available stock is in the cart.`,
+            `Cannot add more ${item.name || 'product'}. Max stock is ${originalProduct.quantity}.`,
             [{ text: "OK" }]
           );
           return prevCart;
@@ -359,14 +367,9 @@ export default function SalesScreen() {
 
         const newQty = item.quantityInCart + 1;
         const updatedCart = [...prevCart];
-        updatedCart[itemIndex] = {
-          ...item,
-          quantityInCart: newQty,
-        };
-        setSelectedQuantities((prev) => ({
-          ...prev,
-          [productId]: newQty,
-        }));
+        updatedCart[itemIndex] = { ...item, quantityInCart: newQty };
+        
+        setSelectedQuantities((prev) => ({ ...prev, [productId]: newQty }));
         return updatedCart;
       });
     },
@@ -380,29 +383,18 @@ export default function SalesScreen() {
         if (itemIndex === -1) return prevCart;
 
         const item = prevCart[itemIndex];
-        if (item.quantityInCart > 1) {
-          const newQty = item.quantityInCart - 1;
-          const updatedCart = [...prevCart];
-          updatedCart[itemIndex] = {
-            ...item,
-            quantityInCart: newQty,
-          };
-          setSelectedQuantities((prev) => ({
-            ...prev,
-            [productId]: newQty,
-          }));
-          return updatedCart;
-        } else {
+        const newQty = item.quantityInCart - 1;
+
+        if (newQty <= 0) {
           const newCart = prevCart.filter((i) => i.id !== productId);
-          setSelectedQuantities((prev) => {
-            const newQuantities = { ...prev };
-            delete newQuantities[productId];
-            return newQuantities;
-          });
-          if (newCart.length === 0) {
-            setIsCartOpen(false);
-          }
+          setSelectedQuantities((prev) => ({ ...prev, [productId]: 0 }));
+          if (newCart.length === 0 && prevCart.length > 0) setIsCartOpen(false);
           return newCart;
+        } else {
+          const updatedCart = [...prevCart];
+          updatedCart[itemIndex] = { ...item, quantityInCart: newQty };
+          setSelectedQuantities((prev) => ({ ...prev, [productId]: newQty }));
+          return updatedCart;
         }
       });
     },
@@ -412,13 +404,9 @@ export default function SalesScreen() {
   const removeCartItem = useCallback(
     (productId: string) => {
       setCartItems((prevCart) => {
-        const newCart = prevCart.filter((item) => item.id !== productId);
-        setSelectedQuantities((prev) => {
-          const newQuantities = { ...prev };
-          delete newQuantities[productId];
-          return newQuantities;
-        });
-        if (newCart.length === 0) {
+        const newCart = prevCart.filter((item) => item.id === productId);
+        setSelectedQuantities((prev) => ({ ...prev, [productId]: 0 }));
+        if (newCart.length === 0 && prevCart.length > 0) {
           setIsCartOpen(false);
         }
         return newCart;
@@ -448,8 +436,7 @@ export default function SalesScreen() {
       currentSubtotal += itemSubtotal;
       currentProfit += itemProfit;
     });
-    const currentTotalAmount = currentSubtotal;
-    return { subtotal: currentSubtotal, totalAmount: currentTotalAmount, totalProfit: currentProfit };
+    return { subtotal: currentSubtotal, totalAmount: currentSubtotal, totalProfit: currentProfit };
   }, [cartItems]);
 
   const confirmSale = async () => {
@@ -460,9 +447,6 @@ export default function SalesScreen() {
     setIsProcessingSale(true);
 
     try {
-      const authState = useAuthStore.getState();
-      const currentUserId = authState.userId;
-
       if (!currentUserId) {
         const errorMessage = 'User not authenticated to complete sale.';
         console.warn(errorMessage);
@@ -495,9 +479,9 @@ export default function SalesScreen() {
               item.id,
               item.quantityInCart,
               item.sellingPrice,
-              item.costPrice,
+              item.costPrice || 0,
               item.sellingPrice * item.quantityInCart,
-              (item.sellingPrice - item.costPrice) * item.quantityInCart,
+              (item.sellingPrice - (item.costPrice || 0)) * item.quantityInCart,
             ]
           );
           await db.runAsync(
@@ -508,7 +492,7 @@ export default function SalesScreen() {
             name: item.name,
             quantityInCart: item.quantityInCart,
             sellingPrice: item.sellingPrice,
-            costPrice: item.costPrice,
+            costPrice: item.costPrice || 0,
             category: item.category
           });
         }
@@ -529,8 +513,19 @@ export default function SalesScreen() {
             [receiptId, saleId, receiptNumber, 'PDF', pdfUri, new Date().toISOString()]
           );
           console.log('Receipt record saved to DB with filePath:', pdfUri);
+          Alert.alert('Sale Confirmed', 'Sale completed. Receipt ready for sharing.', [
+            {
+              text: 'OK',
+              onPress: () => router.push(`/sale/receipts?saleId=${saleId}`),
+            },
+          ]);
         } else {
-          Alert.alert("Sale Confirmed", "Sale completed, but there was an issue generating or sharing the receipt.");
+          Alert.alert('Sale Confirmed', 'Sale completed, but there was an issue generating or sharing the receipt.', [
+            {
+              text: 'OK',
+              onPress: () => router.push(`/sale/receipts?saleId=${saleId}`),
+            },
+          ]);
         }
       });
 
@@ -538,8 +533,6 @@ export default function SalesScreen() {
       setSelectedQuantities({});
       setIsCartOpen(false);
       setIsConfirmDialogOpen(false);
-
-      Alert.alert('Sale Confirmed', `Sale completed. Receipt ready for sharing.`);
 
     } catch (error) {
       console.error('Error confirming sale:', error);
@@ -550,11 +543,18 @@ export default function SalesScreen() {
     }
   };
 
-  const renderProductItem = ({ item }: { item: Product }) => (
+  const renderProductItem = ({ item }: { item: Product }) => {
+    const originalProduct = products.find(p => p.id === item.id);
+    const totalOriginalStock = originalProduct ? originalProduct.quantity : 0;
+    const currentSelectedQtyOnCard = selectedQuantities[item.id] || 0;
+
+    return (
     <TouchableOpacity
       onPress={() => addToCart(item.id, selectedQuantities[item.id] || 0)}
-      disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
-      className={`w-[48%] m-1 rounded-xl overflow-hidden shadow-sm ${item.quantity <= 0 ? 'opacity-50' : ''}`}
+      disabled={(originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0 || (selectedQuantities[item.id] || 0) === 0 }
+      className={`w-[48%] m-1 rounded-xl overflow-hidden shadow-sm ${
+        (originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0 ? 'opacity-50' : ''
+      }`}
       style={{ backgroundColor: colors.white }}
     >
       <View className="relative">
@@ -567,11 +567,10 @@ export default function SalesScreen() {
             onError={(e) => console.log(`Image load error for ${item.name}:`, e.nativeEvent.error)}
           />
         ) : (
-          <View className="w-full h-32 rounded-t-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+          <View className="w-full h-[120px] rounded-t-xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
             <Package size={32} color={colors.primary} />
           </View>
         )}
-
       </View>
       <View className="p-3">
         <Text
@@ -592,46 +591,66 @@ export default function SalesScreen() {
           </Text>
           <View className="flex-row items-center">
             <TouchableOpacity
-              onPress={() => decreaseListQuantity(item.id)}
-              disabled={item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0}
+              onPress={(e) => { e.stopPropagation(); decreaseListQuantity(item.id); }}
+              disabled={currentSelectedQtyOnCard <= 0}
               className="p-1"
             >
-              <MinusCircle size={16} color={(item.quantity <= 0 || (selectedQuantities[item.id] || 0) <= 0) ? colors.gray : colors.danger} />
+              <MinusCircle size={16} color={currentSelectedQtyOnCard <= 0 ? colors.gray : colors.danger} />
             </TouchableOpacity>
             <Input
               className="w-10 h-8 mx-2 text-center text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600"
               keyboardType="number-pad"
-              value={String(selectedQuantities[item.id] || 0)}
+              value={String(currentSelectedQtyOnCard)}
+              onTouchStart={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
               onChangeText={(text) => {
-                const num = parseInt(text, 10);
-                if (isNaN(num) || num < 0) {
-                  setSelectedQuantities((prev) => ({ ...prev, [item.id]: 0 }));
-                  setCartItems(prevCart => prevCart.filter(cartItem => cartItem.id !== item.id || 0 > 0));
-                } else if (num <= item.quantity) {
-                  setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
-                } else {
-                  setSelectedQuantities((prev) => ({ ...prev, [item.id]: item.quantity }));
-                  Alert.alert(`Maximum quantity available is ${item.quantity}`);
+                const op = products.find(p => p.id === item.id);
+                const maxStock = op ? op.quantity : 0;
+                let num = parseInt(text, 10);
+
+                if (isNaN(num) || num < 0 || text === '') {
+                  num = 0;
+                }
+                
+                if (num > maxStock) {
+                  num = maxStock;
+                  Alert.alert(`Maximum quantity available is ${maxStock}`);
+                }
+                setSelectedQuantities((prev) => ({ ...prev, [item.id]: num }));
+                if (num === 0) {
+                    setCartItems(prevCart => prevCart.filter(cartItem => cartItem.id !== item.id));
+                } else if (op) {
+                    setCartItems((prevCart) => {
+                        const existingItem = prevCart.find((ci) => ci.id === item.id);
+                        if (existingItem) {
+                            return prevCart.map((ci) =>
+                                ci.id === item.id ? { ...ci, quantityInCart: num } : ci
+                            );
+                        } else {
+                            return [...prevCart, { ...op, quantityInCart: num }];
+                        }
+                    });
                 }
               }}
-              editable={item.quantity > 0}
+              editable={totalOriginalStock > 0}
               style={{ backgroundColor: colors.white, color: colors.primary }}
             />
             <TouchableOpacity
-              onPress={() => increaseListQuantity(item.id, item.quantity)}
-              disabled={item.quantity <= 0}
+              onPress={(e) => { e.stopPropagation(); increaseListQuantity(item.id, totalOriginalStock);}}
+              disabled={currentSelectedQtyOnCard >= totalOriginalStock}
               className="p-1"
             >
-              <PlusCircle size={16} color={item.quantity <= 0 ? colors.gray : colors.gray} />
+              <PlusCircle size={16} color={currentSelectedQtyOnCard >= totalOriginalStock ? colors.gray : colors.dark} />
             </TouchableOpacity>
           </View>
         </View>
         <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          Stock: {item.quantity} {item.unit || 'piece'}
+          Stock: {totalOriginalStock} {item.unit || 'piece'}
         </Text>
       </View>
     </TouchableOpacity>
   );
+  };
 
   const renderCartItem = ({ item }: { item: CartItem }) => {
     const handleQuantityChange = (text: string) => {
@@ -644,7 +663,6 @@ export default function SalesScreen() {
       if (isNaN(newQuantity)) {
         if (text === '') {
           updateItemQuantity(item.id, 1);
-          setSelectedQuantities((prev) => ({ ...prev, [item.id]: 1 }));
         }
         return;
       }
@@ -659,14 +677,12 @@ export default function SalesScreen() {
           [{
             text: "OK", onPress: () => {
               updateItemQuantity(item.id, productInStore.quantity);
-              setSelectedQuantities((prev) => ({ ...prev, [item.id]: productInStore.quantity }));
             }
           }]
         );
         return;
       }
       updateItemQuantity(item.id, newQuantity);
-      setSelectedQuantities((prev) => ({ ...prev, [item.id]: newQuantity }));
     };
 
     return (
@@ -732,7 +748,7 @@ export default function SalesScreen() {
                   color={
                     (products.find((p) => p.id === item.id)?.quantity ?? 0) <= item.quantityInCart
                       ? colors.gray
-                      : colors.gray
+                      : colors.secondary
                   }
                 />
               </TouchableOpacity>
@@ -757,7 +773,7 @@ export default function SalesScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: `${colors.white}1A` }}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colorScheme === 'dark' ? colors.dark : '#F3F4F6' }}>
       <View className="flex-1 p-4 pt-2 bg-gray-100 dark:bg-gray-900">
         <View className="mb-4 flex-row items-center rounded-lg px-3 shadow-md" style={{ backgroundColor: colors.white }}>
           <Search size={20} color={colors.secondary} />
@@ -791,7 +807,7 @@ export default function SalesScreen() {
                   style={{ backgroundColor: `${colors.secondary}1A` }}
                   onPress={() => router.push('/(tabs)/sale/sales-management')}
                 >
-                  <Text className="font-semibold" style={{ color: colors.gray }}>Add Your First Product</Text>
+                  <Text className="font-semibold" style={{ color: colors.gray}}>Add Your First Product</Text>
                 </Button>
               </View>
             )}
@@ -804,7 +820,7 @@ export default function SalesScreen() {
             numColumns={2}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 80 }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} colors={[colors.secondary]} />}
             keyboardShouldPersistTaps="handled"
           />
         )}
@@ -827,7 +843,10 @@ export default function SalesScreen() {
       )}
 
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
-        <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto" style={{ maxHeight: '90%' }}>
+        <DialogContent
+          className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
+          style={{ maxHeight: '100%', minHeight: 600 }}
+        >
           <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
             <View className="flex-row items-center">
               <ShoppingCart size={24} color={colors.secondary} className="mr-2" />
@@ -836,7 +855,7 @@ export default function SalesScreen() {
               </DialogTitle>
             </View>
           </DialogHeader>
-          <View style={{ padding: 16, width: '100%' }}>
+          <View style={{ padding: 16, width: '100%', flex: 1 }}>
             {cartItems.length === 0 ? (
               <View className="items-center justify-center rounded-lg p-6 my-4">
                 <ShoppingCart size={40} color={colors.danger} />
@@ -844,18 +863,21 @@ export default function SalesScreen() {
                 <Text className="text-xs mt-1" style={{ color: colors.gray }}>Select products to add them here</Text>
               </View>
             ) : (
-              <>
-                <Text className="text-base font-semibold mb-3" style={{ color: colors.dark }}>Items in Cart:</Text>
-                <FlatList
-                  data={cartItems}
-                  renderItem={renderCartItem}
-                  keyExtractor={(item) => item.id}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ paddingBottom: 16 }}
-                />
-                <View className="pt-2 px-3 h-80 w-80">
+              <View style={{ height: 600, width: 280 }}>
+                <Text className="text-base font-semibold mt-0 mb-4" style={{ color: colors.dark }}>Items in Cart:</Text>
+                <View style={{ flex: 1, maxHeight: 280 }}>
+                  <FlatList
+                    data={cartItems}
+                    renderItem={renderCartItem}
+                    keyExtractor={(item) => item.id}
+                    showsVerticalScrollIndicator={true}
+                    contentContainerStyle={{ paddingBottom: 16 }}
+                    key={cartItems.length}
+                  />
+                </View>
+                <View style={{ paddingTop: 8, paddingHorizontal: 12, flexShrink: 0 }}>
                   <View className="mb-2">
-                    <View className="flex-row justify-between items-center">
+                    <View className="flex-row justify-between items-center mt-4">
                       <Text className="text-sm" style={{ color: colors.gray }}>Subtotal:</Text>
                       <Text className="text-sm font-semibold" style={{ color: colors.dark }}>₹{subtotal.toFixed(2)}</Text>
                     </View>
@@ -892,7 +914,7 @@ export default function SalesScreen() {
                     </Button>
                   </DialogFooter>
                 </View>
-              </>
+              </View>
             )}
           </View>
         </DialogContent>
@@ -906,26 +928,36 @@ export default function SalesScreen() {
             </DialogTitle>
           </DialogHeader>
           <View className="p-4 h-80 w-80">
-            <Text className="mb-4 text-base font-medium" style={{ color: colors.dark }}>Please confirm the following sale:</Text>
-            {cartItems.map((item) => (
-              <View key={item.id} className="flex-row justify-between py-1">
-                <Text
-                  className="text-sm font-medium"
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  style={{ flex: 1, marginRight: 8, color: colors.gray }}
-                >
-                  {item.name} {item.category ? `(${item.category})` : ''} × {item.quantityInCart}
-                </Text>
-                <Text className="text-sm font-semibold" style={{ color: colors.accent }}>
-                  ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
-                </Text>
-              </View>
-            ))}
+            <Text className="mb-4 text-base font-medium" style={{ color: colors.dark }}>
+              Please confirm the following sale:
+            </Text>
+            <ScrollView
+              style={{ flexGrow: 1, maxHeight: 256 }}
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ paddingVertical: 4 }}
+            >
+              {cartItems.map((item) => (
+                <View key={item.id} className="flex-row justify-between py-1">
+                  <Text
+                    className="text-sm font-medium"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    style={{ flex: 1, marginRight: 8, color: colors.gray }}
+                  >
+                    {item.name} {item.category ? `(${item.category})` : ''} × {item.quantityInCart}
+                  </Text>
+                  <Text className="text-sm font-semibold" style={{ color: colors.accent }}>
+                    ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
             <Separator className="my-2" style={{ backgroundColor: colors.gray }} />
             <View className="flex-row justify-between py-1">
               <Text className="text-lg font-bold" style={{ color: colors.dark }}>Total:</Text>
-              <Text className="text-lg font-bold" style={{ color: colors.green }}>₹{totalAmount.toFixed(2)}</Text>
+              <Text className="text-lg font-bold" style={{ color: colors.green }}>
+                ₹{totalAmount.toFixed(2)}
+              </Text>
             </View>
           </View>
           <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
