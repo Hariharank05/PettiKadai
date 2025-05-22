@@ -1,12 +1,11 @@
-import { Tabs } from 'expo-router';
+// app/(tabs)/_layout.tsx
+import { Tabs, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { Home, ShoppingBag, User, Settings, ShoppingCart, HistoryIcon } from 'lucide-react-native';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { useColorScheme } from '~/lib/useColorScheme';
-
+import CustomTabBar from '~/components/CustomTabBar';
 export default function TabsLayout() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -33,8 +32,21 @@ export default function TabsLayout() {
     );
   }
 
+  // Common header options for top-level tabs
+  const tabHeaderOptions = {
+    headerRight: () => <ThemeToggle />,
+    headerStyle: {
+      backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+    },
+    headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+    headerTitleStyle: {
+      color: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+    },
+  };
+
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />} 
       screenOptions={{
         tabBarActiveTintColor: isDarkColorScheme ? '#E5E7EB' : '#1F2937',
         tabBarInactiveTintColor: isDarkColorScheme ? '#6B7280' : '#9CA3AF',
@@ -46,107 +58,46 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          title: 'Dashboard', // Title for header
+          ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
-        name="products"
+        name="inventory"
         options={{
-          title: 'Invenrtry',
-          tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          title: 'Inventory', // Title for header (if stack header is used)
+          headerShown: false, // Assuming inventory stack has its own header
         }}
       />
       <Tabs.Screen
-        name="sales"
+        name="sale"
         options={{
           title: 'Sales',
-          tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
-        }}
-      />
-      <Tabs.Screen
-        name="receipts"
-        options={{
-          title: 'Receipts',
-          tabBarIcon: ({ color, size }) => <HistoryIcon color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => <Settings color={color} size={size} />,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
-        }}
-      />
-      <Tabs.Screen
-        name="customers"
-        options={{
-          title: 'Customers',
-          // tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />, // We can define an icon
-          href: null,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="ReportsScreen"
         options={{
           title: 'Reports',
-          href: null,
-          headerRight: () => <ThemeToggle />,
+          ...tabHeaderOptions,
         }}
       />
       <Tabs.Screen
-        name="category"
+        name="setting"
         options={{
-          title: 'Categories',
-          // tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />, // We can define an icon
-          href: null,
-          headerRight: () => <ThemeToggle />,
-          headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+          title: 'Settings',
+          headerShown: false,
         }}
       />
+
+      {/* Hidden screens (not direct tabs) */}
+      <Tabs.Screen name="products" options={{ href: null }} />
+      <Tabs.Screen name="category" options={{ href: null }} />
+      <Tabs.Screen name="customers" options={{ href: null }} />
+      <Tabs.Screen name="sales-management" options={{ href: null }} />
+      <Tabs.Screen name="receipts" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }

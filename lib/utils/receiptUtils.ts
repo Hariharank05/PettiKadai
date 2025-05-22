@@ -1,9 +1,10 @@
 // lib/utils/receiptUtils.ts
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { getDatabase } from '~/lib/db/database'; // Adjust path as needed
-import { v4 as uuidv4 } from 'uuid';
+import { useAuthStore } from '../stores/authStore';
+// import { v4 as uuidv4 } from 'uuid'; // Not used in generateAndShareReceipt directly
 
 // Interfaces (can also be in a shared types file)
 export interface ReceiptStoreSettings {
@@ -27,16 +28,21 @@ export interface SaleDetailsForReceipt {
   saleTimestamp: string;
   totalAmount: number;
   cartItems: CartItemForReceipt[];
+  customer?: { // Optional customer details
+    name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
+  paymentMethod?: string | null; // Added
 }
 
-// HTML Generation Function (same as you provided, but exported)
+// HTML Generation Function
 export const generateReceiptHtml = (
-  cartItems: CartItemForReceipt[],
-  totalAmount: number,
-  saleId: string,
-  saleTimestamp: string,
-  storeSettings?: ReceiptStoreSettings | null
+  saleDetails: SaleDetailsForReceipt,
+  storeSettings?: ReceiptStoreSettings | null // storeSettings now part of saleDetails effectively
 ): string => {
+  const { cartItems, totalAmount, saleId, saleTimestamp, customer, paymentMethod } = saleDetails;
+  
   const storeName = storeSettings?.storeName || 'Petti Kadai';
   const storeAddress = storeSettings?.storeAddress || '';
   const storePhone = storeSettings?.storePhone || '';
@@ -55,10 +61,26 @@ export const generateReceiptHtml = (
     )
     .join('');
 
+  let customerHtml = '';
+  if (customer && customer.name) {
+    customerHtml = `
+      <div class="info-section customer-info">
+        <p><strong>Customer:</strong> ${customer.name}</p>
+        ${customer.phone ? `<p><strong>Phone:</strong> ${customer.phone}</p>` : ''}
+        ${customer.email ? `<p><strong>Email:</strong> ${customer.email}</p>` : ''}
+      </div>
+    `;
+  }
+  
+  let paymentMethodHtml = '';
+  if (paymentMethod) {
+    paymentMethodHtml = `<p><strong>Payment Method:</strong> ${paymentMethod}</p>`;
+  }
+
   return `
     <html>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale:1.0">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; font-size: 12px; color: #333; }
           .container { max-width: 300px; margin: auto; border: 1px solid #ddd; padding: 15px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
@@ -67,6 +89,7 @@ export const generateReceiptHtml = (
           .store-details { font-size: 10px; color: #555; margin-bottom: 3px; }
           .info-section { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #ccc; }
           .info-section p { margin: 2px 0; font-size: 10px; }
+          .customer-info p { margin: 1px 0; } /* Tighter spacing for customer info */
           .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
           .items-table th { font-size: 11px; text-align: left; padding: 8px 4px; border-bottom: 1px solid #555; }
           .items-table td { font-size: 11px; padding: 6px 4px; vertical-align: top; }
@@ -87,7 +110,10 @@ export const generateReceiptHtml = (
           <div class="info-section">
             <p><strong>Receipt No:</strong> RCPT-${saleId.substring(0, 8).toUpperCase()}</p>
             <p><strong>Date:</strong> ${new Date(saleTimestamp).toLocaleString()}</p>
+            ${paymentMethodHtml}
           </div>
+
+          ${customerHtml}
 
           <table class="items-table">
             <thead>
@@ -126,41 +152,57 @@ export const generateAndShareReceipt = async (
   saleDetails: SaleDetailsForReceipt
 ): Promise<string | null> => {
   const db = getDatabase();
+  const authStore =useAuthStore.getState(); // Dynamically import to avoid cycle
+  const currentUserId = authStore.userId;
+
   try {
     // 1. Fetch Store Settings for Receipt
-    const storeSettings = await db.getFirstAsync<ReceiptStoreSettings>(
-      'SELECT storeName, storeAddress, storePhone, storeEmail, currencySymbol FROM Settings WHERE id = "app_settings"'
-    );
+    let storeSettings: ReceiptStoreSettings | null = null;
+    if (currentUserId) {
+        storeSettings = await db.getFirstAsync<ReceiptStoreSettings>(
+            'SELECT storeName, storeAddress, storePhone, storeEmail, currencySymbol FROM Settings WHERE userId = ? AND id = ?', // Use id = userId for user-specific settings
+            [currentUserId, currentUserId]
+        );
+    }
+    if (!storeSettings) { // Fallback to global settings
+        storeSettings = await db.getFirstAsync<ReceiptStoreSettings>(
+            'SELECT storeName, storeAddress, storePhone, storeEmail, currencySymbol FROM Settings WHERE id = "app_settings"'
+        );
+    }
+
 
     // 2. Generate Receipt HTML
-    const receiptHtml = generateReceiptHtml(
-      saleDetails.cartItems,
-      saleDetails.totalAmount,
-      saleDetails.saleId,
-      saleDetails.saleTimestamp,
-      storeSettings
-    );
+    // The generateReceiptHtml function now takes saleDetails which includes customer and paymentMethod
+    const receiptHtml = generateReceiptHtml(saleDetails, storeSettings);
+
 
     // 3. Generate PDF from HTML
     const { uri: pdfUri } = await Print.printToFileAsync({ html: receiptHtml, base64: false });
 
-    // 4. Save Receipt Metadata to DB (if not already saved by the calling function)
-    // This part might be redundant if confirmSale already saves it.
-    // For a generic utility, it's good to have the option or ensure it's handled.
-    // For now, we assume the calling function (e.g., confirmSale) handles saving the primary Receipt record.
-    // This utility will focus on generation and sharing.
-
-    // 5. Share Receipt (which allows preview)
-    if (await Sharing.isAvailableAsync()) {
+    // 4. Share Receipt (which allows preview)
+    if (Platform.OS !== 'web' && await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(pdfUri, {
         mimeType: 'application/pdf',
         dialogTitle: `Share Receipt RCPT-${saleDetails.saleId.substring(0, 8).toUpperCase()}`,
-        UTI: 'com.adobe.pdf',
+        UTI: 'com.adobe.pdf', // UTI for iOS
       });
       return pdfUri; // Return URI after successful sharing
-    } else {
+    } else if (Platform.OS === 'web') {
+        // For web, we can prompt download or just log, as direct sharing is different
+        console.log('Receipt PDF (Web - for download):', pdfUri);
+        // You might use a library or anchor tag to trigger download on web
+        // const link = document.createElement('a');
+        // link.href = pdfUri;
+        // link.download = `Receipt_RCPT-${saleDetails.saleId.substring(0, 8).toUpperCase()}.pdf`;
+        // document.body.appendChild(link);
+        // link.click();
+        // document.body.removeChild(link);
+        Alert.alert('Receipt Generated (Web)', 'Receipt PDF is ready. On a live web deployment, this would trigger a download.');
+        return pdfUri;
+    }
+     else {
       Alert.alert('Sharing Not Available', 'Sharing is not available on this device. Receipt saved locally.');
-      console.log('Receipt saved at:', pdfUri);
+      console.log('Receipt saved at (for non-web without sharing):', pdfUri);
       return pdfUri; // Return URI even if sharing is not available
     }
   } catch (error) {
@@ -180,7 +222,7 @@ export const previewExistingReceipt = async (filePath: string | null, receiptNum
         Alert.alert("Error", "Receipt file path is missing.");
         return;
     }
-    if (await Sharing.isAvailableAsync()) {
+    if (Platform.OS !== 'web' && await Sharing.isAvailableAsync()) {
         try {
             await Sharing.shareAsync(filePath, {
                 mimeType: 'application/pdf',
@@ -190,6 +232,11 @@ export const previewExistingReceipt = async (filePath: string | null, receiptNum
             console.error("Error sharing/previewing receipt:", error);
             Alert.alert("Error", "Could not open receipt for preview.");
         }
+    } else if (Platform.OS === 'web') {
+        // On web, try to open in new tab or log
+        // window.open(filePath, '_blank'); // This might be blocked by pop-up blockers
+        console.log("Web Preview: Receipt located at - ", filePath);
+        Alert.alert("Web Preview", "On a live web environment, this might open in a new tab. Path: " + filePath);
     } else {
         Alert.alert("Preview Not Available", "Cannot open receipt for preview on this device. File located at: " + filePath);
     }

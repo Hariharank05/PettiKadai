@@ -7,8 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button'; // Using Button directly
 import { UserPlus, Pencil, Trash2, Search, ArrowDownUp, XCircle } from 'lucide-react-native';
-import { Customer } from '~/lib/db/types';
 import { useCustomerStore } from '~/lib/stores/customerStore';
+import { Customer } from '~/lib/stores/types';
 
 type SortOrder = 'asc' | 'desc' | 'none';
 

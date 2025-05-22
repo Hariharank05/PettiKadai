@@ -364,7 +364,7 @@ export default function SettingsScreen() {
                 </CardHeader>
                 <CardContent style={styles.cardContent}>
                     <Text style={[styles.settingItemText, { marginBottom: 16 }]}>Logged in as: {userName || 'Store Owner'}</Text>
-                    <Button variant="outline" onPress={() => router.push('/(tabs)/profile')} style={styles.buttonComponent} className="mb-3">
+                    <Button variant="outline" onPress={() => router.push('/(tabs)/setting/profile')} style={styles.buttonComponent} className="mb-3">
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <User size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
                             <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>View/Edit Profile</Text>
