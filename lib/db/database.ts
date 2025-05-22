@@ -26,7 +26,15 @@ export const initDatabase = (): void => {
           updatedAt TEXT DEFAULT (datetime('now'))
         );
       `);
+      // After the Users table creation, add this migration
+      const userColumnCheck = db.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM pragma_table_info('Users') WHERE name = 'profileImage'`
+      );
 
+      if (userColumnCheck && userColumnCheck.count === 0) {
+        db.execSync(`ALTER TABLE Users ADD COLUMN profileImage TEXT`);
+        console.log("[DB] Added missing column 'profileImage' to Users table");
+      }
       // AuthState Table (No change needed here for userId itself)
       db.execSync(`
         CREATE TABLE IF NOT EXISTS AuthState (
@@ -69,7 +77,7 @@ export const initDatabase = (): void => {
         FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
        );
     `);
-    // --- Patch: Add missing column 'isActive' if not exists ---
+      // --- Patch: Add missing column 'isActive' if not exists ---
       const columnCheck = db.getFirstSync<{ count: number }>(
         `SELECT COUNT(*) as count FROM pragma_table_info('products') WHERE name = 'isActive'`
       );
@@ -93,14 +101,14 @@ export const initDatabase = (): void => {
         );
       `);
       // --- Patch: Add missing column 'imageUri' if not exists ---
-    const categoryColumnCheck = db.getFirstSync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM pragma_table_info('Categories') WHERE name = 'imageUri'`
-    );
+      const categoryColumnCheck = db.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM pragma_table_info('Categories') WHERE name = 'imageUri'`
+      );
 
-    if (categoryColumnCheck && categoryColumnCheck.count === 0) {
-      db.execSync(`ALTER TABLE Categories ADD COLUMN imageUri TEXT`);
-      console.log("[DB] Added missing column 'imageUri' to Categories table");
-    }
+      if (categoryColumnCheck && categoryColumnCheck.count === 0) {
+        db.execSync(`ALTER TABLE Categories ADD COLUMN imageUri TEXT`);
+        console.log("[DB] Added missing column 'imageUri' to Categories table");
+      }
 
       // Suppliers Table - Added userId (if suppliers are per-user)
       db.execSync(`
@@ -393,7 +401,15 @@ export const initDatabase = (): void => {
           FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
+      // After the Users table creation, add this migration
+      const SettingscolumnCheck = db.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM pragma_table_info('Users') WHERE name = 'profileImage'`
+      );
 
+      if (SettingscolumnCheck && SettingscolumnCheck.count === 0) {
+        db.execSync(`ALTER TABLE Users ADD COLUMN profileImage TEXT`);
+        console.log("[DB] Added missing column 'profileImage' to Users table");
+      }
       // AppUsage Table - Added userId
       db.execSync(`
         CREATE TABLE IF NOT EXISTS AppUsage (
@@ -542,7 +558,7 @@ export const initDatabase = (): void => {
     console.error('Failed to initialize database with multi-user schema:', error);
     // If running on web, SQLite might not be fully supported by expo-sqlite in all browsers/environments
     if (Platform.OS === 'web') {
-        console.warn("SQLite operations on web might have limitations. Ensure your environment supports it fully or consider alternative storage for web.");
+      console.warn("SQLite operations on web might have limitations. Ensure your environment supports it fully or consider alternative storage for web.");
     }
     throw error; // Re-throw to signal failure
   }

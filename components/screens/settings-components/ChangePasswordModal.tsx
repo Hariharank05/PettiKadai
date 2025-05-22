@@ -35,8 +35,8 @@ export function ChangePasswordModal({
       return;
     }
     if (newPassword.length < 8) { // Basic strength check
-        setError('New password must be at least 8 characters long.');
-        return;
+      setError('New password must be at least 8 characters long.');
+      return;
     }
     if (newPassword !== confirmNewPassword) {
       setError('New passwords do not match.');
@@ -86,9 +86,9 @@ export function ChangePasswordModal({
   return (
     <View style={styles.overlay}>
       <View style={styles.content}>
-        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16}}>
-            <Key size={22} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={{marginRight: 8}} />
-            <Text style={styles.titleText}>Change Password</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <Key className='mb-2' size={22} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={{ marginRight: 8 }} />
+          <Text className='mt-4' style={styles.titleText}>Change Password</Text>
         </View>
 
         {error && <Text style={styles.errorText}>{error}</Text>}
@@ -111,7 +111,7 @@ export function ChangePasswordModal({
 
         <View style={styles.inputContainer}>
           <Text style={styles.label}>New Password</Text>
-           <View style={styles.inputWrapper}>
+          <View style={styles.inputWrapper}>
             <Input
               placeholder="Enter new password (min. 8 chars)"
               value={newPassword}
@@ -140,7 +140,7 @@ export function ChangePasswordModal({
           <TouchableOpacity style={styles.button} onPress={handleClose} disabled={isLoading}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.submitButton, isLoading && {opacity: 0.7}]} onPress={handleSubmit} disabled={isLoading}>
+          <TouchableOpacity style={[styles.button, styles.submitButton, isLoading && { opacity: 0.7 }]} onPress={handleSubmit} disabled={isLoading}>
             {isLoading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
