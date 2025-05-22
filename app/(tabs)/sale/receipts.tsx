@@ -1,15 +1,15 @@
 // app/(tabs)/receipts.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router'; // Added useLocalSearchParams
 import { getDatabase } from '~/lib/db/database';
 import * as Sharing from 'expo-sharing';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent } from '~/components/ui/card';
-import { Search, FileText, Share2, Eye } from 'lucide-react-native';
+import { Search, FileText, Share2, Eye, UserCircle } from 'lucide-react-native';
 import { format, parseISO } from 'date-fns';
-import { useColorScheme } from '~/lib/useColorScheme'; // Import useColorScheme
+import { useColorScheme } from '~/lib/useColorScheme'; 
 import { previewExistingReceipt } from '~/lib/utils/receiptUtils';
 
 interface ReceiptHistoryItem {
@@ -20,23 +20,25 @@ interface ReceiptHistoryItem {
     filePath: string | null;
     generatedAt: string;
     totalAmount: number;
-    customerName?: string | null;
+    customerName?: string | null; // From Sales table (denormalized) or joined Customers table
+    customerPhone?: string | null; // From Sales table or joined
+    paymentType?: string | null; // From Sales table
 }
 
 const db = getDatabase();
 
 export default function ReceiptsScreen() {
     const router = useRouter();
-    const { isDarkColorScheme } = useColorScheme(); // Get current color scheme
+    const { highlightSaleId } = useLocalSearchParams<{ highlightSaleId?: string }>(); // Get highlightSaleId
+    const { isDarkColorScheme } = useColorScheme(); 
     const [receipts, setReceipts] = useState<ReceiptHistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [refreshing, setRefreshing] = useState(false);
 
-    // Define colors based on the theme
-    const iconColorEye = isDarkColorScheme ? '#60A5FA' : '#3B82F6'; // Lighter blue for dark, standard for light
-    const iconColorShare = isDarkColorScheme ? '#34D399' : '#10B981'; // Lighter green for dark, standard for light
-    const iconColorDisabled = isDarkColorScheme ? '#4B5563' : '#9CA3AF'; // Darker gray for dark, lighter for light
+    const iconColorEye = isDarkColorScheme ? '#60A5FA' : '#3B82F6'; 
+    const iconColorShare = isDarkColorScheme ? '#34D399' : '#10B981'; 
+    const iconColorDisabled = isDarkColorScheme ? '#4B5563' : '#9CA3AF'; 
     const iconColorSearch = isDarkColorScheme ? '#9CA3AF' : '#6B7280';
     const iconColorFileText = isDarkColorScheme ? '#6B7280' : '#9CA3AF';
     const activityIndicatorColor = isDarkColorScheme ? '#FFFFFF' : '#3B82F6';
@@ -45,25 +47,35 @@ export default function ReceiptsScreen() {
     const fetchReceipts = useCallback(async (currentSearchQuery: string = searchQuery) => {
         setIsLoading(true);
         try {
+            // Query updated to join Sales and potentially Customers
+            // And select customerName, customerPhone, paymentType from Sales table
             let sqlQuery = `
-        SELECT
-          r.id,
-          r.saleId,
-          r.receiptNumber,
-          r.format,
-          r.filePath,
-          r.generatedAt,
-          s.totalAmount,
-          s.customerName
-        FROM Receipts r
-        JOIN Sales s ON r.saleId = s.id
-      `;
-            const params: any[] = [];
+                SELECT
+                  r.id,
+                  r.saleId,
+                  r.receiptNumber,
+                  r.format,
+                  r.filePath,
+                  r.generatedAt,
+                  s.totalAmount,
+                  s.customerName, 
+                  s.customerPhone,
+                  s.paymentType 
+                FROM Receipts r
+                JOIN Sales s ON r.saleId = s.id
+            `;
+            // To join with Customers table (if Sales.customerId exists and is populated):
+            // LEFT JOIN Customers c ON s.customerId = c.id 
+            // Then select c.name as customerNameFromTable, c.phone as customerPhoneFromTable
 
+
+            const params: any[] = [];
             const trimmedQuery = currentSearchQuery.trim();
+
             if (trimmedQuery !== '') {
-                sqlQuery += ` WHERE r.receiptNumber LIKE ? OR s.customerName LIKE ? OR s.totalAmount LIKE ?`;
-                params.push(`%${trimmedQuery}%`, `%${trimmedQuery}%`, `%${trimmedQuery}%`);
+                // Adjust search to include customer name/phone from Sales table
+                sqlQuery += ` WHERE (r.receiptNumber LIKE ? OR s.customerName LIKE ? OR s.customerPhone LIKE ? OR s.totalAmount LIKE ?)`;
+                params.push(`%${trimmedQuery}%`, `%${trimmedQuery}%`, `%${trimmedQuery}%`, `%${trimmedQuery}%`);
             }
             sqlQuery += ` ORDER BY r.generatedAt DESC`;
 
@@ -75,8 +87,10 @@ export default function ReceiptsScreen() {
                 format: item.format,
                 filePath: item.filePath,
                 generatedAt: item.generatedAt,
-                totalAmount: Number(item.totalAmount) || 0, // Explicitly cast to number here
+                totalAmount: Number(item.totalAmount) || 0,
                 customerName: item.customerName,
+                customerPhone: item.customerPhone,
+                paymentType: item.paymentType,
             }));
             setReceipts(formattedResult);
         } catch (error) {
@@ -127,47 +141,35 @@ export default function ReceiptsScreen() {
         }
     };
 
-    const handlePreviewReceipt = async (filePath: string | null, receiptNumber: string) => { // Add receiptNumber
+    const handlePreviewReceipt = async (filePath: string | null, receiptNumber: string) => {
         if (!filePath) {
             Alert.alert("Error", "Receipt file path is missing.");
             return;
         }
-        // Use the new utility function
         await previewExistingReceipt(filePath, receiptNumber);
     };
+    
+    const flatListRef = React.useRef<FlatList>(null);
 
-    // useFocusEffect(
-    //     useCallback(() => {
-    //         fetchReceipts(searchQuery);
+    useEffect(() => {
+        if (highlightSaleId && receipts.length > 0) {
+            const index = receipts.findIndex(r => r.saleId === highlightSaleId);
+            if (index !== -1 && flatListRef.current) {
+                flatListRef.current.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+            }
+        }
+    }, [highlightSaleId, receipts]);
 
-    //         // 🔧 DEV PATCH: Log all sales with incorrect totals
-    //         (async () => {
-    //             const brokenSales = await db.getAllAsync<{ id: string, totalAmount: number, subtotal: number }>(
-    //                 `SELECT id, totalAmount, subtotal FROM Sales WHERE totalAmount IS NULL OR totalAmount = 0`
-    //             );
-
-    //             console.log("[DEV PATCH] Broken Sales Found:", brokenSales.length);
-
-    //             for (const sale of brokenSales) {
-    //                 console.log(`[FIX] Sale ID: ${sale.id}, totalAmount: ${sale.totalAmount}, fixing to subtotal: ${sale.subtotal}`);
-    //                 await db.runAsync(
-    //                     `UPDATE Sales SET totalAmount = ? WHERE id = ?`,
-    //                     [sale.subtotal, sale.id]
-    //                 );
-    //             }
-    //         })();
-
-    //     }, [fetchReceipts, searchQuery])
-    // );
 
     const renderReceiptItem = ({ item }: { item: ReceiptHistoryItem }) => {
-        console.log(`Rendering receipt: ${item.receiptNumber}, total: ${item.totalAmount}`);
-
-        // Ensure totalAmount is handled correctly
         const amount = typeof item.totalAmount === 'number' ? item.totalAmount : 0;
+        const isHighlighted = item.saleId === highlightSaleId;
 
         return (
-            <Card className="mb-3 mx-1 bg-card border border-border">
+            <Card 
+                className={`mb-3 mx-1 bg-card border ${isHighlighted ? 'border-primary' : 'border-border'}`}
+                style={isHighlighted ? { borderWidth: 2 } : {}} // Example highlight style
+            >
                 <CardContent className="p-4">
                     <View className="flex-row justify-between items-start">
                         <View className="flex-1">
@@ -179,14 +181,22 @@ export default function ReceiptsScreen() {
                                 Amount: ₹{amount.toFixed(2)}
                             </Text>
                             {item.customerName && (
-                                <Text className="text-sm text-muted-foreground native:text-gray-600">
-                                    Customer: {item.customerName}
+                                <View className="flex-row items-center mt-1">
+                                    <UserCircle size={14} color={iconColorSearch} className="mr-1 opacity-70" />
+                                    <Text className="text-xs text-muted-foreground native:text-gray-600">
+                                        {item.customerName} {item.customerPhone ? `(${item.customerPhone})` : ''}
+                                    </Text>
+                                </View>
+                            )}
+                            {item.paymentType && (
+                                <Text className="text-xs text-muted-foreground native:text-gray-600 mt-0.5">
+                                    Paid via: {item.paymentType}
                                 </Text>
                             )}
                         </View>
                         <View className="flex-col items-end space-y-2">
                             <TouchableOpacity
-                                onPress={() => handlePreviewReceipt(item.filePath, item.receiptNumber)} // Pass receiptNumber
+                                onPress={() => handlePreviewReceipt(item.filePath, item.receiptNumber)}
                                 className="p-2 bg-muted rounded-md"
                                 disabled={!item.filePath}
                             >
@@ -224,9 +234,9 @@ export default function ReceiptsScreen() {
             <View className="mb-4 flex-row items-center bg-card border border-border rounded-lg px-3">
                 <Search size={20} color={iconColorSearch} />
                 <Input
-                    placeholder="Search by Receipt Number/Amount..."
-                    className="flex-1 h-12 border-0 bg-transparent ml-2 text-base text-foreground" // Tailwind for Input styling
-                    placeholderTextColor={isDarkColorScheme ? '#6B7280' : '#9CA3AF'} // Dynamic placeholder color
+                    placeholder="Search by Receipt No, Amount, Customer..."
+                    className="flex-1 h-12 border-0 bg-transparent ml-2 text-base text-foreground"
+                    placeholderTextColor={isDarkColorScheme ? '#6B7280' : '#9CA3AF'}
                     value={searchQuery}
                     onChangeText={(text) => setSearchQuery(text)}
                 />
@@ -244,6 +254,7 @@ export default function ReceiptsScreen() {
                 </View>
             ) : (
                 <FlatList
+                    ref={flatListRef}
                     data={receipts}
                     renderItem={renderReceiptItem}
                     keyExtractor={(item) => item.id}
@@ -251,6 +262,10 @@ export default function ReceiptsScreen() {
                     contentContainerStyle={{ paddingBottom: 20 }}
                     refreshing={refreshing}
                     onRefresh={onRefresh}
+                    getItemLayout={(data, index) => (
+                        // Estimate item height for performance, adjust if necessary
+                        { length: 120, offset: 120 * index, index } 
+                    )}
                 />
             )}
         </View>

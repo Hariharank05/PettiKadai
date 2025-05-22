@@ -181,7 +181,16 @@ export const initDatabase = (): void => {
           FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
         );
       `);
+       // --- Patch: Add missing column 'customerId' if not exists ---
+      const salesColumnCheck = db.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM pragma_table_info('Sales') WHERE name = 'customerId'`
+      );
 
+      if (salesColumnCheck && salesColumnCheck.count === 0) {
+        db.execSync(`ALTER TABLE Sales ADD COLUMN customerId TEXT`);
+        console.log("[DB] Added missing column 'customerId' to Sales table");
+      }
+      
       // SaleItems Table (Implicitly user-specific via Sales.userId) - No direct userId needed
       db.execSync(`
         CREATE TABLE IF NOT EXISTS SaleItems (

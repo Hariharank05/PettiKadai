@@ -1,8 +1,9 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useReducer } from 'react';
-import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList } from 'react-native';
+import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList, Alert } from 'react-native';
 import { Product, ProductInput } from '~/lib/models/product';
 import { useProductStore } from '~/lib/stores/productStore';
+import { useCategoryStore } from '~/lib/stores/categoryStore'; // Import category store
 import {
   Card,
   CardContent,
@@ -14,7 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Picker } from '@react-native-picker/picker';
 import { Input } from '~/components/ui/input';
 import { Button as ShadcnButton } from '~/components/ui/button';
-import { Filter, Pencil, Trash2, X, ListFilter, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Filter, Pencil, Trash2, X, ListFilter, ChevronDown, ChevronUp, Package } from 'lucide-react-native';
 import { useRefresh } from '~/components/RefreshProvider';
 import throttle from 'lodash/throttle';
 
@@ -78,18 +79,22 @@ const ControlledInput = React.memo(
     );
 
     useEffect(() => {
+      // Sync localValue if the prop `value` changes from outside
       if (localValue !== value) {
         setLocalValue(value);
       }
-    }, [value]);
+    }, [value]); // Only re-run if `value` prop changes
+
+
+    const handleTextChange = (text: string) => {
+      setLocalValue(text);
+      throttledUpdate(text);
+    };
 
     return (
       <Input
         value={localValue}
-        onChangeText={(text) => {
-          setLocalValue(text);
-          throttledUpdate(text);
-        }}
+        onChangeText={handleTextChange}
         placeholder={placeholder}
         keyboardType={keyboardType}
         className={`h-12 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base placeholder-gray-400 dark:placeholder-gray-500 ${className}`}
@@ -114,14 +119,14 @@ interface CategorySectionProps {
   category: string;
   isNewCategory: boolean;
   setIsNewCategory: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsNewProduct: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsNewProduct: React.Dispatch<React.SetStateAction<boolean>>; // To toggle product to new if new category is chosen
   dispatch: React.Dispatch<FormAction>;
   isLoading: boolean;
   isAccordionOpen: boolean;
   setIsAccordionOpen: React.Dispatch<React.SetStateAction<boolean>>;
   categorySearch: string;
   setCategorySearch: React.Dispatch<React.SetStateAction<string>>;
-  filteredCategories: string[];
+  filteredCategoriesFromStore: string[]; // Changed prop name
   onSelectCategory: (category: string) => void;
   onAddNewCategory: () => void;
 }
@@ -138,7 +143,7 @@ const CategorySection = React.memo(
     setIsAccordionOpen,
     categorySearch,
     setCategorySearch,
-    filteredCategories,
+    filteredCategoriesFromStore, // Changed prop name
     onSelectCategory,
     onAddNewCategory,
   }: CategorySectionProps) => {
@@ -155,12 +160,14 @@ const CategorySection = React.memo(
             onPress={() => {
               const newIsNewCategory = !isNewCategory;
               setIsNewCategory(newIsNewCategory);
-              setIsNewProduct(newIsNewCategory);
               dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
 
-              if (newIsNewCategory) {
-                dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
-                setIsAccordionOpen(false);
+              if (newIsNewCategory) { // If switching to "Add New Category"
+                // Optionally, if adding a new category, it's often for a new product too.
+                // This behavior can be customized.
+                setIsNewProduct(true);
+                dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' }); // Clear product name
+                setIsAccordionOpen(false); // Close accordion if open
               }
             }}
             disabled={isLoading}
@@ -176,7 +183,7 @@ const CategorySection = React.memo(
             <ControlledInput
               value={category}
               onChangeText={(text) => dispatch({ type: 'UPDATE_FIELD', field: 'category', value: text })}
-              placeholder="Enter new category"
+              placeholder="Enter new category name"
               editable={!isLoading}
             />
           </View>
@@ -195,6 +202,7 @@ const CategorySection = React.memo(
             {isAccordionOpen && (
               <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
                 <View className="p-2">
+                  {/* "Add New Category..." button INSIDE the accordion */}
                   <TouchableOpacity
                     onPress={onAddNewCategory}
                     className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
@@ -210,7 +218,7 @@ const CategorySection = React.memo(
                   />
                 </View>
                 <FlatList
-                  data={filteredCategories}
+                  data={filteredCategoriesFromStore} // Use store categories
                   keyExtractor={(item) => item}
                   renderItem={({ item }) => (
                     <TouchableOpacity
@@ -239,8 +247,8 @@ interface ProductNameSectionProps {
   name: string;
   isNewProduct: boolean;
   setIsNewProduct: React.Dispatch<React.SetStateAction<boolean>>;
-  isNewCategory: boolean;
-  setIsNewCategory: React.Dispatch<React.SetStateAction<boolean>>;
+  isNewCategory: boolean; // To know if category is also new
+  setIsNewCategory: React.Dispatch<React.SetStateAction<boolean>>; // To set category to new if product is new
   dispatch: React.Dispatch<FormAction>;
   isLoading: boolean;
   isAccordionOpen: boolean;
@@ -286,15 +294,23 @@ const ProductNameSection = React.memo(
               setIsNewProduct(newIsNewProduct);
               dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
 
-              if (newIsNewProduct) {
+              if (newIsNewProduct) { // If switching to "Add New Product"
+                // If currently "Select Existing Category", switch it to "Add New Category"
+                // because a new product usually means a new category unless specified otherwise.
+                // This behavior can be adjusted based on desired UX.
                 if (!isNewCategory) {
                   setIsNewCategory(true);
-                  dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+                  dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' }); // Clear category as well
                 }
-                setIsAccordionOpen(false);
-              } else {
+                setIsAccordionOpen(false); // Close accordion if open
+              } else { // If switching to "Select Existing Product"
+                // If category was also new, maybe revert it to select?
+                // For now, let's keep category as is, user can change it separately.
+                // Or, if category was new, and product is now existing, this might be an odd state.
+                // A safer bet: if product is existing, category should also be existing (or cleared).
                 if (isNewCategory) {
-                    setIsNewCategory(false);
+                  setIsNewCategory(false); // Revert category to select mode
+                  // dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' }); // Optionally clear category
                 }
               }
             }}
@@ -333,6 +349,7 @@ const ProductNameSection = React.memo(
             {isAccordionOpen && (
               <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
                 <View className="p-2">
+                  {/* "Add New Product..." button INSIDE the accordion */}
                   <TouchableOpacity
                     onPress={onAddNewProduct}
                     className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
@@ -400,7 +417,7 @@ const PriceSection = React.memo(
             {!costPrice && (
               <Text className="text-red-500 dark:text-red-400 text-sm mt-1">Cost price is required</Text>
             )}
-            {costPrice && (parseFloat(costPrice) <= 0 || !/^\d*\.?\d+$/.test(costPrice)) && (
+            {costPrice && (parseFloat(costPrice) <= 0 || !/^\d*\.?\d+(\.\d*)?$/.test(costPrice)) && (
               <Text className="text-red-500 dark:text-red-400 text-sm mt-1">
                 Enter a valid number greater than 0
               </Text>
@@ -422,7 +439,7 @@ const PriceSection = React.memo(
             {!sellingPrice && (
               <Text className="text-red-500 dark:text-red-400 text-sm mt-1">Selling price is required</Text>
             )}
-            {sellingPrice && (parseFloat(sellingPrice) <= 0 || !/^\d*\.?\d+$/.test(sellingPrice)) && (
+            {sellingPrice && (parseFloat(sellingPrice) <= 0 || !/^\d*\.?\d+(\.\d*)?$/.test(sellingPrice)) && (
               <Text className="text-red-500 dark:text-red-400 text-sm mt-1">
                 Enter a valid number greater than 0
               </Text>
@@ -474,7 +491,7 @@ const QuantityUnitSection = React.memo(
             <Picker
               selectedValue={unit}
               onValueChange={(itemValue) => dispatch({ type: 'UPDATE_FIELD', field: 'unit', value: itemValue })}
-              style={{ color: Platform.OS === 'ios' ? '#000000' : (isLoading ? '#a0a0a0' : '#000000'), fontSize: 16 }}
+              style={{ color: Platform.OS === 'ios' ? '#000000' : (isLoading ? '#a0a0a0' : '#000000'), fontSize: 16 }} // Fixed color logic for native
               dropdownIconColor={Platform.OS === 'android' ? (isLoading ? '#a0a0a0' : '#000000') : undefined}
               enabled={!isLoading}
             >
@@ -551,7 +568,7 @@ interface ProductFormDialogContentProps {
   setIsCategoryAccordionOpen: React.Dispatch<React.SetStateAction<boolean>>;
   categorySearch: string;
   setCategorySearch: React.Dispatch<React.SetStateAction<string>>;
-  filteredCategories: string[];
+  filteredCategoriesFromStore: string[]; // Changed prop name
   onSelectCategory: (category: string) => void;
   onAddNewCategory: () => void;
   isProductAccordionOpen: boolean;
@@ -579,12 +596,12 @@ const ProductFormDialogContent = React.memo(
     formMode,
     handleSubmit,
     setDialogOpen,
-    resetDialogState,
+    // resetDialogState, // Not used directly here, but kept for potential future use
     isCategoryAccordionOpen,
     setIsCategoryAccordionOpen,
     categorySearch,
     setCategorySearch,
-    filteredCategories,
+    filteredCategoriesFromStore,
     onSelectCategory,
     onAddNewCategory,
     isProductAccordionOpen,
@@ -596,9 +613,9 @@ const ProductFormDialogContent = React.memo(
     onAddNewProduct,
   }: ProductFormDialogContentProps) => {
     return (
-      <FlatList
-        data={[1]}
-        keyExtractor={() => 'form'}
+      <FlatList // Using FlatList for scrollability inside dialog on smaller screens
+        data={[1]} // Dummy data to render the form once
+        keyExtractor={() => 'product-form-scroll'}
         renderItem={() => (
           <View>
             <DialogHeader className="p-6 pb-4 border-b border-gray-300 dark:border-gray-600">
@@ -622,7 +639,7 @@ const ProductFormDialogContent = React.memo(
                   setIsAccordionOpen={setIsCategoryAccordionOpen}
                   categorySearch={categorySearch}
                   setCategorySearch={setCategorySearch}
-                  filteredCategories={filteredCategories}
+                  filteredCategoriesFromStore={filteredCategoriesFromStore}
                   onSelectCategory={onSelectCategory}
                   onAddNewCategory={onAddNewCategory}
                 />
@@ -670,7 +687,7 @@ const ProductFormDialogContent = React.memo(
                 size="lg"
                 className="h-12 px-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
                 onPress={() => {
-                  setDialogOpen(false);
+                  setDialogOpen(false); // This will trigger the onOpenChange which calls resetDialogState
                 }}
                 disabled={isLoading}
               >
@@ -689,7 +706,7 @@ const ProductFormDialogContent = React.memo(
         )}
         contentContainerStyle={{ padding: 0, width: '100%' }}
         nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="handled" // Important for inputs inside scrollable dialogs
         showsVerticalScrollIndicator={false}
       />
     );
@@ -708,7 +725,14 @@ const ProductManagementScreen = () => {
     deleteProduct,
   } = useProductStore();
 
-  const { refreshForm: appRefreshForm } = useRefresh();
+  const {
+    categories: storeCategories,
+    fetchCategories: fetchStoreCategories,
+    addCategory: addStoreCategory, // Renamed to avoid conflict
+  } = useCategoryStore();
+
+
+  const { refreshForm: appRefreshForm } = useRefresh(); // Assuming this is setup elsewhere
   const [formState, dispatch] = useReducer(formReducer, initialFormState);
 
   const products = useMemo(
@@ -726,7 +750,7 @@ const ProductManagementScreen = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
-  const [isFilterAccordionOpen, setIsFilterAccordionOpen] = useState(false); // New state for filter accordion
+  const [isFilterAccordionOpen, setIsFilterAccordionOpen] = useState(false);
 
   const [isCategoryAccordionOpen, setIsCategoryAccordionOpen] = useState(false);
   const [isProductAccordionOpen, setIsProductAccordionOpen] = useState(false);
@@ -736,7 +760,7 @@ const ProductManagementScreen = () => {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
 
   const [formError, setFormError] = useState<string | null>(null);
-  const [uiIsLoading, setUiIsLoading] = useState(false);
+  const [uiIsLoading, setUiIsLoading] = useState(false); // For UI-specific loading states
 
   const [categorySearch, setCategorySearch] = useState('');
   const [productSearch, setProductSearch] = useState('');
@@ -746,21 +770,27 @@ const ProductManagementScreen = () => {
 
   const isLoading = storeLoading || uiIsLoading;
 
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort();
-    return ['All Categories', ...cats]; // Include "All Categories" for filter
-  }, [products]);
+  // Categories for the filter dropdown (main screen)
+  const categoriesForFilter = useMemo(() => {
+    const cats = Array.from(new Set(storeCategories.map((c) => c.name).filter(Boolean))).sort();
+    return ['All Categories', ...cats];
+  }, [storeCategories]);
+
+  // Categories for the form accordion (inside dialog)
+  const categoriesForFormAccordion = useMemo(() => {
+    return storeCategories.map(c => c.name).sort();
+  }, [storeCategories]);
 
   const productNamesForSelection = useMemo(() => {
     return Array.from(new Set(products.map((p) => p.name).filter(Boolean))).sort();
   }, [products]);
 
-  const filteredCategoriesForAccordion = useMemo(() => {
-    if (!categorySearch) return categories;
-    return categories.filter((cat) =>
+  const filteredCategoriesForFormAccordion = useMemo(() => {
+    if (!categorySearch) return categoriesForFormAccordion;
+    return categoriesForFormAccordion.filter((cat) =>
       cat?.toLowerCase().includes(categorySearch.toLowerCase())
     );
-  }, [categories, categorySearch]);
+  }, [categoriesForFormAccordion, categorySearch]);
 
   const filteredProductNamesForAccordion = useMemo(() => {
     if (!productSearch) return productNamesForSelection;
@@ -786,30 +816,44 @@ const ProductManagementScreen = () => {
     const sellingPriceNum = parseFloat(formState.sellingPrice);
     const quantityNum = parseInt(formState.quantity, 10);
 
+    const isNameValid = !!formState.name.trim();
+    const isCostPriceValid = !!formState.costPrice && !isNaN(costPriceNum) && costPriceNum > 0;
+    const isSellingPriceValid = !!formState.sellingPrice && !isNaN(sellingPriceNum) && sellingPriceNum > 0;
+    const isQuantityValid = formState.quantity === '' || (!isNaN(quantityNum) && quantityNum >= 0);
+    const isUnitValid = !!formState.unit;
+    // Category can be empty initially if user is adding a new one
+    const isCategoryValid = isNewCategory ? true : !!formState.category.trim();
+
+
     return (
-      !!formState.name.trim() &&
-      !!formState.costPrice && !isNaN(costPriceNum) && costPriceNum > 0 &&
-      !!formState.sellingPrice && !isNaN(sellingPriceNum) && sellingPriceNum > 0 &&
-      (formState.quantity === '' || (!isNaN(quantityNum) && quantityNum >= 0)) &&
-      !!formState.unit
+      isNameValid &&
+      isCostPriceValid &&
+      isSellingPriceValid &&
+      isQuantityValid &&
+      isUnitValid &&
+      isCategoryValid
     );
-  }, [formState]);
+  }, [formState, isNewCategory]);
 
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+    fetchStoreCategories(); // Fetch categories from store
+  }, [fetchProducts, fetchStoreCategories]);
 
   useEffect(() => {
-    if (formError) {
+    // Clear form error when form state changes or dialog opens/closes,
+    // but not if the error is from the store (e.g., network error)
+    if (formError && formError !== storeError) {
       setFormError(null);
     }
-  }, [formState, dialogOpen]);
+  }, [formState, dialogOpen, storeError, formError]);
+
 
   const pickImage = useCallback(async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permissionResult.granted === false) {
-        alert("Permission to access camera roll is required!");
+        Alert.alert("Permission Denied", "Permission to access camera roll is required!");
         return;
       }
 
@@ -829,7 +873,7 @@ const ProductManagementScreen = () => {
     }
   }, [dispatch]);
 
-  const resetFormAndDialogState = useCallback(() => {
+  const resetDialogState = useCallback(() => {
     dispatch({ type: 'RESET' });
     setFormMode('add');
     setSelectedProduct(null);
@@ -842,65 +886,82 @@ const ProductManagementScreen = () => {
     setIsProductAccordionOpen(false);
   }, [dispatch]);
 
-  const handleAddProductSubmit = async () => {
+  const handleProductSubmit = async () => {
     if (!isFormValid) {
-      setFormError('Please fill in all required fields correctly.');
+      let errorMsg = 'Please fill in all required fields correctly.';
+      if (!formState.name.trim()) errorMsg = 'Product name is required.';
+      else if (!formState.costPrice || parseFloat(formState.costPrice) <= 0) errorMsg = 'Valid cost price is required.';
+      else if (!formState.sellingPrice || parseFloat(formState.sellingPrice) <= 0) errorMsg = 'Valid selling price is required.';
+      else if (formState.category.trim() === '' && !isNewCategory) errorMsg = 'Category is required if not adding a new one.';
+      setFormError(errorMsg);
       return;
     }
     setUiIsLoading(true);
     setFormError(null);
+
     try {
-      const productData: Omit<ProductInput, 'userId'> = {
+      let finalCategoryName = formState.category.trim();
+
+      // If a new category name is provided and it's marked as new
+      if (finalCategoryName && isNewCategory) {
+        const existingStoreCategory = storeCategories.find(
+          (sc) => sc.name.toLowerCase() === finalCategoryName.toLowerCase()
+        );
+        if (!existingStoreCategory) {
+          try {
+            console.log(`Attempting to add new category from product form: ${finalCategoryName}`);
+            await addStoreCategory({ name: finalCategoryName, description: '', imageUri: undefined });
+            console.log(`New category "${finalCategoryName}" added to store.`);
+            await fetchStoreCategories(); // Re-fetch to update UI if needed
+          } catch (catError) {
+            console.error(`Failed to add new category "${finalCategoryName}" from product form:`, catError);
+            Alert.alert("Category Error", `Could not add new category: ${catError instanceof Error ? catError.message : String(catError)}. Product will be saved with this category name.`);
+            // Proceed with product saving, category might be created later or manually.
+          }
+        } else {
+          console.log(`Category "${finalCategoryName}" already exists in store. Using existing.`);
+        }
+      } else if (!finalCategoryName && formMode === 'add') {
+        // This case should ideally be caught by isFormValid, but as a safeguard:
+        // If category is empty and it's not a new category being defined
+        // Or if it's a new product without any category selected/entered.
+        setFormError('Category is required. Please select or add a new category.');
+        setUiIsLoading(false);
+        return;
+      }
+
+
+      const productData: Omit<ProductInput, 'userId'> = { // Omit userId, productStore will add it
         name: formState.name.trim(),
         costPrice: parseFloat(formState.costPrice),
         sellingPrice: parseFloat(formState.sellingPrice),
         quantity: formState.quantity ? parseInt(formState.quantity, 10) : 0,
         unit: formState.unit,
-        category: formState.category.trim() || undefined,
+        category: finalCategoryName || undefined,
         imageUri: formState.imageUri || undefined,
+        // Default other fields from ProductInput model
         rating: 0,
         discount: 0,
-        image: '',
-        isActive: false
+        image: '', // This might be deprecated if imageUri is primary
+        isActive: true, // New products are active by default
       };
-      await addProduct(productData);
-      setDialogOpen(false);
-      fetchProducts();
+
+      if (formMode === 'add') {
+        await addProduct(productData);
+      } else if (selectedProduct) {
+        await updateProduct(selectedProduct.id, productData);
+      }
+
+      setDialogOpen(false); // This will trigger resetDialogState via onOpenChange
+      fetchProducts(); // Re-fetch products to update the list
     } catch (e: any) {
-      console.error('Failed to add product:', e);
-      setFormError(e.message || 'Failed to add product. Please try again.');
+      console.error(`Failed to ${formMode === 'add' ? 'add' : 'update'} product:`, e);
+      setFormError(e.message || `Failed to ${formMode === 'add' ? 'add' : 'update'} product. Please try again.`);
     } finally {
       setUiIsLoading(false);
     }
   };
 
-  const handleEditProductSubmit = async () => {
-    if (!isFormValid || !selectedProduct) {
-      setFormError('Please fill in all required fields correctly.');
-      return;
-    }
-    setUiIsLoading(true);
-    setFormError(null);
-    try {
-      const productUpdates: Partial<Omit<ProductInput, 'userId'>> = {
-        name: formState.name.trim(),
-        costPrice: parseFloat(formState.costPrice),
-        sellingPrice: parseFloat(formState.sellingPrice),
-        quantity: formState.quantity ? parseInt(formState.quantity, 10) : 0,
-        unit: formState.unit,
-        category: formState.category.trim() || undefined,
-        imageUri: formState.imageUri || undefined,
-      };
-      await updateProduct(selectedProduct.id, productUpdates);
-      setDialogOpen(false);
-      fetchProducts();
-    } catch (e: any) {
-      console.error('Failed to update product:', e);
-      setFormError(e.message || 'Failed to update product. Please try again.');
-    } finally {
-      setUiIsLoading(false);
-    }
-  };
 
   const handleEditClick = useCallback((product: Product) => {
     setSelectedProduct(product);
@@ -917,8 +978,8 @@ const ProductManagementScreen = () => {
       },
     });
     setFormMode('edit');
-    setIsNewCategory(false);
-    setIsNewProduct(false);
+    setIsNewCategory(false); // When editing, assume category exists unless changed
+    setIsNewProduct(false); // Editing an existing product
     setIsCategoryAccordionOpen(false);
     setIsProductAccordionOpen(false);
     setFormError(null);
@@ -938,10 +999,10 @@ const ProductManagementScreen = () => {
       await deleteProduct(selectedProduct.id);
       setDeleteDialogOpen(false);
       setSelectedProduct(null);
-      fetchProducts();
+      fetchProducts(); // Re-fetch products
     } catch (e: any) {
       console.error('Failed to delete product:', e);
-      alert(e.message || 'Failed to delete product. Please try again.');
+      Alert.alert("Delete Error", e.message || 'Failed to delete product. Please try again.');
     } finally {
       setUiIsLoading(false);
     }
@@ -953,53 +1014,76 @@ const ProductManagementScreen = () => {
     setSelectedCategoryFilter(null);
     try {
       await fetchProducts();
+      await fetchStoreCategories();
     } catch (e) {
       console.error("Error on refresh: ", e);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchProducts]);
+  }, [fetchProducts, fetchStoreCategories]);
 
+  // Handler for when an existing category is selected from the accordion
   const handleSelectCategoryFromAccordion = useCallback((item: string) => {
-    setIsNewCategory(false);
+    setIsNewCategory(false); // No longer adding a new category
     dispatch({ type: 'UPDATE_FIELD', field: 'category', value: item });
-    setCategorySearch('');
-    setIsCategoryAccordionOpen(false);
-  }, [dispatch, setIsNewCategory]);
+    setCategorySearch(''); // Clear search
+    setIsCategoryAccordionOpen(false); // Close accordion
+  }, [dispatch]);
 
-  const handleAddNewCategoryFromAccordion = useCallback(() => {
+  // Handler for "Add New Category..." clicked within the accordion
+  const handleAddNewCategoryMode = useCallback(() => {
     setIsNewCategory(true);
-    setIsNewProduct(true);
-    dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
-    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
+    setIsNewProduct(true); // Usually, new category means new product details
+    dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' }); // Clear category field for new input
+    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' }); // Clear product name as well
     setCategorySearch('');
     setIsCategoryAccordionOpen(false);
-  }, [dispatch, setIsNewCategory, setIsNewProduct]);
+  }, [dispatch]);
 
+  // Handler for when an existing product is selected from the accordion
   const handleSelectProductFromAccordion = useCallback((itemName: string) => {
     const productDetails = products.find(p => p.name === itemName);
-    
-    setIsNewProduct(false);
+
+    setIsNewProduct(false); // No longer adding a new product
     dispatch({ type: 'UPDATE_FIELD', field: 'name', value: itemName });
 
-    if (productDetails && productDetails.category) {
-      dispatch({ type: 'UPDATE_FIELD', field: 'category', value: productDetails.category });
-      setIsNewCategory(false); 
+    if (productDetails) {
+      // Pre-fill form with selected product details
+      dispatch({
+        type: 'SET_FORM', payload: {
+          name: productDetails.name,
+          category: productDetails.category || '',
+          costPrice: productDetails.costPrice.toString(),
+          sellingPrice: productDetails.sellingPrice.toString(),
+          quantity: productDetails.quantity.toString(),
+          unit: productDetails.unit || 'piece',
+          imageUri: productDetails.imageUri || '',
+        }
+      });
+      setIsNewCategory(!productDetails.category); // If product has no category, set to new category mode
+    } else {
+      // Should not happen if itemName is from products list
+      // Clear other fields or set to new category mode if desired
+      dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+      setIsNewCategory(true);
     }
     setProductSearch('');
     setIsProductAccordionOpen(false);
-  }, [dispatch, products, setIsNewProduct, setIsNewCategory]);
+  }, [dispatch, products]);
 
-  const handleAddNewProductFromAccordion = useCallback(() => {
+  // Handler for "Add New Product..." clicked within the accordion
+  const handleAddNewProductMode = useCallback(() => {
     setIsNewProduct(true);
-    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
-    if (!formState.category || !isNewCategory) {
-        setIsNewCategory(true);
-        dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' }); // Clear name field
+    // If category is not already in 'new' mode, switch it too
+    if (!isNewCategory) {
+      setIsNewCategory(true);
+      dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' }); // Clear category field
     }
     setProductSearch('');
     setIsProductAccordionOpen(false);
-  }, [dispatch, formState.category, isNewCategory, setIsNewProduct, setIsNewCategory]);
+  }, [dispatch, isNewCategory]);
+
 
   const renderMainProductItem = useCallback(
     ({ item }: { item: Product }) => (
@@ -1015,6 +1099,7 @@ const ProductManagementScreen = () => {
                 />
               ) : (
                 <View className="w-12 h-12 rounded-lg mr-3 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                  <Package size={24} className="text-gray-400 dark:text-gray-500" />
                 </View>
               )}
               <View className="flex-1">
@@ -1089,10 +1174,10 @@ const ProductManagementScreen = () => {
           </ShadcnButton>
           <ShadcnButton
             onPress={() => {
-              resetFormAndDialogState();
+              resetDialogState();
               setFormMode('add');
-              setIsNewCategory(true);
-              setIsNewProduct(true);
+              setIsNewCategory(true); // Default to new category for new product
+              setIsNewProduct(true);  // Default to new product
               setDialogOpen(true);
             }}
             disabled={isLoading}
@@ -1174,7 +1259,7 @@ const ProductManagementScreen = () => {
             {isFilterAccordionOpen && (
               <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
                 <FlatList
-                  data={categories}
+                  data={categoriesForFilter} // Use categories from store for filter
                   keyExtractor={(item) => item}
                   renderItem={({ item }) => (
                     <TouchableOpacity
@@ -1221,20 +1306,21 @@ const ProductManagementScreen = () => {
         onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) {
+            // Delay reset to allow animations to finish, reducing flicker
             setTimeout(() => {
-              resetFormAndDialogState();
-            }, 10);
+              resetDialogState();
+            }, Platform.OS === 'web' ? 10 : 150); // Shorter delay for web
           }
         }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0} // Adjust as needed
           style={{ flex: 1 }}
         >
           <DialogContent
             className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
-            style={{ maxHeight: '95%' }}
+            style={{ maxHeight: '95%' }} // Ensure content doesn't overflow screen
           >
             <ProductFormDialogContent
               formState={formState}
@@ -1249,23 +1335,23 @@ const ProductManagementScreen = () => {
               profit={profit}
               isFormValid={isFormValid}
               formMode={formMode}
-              handleSubmit={formMode === 'edit' ? handleEditProductSubmit : handleAddProductSubmit}
+              handleSubmit={handleProductSubmit} // Combined submit handler
               setDialogOpen={setDialogOpen}
-              resetDialogState={resetFormAndDialogState}
+              resetDialogState={resetDialogState}
               isCategoryAccordionOpen={isCategoryAccordionOpen}
               setIsCategoryAccordionOpen={setIsCategoryAccordionOpen}
               categorySearch={categorySearch}
               setCategorySearch={setCategorySearch}
-              filteredCategories={filteredCategoriesForAccordion}
+              filteredCategoriesFromStore={filteredCategoriesForFormAccordion} // Use store categories
               onSelectCategory={handleSelectCategoryFromAccordion}
-              onAddNewCategory={handleAddNewCategoryFromAccordion}
+              onAddNewCategory={handleAddNewCategoryMode} // For "Add New Category..." button
               isProductAccordionOpen={isProductAccordionOpen}
               setIsProductAccordionOpen={setIsProductAccordionOpen}
               productSearch={productSearch}
               setProductSearch={setProductSearch}
               filteredProductNames={filteredProductNamesForAccordion}
               onSelectProduct={handleSelectProductFromAccordion}
-              onAddNewProduct={handleAddNewProductFromAccordion}
+              onAddNewProduct={handleAddNewProductMode} // For "Add New Product..." button
             />
           </DialogContent>
         </KeyboardAvoidingView>
