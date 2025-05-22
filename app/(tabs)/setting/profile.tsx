@@ -442,7 +442,7 @@ export default function ProfileScreen({ navigation }: Props) {
               <EditIcon size={12} color="white" />
             </View>
           </TouchableOpacity>
-          <View style={styles.profileTextContainer}>
+         <View className='text-right mr-2 mt-4' style={[styles.profileTextContainer, { paddingLeft: 8 }]}>
             <Text style={styles.profileName}>{formData.name}</Text>
             <Text style={styles.profileSubtitle}>Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}</Text>
           </View>
