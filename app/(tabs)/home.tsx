@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, ImageBackground, Dimensions, Animated, useColorScheme } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, ImageBackground, Dimensions, Animated, useColorScheme as rnColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { useProductStore } from '~/lib/stores/productStore';
@@ -7,6 +7,7 @@ import { Text } from '~/components/ui/text';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { BarChart4, TrendingUp, Package, DollarSign, AlertTriangle, Plus, Users, ChevronDown, Tag } from 'lucide-react-native';
 import { format } from 'date-fns';
+import { useCategoryStore } from '~/lib/stores/categoryStore'; // Import category store
 
 // Define the color palette based on theme
 const getColors = (colorScheme: 'light' | 'dark') => ({
@@ -36,6 +37,7 @@ const CAROUSEL_IMAGES = [
 
 // Fallback image for products without a matching category or image
 const FALLBACK_PRODUCT_IMAGE = 'https://images.unsplash.com/photo-1494390248081-4e521a5940db';
+const FALLBACK_CATEGORY_IMAGE = 'https://images.unsplash.com/photo-1543083477-4f785aeafaa8'; // Generic category image
 
 // Define shadow style for Card components
 const cardShadow = {
@@ -46,14 +48,29 @@ const cardShadow = {
   elevation: 5, // For Android
 };
 
+// Hardcoded categories for fallback
+const hardcodedCategories = [
+  { name: 'Vegetables', image: 'https://images.pexels.com/photos/30397673/pexels-photo-30397673/free-photo-of-colorful-fresh-vegetables-and-ingredients-flat-lay.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
+  { name: 'Fruits', image: 'https://images.pexels.com/photos/11738254/pexels-photo-11738254.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
+  { name: 'Snacks', image: 'https://images.pexels.com/photos/2725744/pexels-photo-2725744.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
+  { name: 'Dairy', image: 'https://images.pexels.com/photos/248412/pexels-photo-248412.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  { name: 'Grains', image: 'https://images.pexels.com/photos/17109241/pexels-photo-17109241/free-photo-of-seeds-for-sale-on-market.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
+];
+
 export default function HomeScreen() {
   const router = useRouter();
   const { userName } = useAuthStore();
   const storeProducts = useProductStore((state) => state.products);
   const fetchProducts = useProductStore((state) => state.fetchProducts);
   const productStoreLoading = useProductStore((state) => state.loading);
-  const colorScheme = useColorScheme();
-  const COLORS = getColors(colorScheme || 'light');
+  
+  const storeCategories = useCategoryStore((state) => state.categories);
+  const fetchStoreCategories = useCategoryStore((state) => state.fetchCategories);
+  const categoriesLoading = useCategoryStore((state) => state.isLoading);
+
+  const currentColorScheme = rnColorScheme(); // Use the hook directly
+  const COLORS = getColors(currentColorScheme || 'light');
+
 
   const [isScreenLoading, setIsScreenLoading] = useState(true);
   const [lowStockProductsCount, setLowStockProductsCount] = useState<number>(0);
@@ -74,10 +91,10 @@ export default function HomeScreen() {
   const offerScrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    fetchProducts().finally(() => {
+    Promise.all([fetchProducts(), fetchStoreCategories()]).finally(() => {
       setIsScreenLoading(false);
     });
-  }, [fetchProducts]);
+  }, [fetchProducts, fetchStoreCategories]);
 
   useEffect(() => {
     if (!productStoreLoading && storeProducts.length > 0) {
@@ -125,26 +142,35 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [offerIndex, discountedProducts.length]);
 
-  // Category data for "Product Categories" section and to map images in Product Inventory
-  const categories = [
-    { name: 'Vegetables', image: 'https://images.pexels.com/photos/30397673/pexels-photo-30397673/free-photo-of-colorful-fresh-vegetables-and-ingredients-flat-lay.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
-    { name: 'Fruits', image: 'https://images.pexels.com/photos/11738254/pexels-photo-11738254.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
-    { name: 'Snacks', image: 'https://images.pexels.com/photos/2725744/pexels-photo-2725744.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
-    { name: 'Dairy', image: 'https://images.pexels.com/photos/248412/pexels-photo-248412.jpeg?auto=compress&cs=tinysrgb&w=600' },
-    { name: 'Grains', image: 'https://images.pexels.com/photos/17109241/pexels-photo-17109241/free-photo-of-seeds-for-sale-on-market.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' },
-  ];
-
   // Function to get the image URL based on the product's image field or category
-  const getProductImageByCategory = (product: { image?: string; category?: string }) => {
-    // Prioritize the product's own image field if it exists
-    if (product.image) {
-      return product.image;
+  const getProductImageByCategory = (product: { imageUri?: string; category?: string }) => {
+    if (product.imageUri) {
+        return product.imageUri;
     }
-    // Otherwise, fall back to category-based image
-    if (!product.category) return FALLBACK_PRODUCT_IMAGE;
-    const matchedCategory = categories.find((cat) => cat.name.toLowerCase() === product.category?.toLowerCase());
-    return matchedCategory ? matchedCategory.image : FALLBACK_PRODUCT_IMAGE;
+    const productCategoryName = product.category?.toLowerCase();
+    if (!productCategoryName) return FALLBACK_PRODUCT_IMAGE;
+
+    if (storeCategories.length > 0) {
+        const matchedStoreCategory = storeCategories.find(
+            (cat) => cat.name.toLowerCase() === productCategoryName && cat.imageUri
+        );
+        if (matchedStoreCategory && matchedStoreCategory.imageUri) {
+            return matchedStoreCategory.imageUri;
+        }
+    }
+    const matchedHardcodedCategory = hardcodedCategories.find(
+        (cat) => cat.name.toLowerCase() === productCategoryName
+    );
+    if (matchedHardcodedCategory) {
+        return matchedHardcodedCategory.image;
+    }
+    return FALLBACK_PRODUCT_IMAGE;
   };
+
+  // Determine which categories to display
+  const displayCategories = !categoriesLoading && storeCategories.length > 0 
+    ? storeCategories.map(cat => ({ name: cat.name, image: cat.imageUri || FALLBACK_CATEGORY_IMAGE })) 
+    : hardcodedCategories;
 
   // Define Quick Actions data
   const quickActions = [
@@ -159,7 +185,6 @@ export default function HomeScreen() {
       title: 'Add Product',
       icon: <Package size={24} color={COLORS.primary} />,
       backgroundColor: COLORS.lightPurple,
-      // Use the first product's image if available, otherwise fall back to static image
       image: storeProducts.length > 0 ? getProductImageByCategory(storeProducts[0]) : 'https://images.pexels.com/photos/264636/pexels-photo-264636.jpeg?auto=compress&cs=tinysrgb&w=600',
       onPress: () => router.push('/(tabs)/inventory/products'),
     },
@@ -218,10 +243,10 @@ export default function HomeScreen() {
 
   const navigateToProducts = () => router.push('/(tabs)/inventory/products');
   const navigateToNewSale = () => router.push('/(tabs)/sale/sales-management');
-  const navigateToCustomer = () => router.push('/(tabs)/inventory/customers');
+  // const navigateToCustomer = () => router.push('/(tabs)/inventory/customers');
   const navigateToReports = () => router.push('/(tabs)/ReportsScreen');
 
-  if (isScreenLoading) {
+  if (isScreenLoading || categoriesLoading) {
     return (
       <View style={{ backgroundColor: COLORS.white }} className="flex-1 justify-center items-center">
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -237,11 +262,11 @@ export default function HomeScreen() {
       <View className="p-4">
         {/* Welcome Section - No Card, but has ImageBackground */}
         <ImageBackground
-          source={{ uri: 'https://images.unsplash.com/photo-1556740738-6b4a6d6b6b6b' }}
+          source={{ uri: 'https://images.unsplash.com/photo-1556740738-6b4a6d6b6b6b' }} // A vibrant grocery store or market background
           style={{ borderRadius: 16, overflow: 'hidden' }}
           className="mb-6"
         >
-          <View style={{ backgroundColor: colorScheme === 'dark' ? 'rgba(139,92,246,0.8)' : 'rgba(114,0,218,0.8)' }} className="rounded-2xl p-5">
+          <View style={{ backgroundColor: currentColorScheme === 'dark' ? 'rgba(139,92,246,0.8)' : 'rgba(114,0,218,0.8)' }} className="rounded-2xl p-5">
             <View className="flex-row justify-between items-center">
               <View>
                 <Text style={{ color: COLORS.white }} className="text-2xl font-bold">
@@ -334,7 +359,7 @@ export default function HomeScreen() {
             className="flex-1 rounded-2xl overflow-hidden"
           >
             <ImageBackground
-              source={{ uri: 'https://images.pexels.com/photos/7055126/pexels-photo-7055126.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1                            ' }}
+              source={{ uri: 'https://images.pexels.com/photos/7055126/pexels-photo-7055126.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1                            ' }} // Shelves with products
               style={{ width: '100%' }}
               resizeMode="cover"
             >
@@ -365,7 +390,7 @@ export default function HomeScreen() {
             className="flex-1 rounded-2xl overflow-hidden"
           >
             <ImageBackground
-              source={{ uri: 'https://images.pexels.com/photos/259165/pexels-photo-259165.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' }}
+              source={{ uri: 'https://images.pexels.com/photos/259165/pexels-photo-259165.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' }} // Cash register or money related
               style={{ width: '100%' }}
               resizeMode="cover"
             >
@@ -391,11 +416,11 @@ export default function HomeScreen() {
 
         {/* Inventory Alerts - No Card, but has ImageBackground */}
         <ImageBackground
-          source={{ uri: 'https://images.pexels.com/photos/1797428/pexels-photo-1797428.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' }}
+          source={{ uri: 'https://images.pexels.com/photos/1797428/pexels-photo-1797428.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1' }} // Warehouse or stock room
           style={{ borderRadius: 16, overflow: 'hidden' }}
           className="mb-6"
         >
-          <View style={{ backgroundColor: colorScheme === 'dark' ? 'rgba(55,65,81,0.95)' : 'rgba(255,255,255,0.95)' }} className="rounded-2xl">
+          <View style={{ backgroundColor: currentColorScheme === 'dark' ? 'rgba(55,65,81,0.95)' : 'rgba(255,255,255,0.95)' }} className="rounded-2xl">
             <CardHeader className="pb-2 px-5 pt-5">
               <CardTitle style={{ color: COLORS.dark }} className="text-lg font-bold">
                 Inventory Alerts
@@ -459,7 +484,7 @@ export default function HomeScreen() {
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row">
-              {categories.map((category, index) => (
+              {displayCategories.map((category, index) => (
                 <TouchableOpacity
                   key={index}
                   className="mr-4 items-center"
@@ -468,6 +493,7 @@ export default function HomeScreen() {
                   <ImageBackground
                     source={{ uri: category.image }}
                     style={{ width: 80, height: 80, borderRadius: 40, overflow: 'hidden' }}
+                    onError={() => console.log(`Failed to load image for category: ${category.name}`)}
                   />
                   <Text style={{ color: COLORS.dark, fontSize: 14, marginTop: 8 }}>
                     {category.name}
@@ -556,7 +582,7 @@ export default function HomeScreen() {
                 <View className="flex-row">
                   {sortedProducts.map((product, index) => {
                     const productImage = getProductImageByCategory(product);
-                    const isFallback = productImage === FALLBACK_PRODUCT_IMAGE;
+                    const isFallback = productImage === FALLBACK_PRODUCT_IMAGE || productImage === FALLBACK_CATEGORY_IMAGE;
 
                     return (
                       <TouchableOpacity
@@ -577,6 +603,7 @@ export default function HomeScreen() {
                             source={{ uri: productImage }}
                             style={{ width: '100%', height: 80 }}
                             className="rounded-t-xl overflow-hidden"
+                            onError={() => console.log(`Failed to load image for product: ${product.name}`)}
                           >
                             {isFallback && (
                               <View
@@ -683,11 +710,11 @@ export default function HomeScreen() {
 
         {/* Recent Sales - No Card, but has ImageBackground */}
         <ImageBackground
-          source={{ uri: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d' }}
+          source={{ uri: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d' }} // POS interaction or happy customer
           style={{ borderRadius: 16, overflow: 'hidden' }}
           className="mb-6"
         >
-          <View style={{ backgroundColor: colorScheme === 'dark' ? 'rgba(55,65,81,0.95)' : 'rgba(255,255,255,0.95)' }} className="rounded-2xl">
+          <View style={{ backgroundColor: currentColorScheme === 'dark' ? 'rgba(55,65,81,0.95)' : 'rgba(255,255,255,0.95)' }} className="rounded-2xl">
             <CardHeader className="pb-2 px-5 pt-5">
               <CardTitle style={{ color: COLORS.dark }} className="text-lg font-bold">
                 Recent Sales
