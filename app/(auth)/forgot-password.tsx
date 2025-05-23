@@ -1,5 +1,6 @@
+// ~/screens/forgot-password.tsx
 import React, { useState, useEffect } from 'react';
-import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ViewStyle } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ViewStyle, StyleSheet, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { useAuthStore } from '~/lib/stores/authStore';
@@ -15,7 +16,7 @@ import AnimatedBackground from '~/components/AnimatedBackground';
 // Toast styles using NativeWind colors but as style objects for sonner-native compatibility
 const toasterOptionsConfig = {
   style: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
     borderWidth: 1,
     borderRadius: 16,
@@ -52,6 +53,9 @@ const toasterOptionsConfig = {
   },
 };
 
+const ACTIVE_BUTTON_COLOR = '#F9C00C';
+const DISABLED_BUTTON_COLOR = '#FBE08A';
+
 enum ResetStep {
   IDENTIFY_USER,
   ANSWER_QUESTION,
@@ -66,66 +70,97 @@ export default function ForgotPasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState<ResetStep>(ResetStep.IDENTIFY_USER);
-  const [securityQuestion, setSecurityQuestion] = useState<string | null>(null); // This will hold the raw string from DB
+  const [securityQuestion, setSecurityQuestion] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { 
-    verifySecurityAnswer, 
-    resetUserPassword, 
-    isLoading, 
-    error, 
+  const {
+    verifySecurityAnswer,
+    resetUserPassword,
+    isLoading,
+    error,
     clearError,
-    fetchUserAndSecurityQuestion 
+    fetchUserAndSecurityQuestion
   } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
+    // console.log("[FORGOT PASSWORD] Component did mount - clearing error from store.");
     clearError();
-  }, [clearError]);
+  }, [clearError]); // Runs on mount
 
   useEffect(() => {
-    if (error) {
-      let toastShown = false;
-      let toastTitle = "An Error Occurred";
-      let toastDescription = error;       
+    // ADD THIS CONSOLE LOG TO SEE THE EXACT ERROR
+    console.log(`[FORGOT PASSWORD] Error Effect: store.error is "${error}", currentStep is ${ResetStep[currentStep]}`);
 
-      if (currentStep === ResetStep.IDENTIFY_USER || currentStep === ResetStep.ANSWER_QUESTION) {
-        if (error.toLowerCase().includes('user not found')) {
-          toastTitle = 'User Not Found';
-          toastDescription = 'The email or phone number entered does not match any account. Please check and try again.';
-          toast.error(toastTitle, { description: toastDescription });
-          toastShown = true;
-        } else if (error.toLowerCase().includes('incorrect security answer')) {
-          toastTitle = 'Incorrect Security Answer';
-          toastDescription = 'The answer provided is incorrect. Please try again.';
-          toast.error(toastTitle, { description: toastDescription });
-          toastShown = true;
-        } else if (error.toLowerCase().includes('security question not set')) {
-          toastTitle = 'Account Issue';
-          toastDescription = 'A security question is not set up for this account. Please contact support.';
-          toast.error(toastTitle, { description: toastDescription });
-          toastShown = true;
-        }
+    if (!error) {
+      return; 
+    }
+
+    let errorToastShown = false; 
+    const currentErrorValue = error; // Capture error value for this effect run
+
+    if (currentStep === ResetStep.IDENTIFY_USER) {
+      if (currentErrorValue.toLowerCase().includes('user not found')) {
+        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.error('User Not Found', {
+          description: 'The email or phone number entered does not match any account. Please check and try again.',
+        });
+        errorToastShown = true;
+      } else if (currentErrorValue.toLowerCase().includes('security question not set')) {
+        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.error('Account Issue', {
+          description: 'A security question is not set up for this account. Please contact support.',
+        });
+        errorToastShown = true;
       }
-      else if (currentStep === ResetStep.CREATE_PASSWORD) {
-        toastTitle = 'Password Reset Failed';
-        toast.error(toastTitle, { description: toastDescription });
-        toastShown = true;
+    } else if (currentStep === ResetStep.ANSWER_QUESTION) {
+      if (currentErrorValue.toLowerCase().includes('incorrect security answer')) {
+        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.error('Incorrect Security Answer', {
+          description: 'The answer provided is incorrect. Please try again.',
+        });
+        errorToastShown = true;
+      } else if (currentErrorValue.toLowerCase().includes('user not found')) {
+        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.error('User Not Found', {
+          description: 'The email or phone number entered does not match any account. Please check and try again.',
+        });
+        errorToastShown = true;
+      } else if (currentErrorValue.toLowerCase().includes('security question not set')) {
+        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.error('Account Issue', {
+          description: 'A security question is not set up for this account. Please contact support.',
+        });
+        errorToastShown = true;
       }
-      
-      if (toastShown) { 
-        clearError(); 
-      } else if (currentStep !== ResetStep.CREATE_PASSWORD && 
-                 !error.toLowerCase().includes('user not found') && 
-                 !error.toLowerCase().includes('incorrect security answer') && 
-                 !error.toLowerCase().includes('security question not set')) {
+    } else if (currentStep === ResetStep.CREATE_PASSWORD) {
+      toast.dismiss(); // Explicitly dismiss other toasts
+      toast.error('Password Reset Failed', {
+        description: currentErrorValue,
+      });
+      errorToastShown = true;
+    }
+
+    // Important: Clear the error from the store AFTER processing it for this screen.
+    // This ensures that this instance of the error has been handled.
+    if (errorToastShown) {
+      clearError();
+    } else {
+      // If no specific toast was shown for the error in the current step,
+      // (e.g. a generic network error not caught above for IDENTIFY_USER/ANSWER_QUESTION)
+      // still clear it to prevent it from lingering.
+      if (currentStep !== ResetStep.CREATE_PASSWORD) {
         clearError();
       }
+      // For CREATE_PASSWORD step, if errorToastShown is false (which shouldn't happen due to above logic),
+      // the error would be cleared here if not handled.
+      // However, any error in CREATE_PASSWORD step *is* handled and shows a toast.
     }
   }, [error, currentStep, clearError]);
 
   useEffect(() => {
     if (validationError) {
+      toast.dismiss(); // Dismiss other toasts before showing validation error
       toast.error('Validation error', {
         description: validationError,
       });
@@ -137,13 +172,14 @@ export default function ForgotPasswordScreen() {
       setValidationError('Please enter your email or phone');
       return;
     }
-    clearError(); 
+    clearError(); // Clear any existing store error before new async operation
     setValidationError(null);
     const userDetails = await fetchUserAndSecurityQuestion(emailOrPhone);
     if (userDetails && userDetails.securityQuestion) {
-      setSecurityQuestion(userDetails.securityQuestion); // Store the raw string
+      setSecurityQuestion(userDetails.securityQuestion);
       setCurrentStep(ResetStep.ANSWER_QUESTION);
     }
+    // If error, the useEffect for [error] will handle it.
   };
 
   const handleVerifySecurityAnswer = async () => {
@@ -151,7 +187,7 @@ export default function ForgotPasswordScreen() {
       setValidationError('Please enter your security answer');
       return;
     }
-    clearError(); 
+    clearError(); // Clear any existing store error
     setValidationError(null);
     const user = await verifySecurityAnswer(emailOrPhone, securityAnswer);
     if (user) {
@@ -172,7 +208,7 @@ export default function ForgotPasswordScreen() {
       setValidationError('Passwords do not match');
       return;
     }
-    clearError(); 
+    clearError(); // Clear any existing store error
     setValidationError(null);
     const success = await resetUserPassword({
       emailOrPhone,
@@ -180,34 +216,32 @@ export default function ForgotPasswordScreen() {
       newPassword,
     });
     if (success) {
+      toast.dismiss(); // Dismiss others before success
       toast.success('Password reset successful!', {
         description: 'You can now sign in with your new password',
       });
       setTimeout(() => {
         setCurrentStep(ResetStep.SUCCESS);
-      }, 1000);
+      }, 1000); 
     }
   };
 
-  // Helper function to parse the security question for display
   const getFormattedSecurityQuestion = () => {
     if (!securityQuestion) return "Loading question...";
-    // Check if it's the malformed string like "{value=..., label=...}"
     if (securityQuestion.startsWith("{value=") && securityQuestion.includes("label=") && securityQuestion.endsWith("}")) {
       const labelMatch = securityQuestion.match(/label=([^}]+)/);
       if (labelMatch && labelMatch[1]) {
-        // labelMatch[1] contains the text after "label=" up to the closing "}"
-        // For "{value=Q, label=L}", labelMatch[1] is "L"
         return labelMatch[1].trim();
       }
     }
-    // Otherwise, assume it's a normal question string or parsing failed, return as is
     return securityQuestion;
   };
 
   const getStepContent = () => {
+    let isButtonDisabled;
     switch (currentStep) {
       case ResetStep.IDENTIFY_USER:
+        isButtonDisabled = isLoading || !emailOrPhone.trim();
         return (
           <>
             <View className="items-center mb-8">
@@ -224,8 +258,7 @@ export default function ForgotPasswordScreen() {
                   value={emailOrPhone}
                   onChangeText={text => {
                     setEmailOrPhone(text);
-                    setValidationError(null); 
-                    if (error) clearError(); 
+                    setValidationError(null);
                   }}
                   autoCapitalize="none"
                   keyboardType="email-address"
@@ -236,17 +269,23 @@ export default function ForgotPasswordScreen() {
             </View>
             <Button
               onPress={handleVerifyUser}
-              disabled={isLoading || !emailOrPhone.trim()}
-              className="h-12 bg-amber-400 rounded-2xl shadow-lg mb-4"
+              disabled={isButtonDisabled}
+              style={[
+                styles.actionButtonBase,
+                { backgroundColor: isButtonDisabled ? DISABLED_BUTTON_COLOR : ACTIVE_BUTTON_COLOR }
+              ]}
             >
-              <Text className="text-slate-800 font-bold text-base">
-                {isLoading ? 'Verifying...' : 'Continue'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#334155" />
+              ) : (
+                <Text className="text-white font-bold text-base">Continue</Text>
+              )}
             </Button>
           </>
         );
 
       case ResetStep.ANSWER_QUESTION:
+        isButtonDisabled = isLoading || !securityAnswer.trim();
         return (
           <>
             <View className="items-center mb-8">
@@ -269,8 +308,7 @@ export default function ForgotPasswordScreen() {
                   value={securityAnswer}
                   onChangeText={text => {
                     setSecurityAnswer(text);
-                    setValidationError(null); 
-                    if (error) clearError(); 
+                    setValidationError(null);
                   }}
                   className="h-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
                   editable={!isLoading}
@@ -279,17 +317,23 @@ export default function ForgotPasswordScreen() {
             </View>
             <Button
               onPress={handleVerifySecurityAnswer}
-              disabled={isLoading || !securityAnswer.trim()}
-              className="h-12 bg-amber-400 rounded-2xl shadow-lg mb-4"
+              disabled={isButtonDisabled}
+              style={[
+                styles.actionButtonBase,
+                { backgroundColor: isButtonDisabled ? DISABLED_BUTTON_COLOR : ACTIVE_BUTTON_COLOR }
+              ]}
             >
-              <Text className="text-slate-800 font-bold text-base">
-                {isLoading ? 'Verifying...' : 'Verify Answer'}
-              </Text>
+               {isLoading ? (
+                <ActivityIndicator size="small" color="#334155" />
+              ) : (
+                <Text className="text-white font-bold text-base">Verify Answer</Text>
+              )}
             </Button>
           </>
         );
 
       case ResetStep.CREATE_PASSWORD:
+        isButtonDisabled = isLoading || !newPassword || !confirmPassword;
         return (
           <>
             <View className="items-center mb-8">
@@ -308,7 +352,6 @@ export default function ForgotPasswordScreen() {
                     onChangeText={text => {
                       setNewPassword(text);
                       setValidationError(null);
-                      if (error) clearError(); 
                     }}
                     secureTextEntry={!showPassword}
                     className="h-12 pr-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
@@ -335,7 +378,6 @@ export default function ForgotPasswordScreen() {
                   onChangeText={text => {
                     setConfirmPassword(text);
                     setValidationError(null);
-                    if (error) clearError();
                   }}
                   secureTextEntry={!showPassword}
                   className="h-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
@@ -345,12 +387,17 @@ export default function ForgotPasswordScreen() {
             </View>
             <Button
               onPress={handleResetPassword}
-              disabled={isLoading || !newPassword || !confirmPassword}
-              className="h-12 bg-amber-400 rounded-2xl shadow-lg mb-4"
+              disabled={isButtonDisabled}
+              style={[
+                styles.actionButtonBase,
+                { backgroundColor: isButtonDisabled ? DISABLED_BUTTON_COLOR : ACTIVE_BUTTON_COLOR }
+              ]}
             >
-              <Text className="text-slate-800 font-bold text-base">
-                {isLoading ? 'Resetting...' : 'Reset Password'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#334155" />
+              ) : (
+                <Text className="text-white font-bold text-base">Reset Password</Text>
+              )}
             </Button>
           </>
         );
@@ -366,9 +413,12 @@ export default function ForgotPasswordScreen() {
             </View>
             <Button
               onPress={() => router.replace('/(auth)/login')}
-              className="h-12 bg-amber-400 rounded-2xl shadow-lg mb-4"
+              style={[
+                styles.actionButtonBase,
+                { backgroundColor: ACTIVE_BUTTON_COLOR }
+              ]}
             >
-              <Text className="text-slate-800 font-bold text-base">
+              <Text className="text-white font-bold text-base">
                 Back to Login
               </Text>
             </Button>
@@ -405,8 +455,8 @@ export default function ForgotPasswordScreen() {
                       router.back();
                     } else if (currentStep !== ResetStep.SUCCESS) {
                       setCurrentStep(currentStep - 1);
-                      if (error) clearError(); 
-                      setValidationError(null);
+                      clearError(); // Clear store error when navigating back between steps
+                      setValidationError(null); 
                     }
                   }}
                   className="p-2"
@@ -427,7 +477,7 @@ export default function ForgotPasswordScreen() {
         </View>
         <View style={toasterContainerStyle}>
           <Toaster
-            position="top-center"
+            position="top-center" // was top-center previously
             toastOptions={toasterOptionsConfig}
           />
         </View>
@@ -435,3 +485,14 @@ export default function ForgotPasswordScreen() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  actionButtonBase: {
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+});

@@ -18,6 +18,7 @@ import {
   StatusBar,
   ViewStyle,
   Image,
+  StyleSheet, // Import StyleSheet
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AnimatedBackground from '~/components/AnimatedBackground';
@@ -62,6 +63,13 @@ const toasterOptionsConfig = {
   },
 };
 
+const ACTIVE_BUTTON_COLOR = '#F9C00C'; // Define your color
+// For disabled, let's use a lighter version or opacity.
+// If we had #F9C00C in tailwind.config.js as 'custom-amber',
+// we could use 'bg-custom-amber/60'.
+// Manually choosing a lighter shade or using opacity with inline style:
+const DISABLED_BUTTON_COLOR = '#FBE08A'; // A lighter version of #F9C00C
+
 export default function LoginScreen() {
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -77,9 +85,6 @@ export default function LoginScreen() {
       try {
         await initDatabase();
         setDbInitialized(true);
-        toast.success('Logout Successful!', {
-          description: 'Please sign in to continue',
-        });
       } catch (error) {
         console.error('Database initialization error:', error);
         toast.error('Setup failed', {
@@ -100,15 +105,15 @@ export default function LoginScreen() {
       toast.error('Sign in failed', {
         description: error,
       });
+      clearError();
     }
-  }, [error]);
+  }, [error, clearError]);
 
   const handleLogin = async () => {
     if (!emailOrPhone.trim() || !password) {
       toast.error('Missing information', {
         description: 'Please enter both email/phone and password',
       });
-      console.log('Login attempted with empty fields:', { emailOrPhone, password });
       return;
     }
 
@@ -125,13 +130,13 @@ export default function LoginScreen() {
   };
 
   const handleEmailOrPhoneChange = (text: string) => {
-    console.log('Email/Phone input changed:', text);
     setEmailOrPhone(text);
+    if (error) clearError();
   };
 
   const handlePasswordChange = (text: string) => {
-    console.log('Password input changed:', text);
     setPassword(text);
+    if (error) clearError();
   };
 
   const toasterContainerStyle: ViewStyle = {
@@ -141,6 +146,8 @@ export default function LoginScreen() {
     right: 0,
     zIndex: 10000,
   };
+
+  const isButtonDisabled = isLoading || !emailOrPhone.trim() || !password;
 
   if (initializingDb) {
     return (
@@ -220,7 +227,6 @@ export default function LoginScreen() {
                           keyboardType="email-address"
                           className="h-14 px-4 text-base text-slate-800 border-0 w-full"
                           editable={!isLoading}
-                          onFocus={() => console.log('Email/Phone input focused')}
                         />
                       </View>
 
@@ -232,7 +238,6 @@ export default function LoginScreen() {
                           secureTextEntry={!showPassword}
                           className="h-14 px-4 text-base text-slate-800 border-0 w-full"
                           editable={!isLoading}
-                          onFocus={() => console.log('Password input focused')}
                         />
                         <TouchableOpacity
                           onPress={() => setShowPassword(!showPassword)}
@@ -260,17 +265,20 @@ export default function LoginScreen() {
 
                     <TouchableOpacity
                       onPress={handleLogin}
-                      disabled={isLoading || !emailOrPhone.trim() || !password}
-                      className={`${(!emailOrPhone.trim() || !password) ? 'bg-amber-300/60 shadow-sm' : 'bg-amber-400 shadow-lg'} h-14 rounded-2xl justify-center items-center w-full`}
+                      disabled={isButtonDisabled}
+                      style={[
+                        styles.signInButtonBase,
+                        { backgroundColor: isButtonDisabled ? DISABLED_BUTTON_COLOR : ACTIVE_BUTTON_COLOR }
+                      ]}
                       activeOpacity={0.85}
                     >
                       {isLoading ? (
-                        <ActivityIndicator size="small" color="#ffffff" />
+                        <ActivityIndicator size="small" color="#334155" /> // Darker color for text on yellow
                       ) : (
                         <View className="flex-row items-center justify-center">
-                          <Text className="text-slate-800 font-bold text-base mr-3">Sign In</Text>
+                          <Text className="text-white font-bold text-base mr-3">Sign In</Text>
                           <View className="w-6 h-6 rounded-full bg-white justify-center items-center shadow-sm">
-                            <ArrowRight size={16} color="#FBBF24" />
+                            <ArrowRight size={16} color={ACTIVE_BUTTON_COLOR} /> 
                           </View>
                         </View>
                       )}
@@ -303,3 +311,14 @@ export default function LoginScreen() {
     </GestureHandlerRootView>
   );
 }
+
+// Add StyleSheet for button styles not covered by Tailwind classes
+const styles = StyleSheet.create({
+  signInButtonBase: {
+    height: 56, // h-14 equivalent
+    borderRadius: 16, // rounded-2xl equivalent
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+});

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ViewStyle } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ViewStyle, StyleSheet, ActivityIndicator } from 'react-native'; // Added StyleSheet, ActivityIndicator
 import { Link, useRouter } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
-import { Button } from '~/components/ui/button';
-import { Eye, EyeOff, ChevronDown } from 'lucide-react-native';
+import { Button } from '~/components/ui/button'; // We will replace this with TouchableOpacity for consistent styling
+import { Eye, EyeOff } from 'lucide-react-native'; // Removed ChevronDown as Select component handles its own icon
 import { SECURITY_QUESTIONS } from '~/lib/models/user';
 import { validateEmail, validatePhone, validatePasswordStrength } from '~/lib/utils/authUtils';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '~/components/ui/select';
@@ -17,7 +17,7 @@ import AnimatedBackground from '~/components/AnimatedBackground';
 // Toast styles using NativeWind colors but as style objects for sonner-native compatibility
 const toasterOptionsConfig = {
   style: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
     borderWidth: 1,
     borderRadius: 16,
@@ -54,6 +54,9 @@ const toasterOptionsConfig = {
   },
 };
 
+const ACTIVE_BUTTON_COLOR = '#F9C00C';
+const DISABLED_BUTTON_COLOR = '#FBE08A'; // A lighter version for disabled state
+
 export default function SignupScreen() {
   const [name, setName] = useState('');
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -69,13 +72,19 @@ export default function SignupScreen() {
   const { signup, isLoading, error, clearError } = useAuthStore();
   const router = useRouter();
 
+  // Clear stale errors from the store when the screen mounts
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
+
   useEffect(() => {
     if (error) {
       toast.error('Sign up failed', {
         description: error,
       });
+      clearError(); // Clear error after showing toast
     }
-  }, [error]);
+  }, [error, clearError]);
 
   useEffect(() => {
     if (Object.keys(validationErrors).length > 0) {
@@ -83,42 +92,21 @@ export default function SignupScreen() {
       toast.error('Validation error', {
         description: firstError,
       });
+      // Validation errors are cleared on input change or form submission attempt
     }
   }, [validationErrors]);
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
-
-    if (!name.trim()) {
-      errors.name = 'Name is required';
-    }
-
-    if (!emailOrPhone.trim()) {
-      errors.emailOrPhone = `${isEmail ? 'Email' : 'Phone'} is required`;
-    } else if (isEmail && !validateEmail(emailOrPhone)) {
-      errors.emailOrPhone = 'Invalid email format';
-    } else if (!isEmail && !validatePhone(emailOrPhone)) {
-      errors.emailOrPhone = 'Invalid phone format';
-    }
-
-    if (!password) {
-      errors.password = 'Password is required';
-    } else if (!validatePasswordStrength(password)) {
-      errors.password = 'Password must be at least 8 characters and contain a number';
-    }
-
-    if (password !== confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
-    }
-
-    if (!securityQuestion) {
-      errors.securityQuestion = 'Security question is required';
-    }
-
-    if (!securityAnswer.trim()) {
-      errors.securityAnswer = 'Security answer is required';
-    }
-
+    if (!name.trim()) errors.name = 'Name is required';
+    if (!emailOrPhone.trim()) errors.emailOrPhone = `${isEmail ? 'Email' : 'Phone'} is required`;
+    else if (isEmail && !validateEmail(emailOrPhone)) errors.emailOrPhone = 'Invalid email format';
+    else if (!isEmail && !validatePhone(emailOrPhone)) errors.emailOrPhone = 'Invalid phone format (e.g., +12223334444)';
+    if (!password) errors.password = 'Password is required';
+    else if (!validatePasswordStrength(password)) errors.password = 'Password must be at least 8 characters and contain a number';
+    if (password !== confirmPassword) errors.confirmPassword = 'Passwords do not match';
+    if (!securityQuestion) errors.securityQuestion = 'Security question is required';
+    if (!securityAnswer.trim()) errors.securityAnswer = 'Security answer is required';
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -127,12 +115,11 @@ export default function SignupScreen() {
     if (!validateForm()) {
       return;
     }
-
     clearError();
     const userData = {
       name,
       password,
-      securityQuestion,
+      securityQuestion, // This should be the string value from the Select component
       securityAnswer,
       ...(isEmail ? { email: emailOrPhone } : { phone: emailOrPhone }),
     };
@@ -154,15 +141,31 @@ export default function SignupScreen() {
     const newErrors = { ...validationErrors };
     delete newErrors.emailOrPhone;
     setValidationErrors(newErrors);
+    if (error) clearError();
+  };
+
+  const handleInputChange = (setter: React.Dispatch<React.SetStateAction<string>>, fieldName?: keyof typeof validationErrors) => (text: string) => {
+    setter(text);
+    if (fieldName && validationErrors[fieldName]) {
+      const newErrors = { ...validationErrors };
+      delete newErrors[fieldName];
+      setValidationErrors(newErrors);
+    }
+    if (error) clearError();
   };
 
   const handleSecurityQuestionChange = (value: string) => {
-    setSecurityQuestion(value);
+    setSecurityQuestion(value); // value is the string of the question itself
     if (validationErrors.securityQuestion) {
       const newErrors = { ...validationErrors };
       delete newErrors.securityQuestion;
       setValidationErrors(newErrors);
     }
+    if (error) clearError();
+  };
+
+  const isFormSubmittable = () => {
+    return name.trim() && emailOrPhone.trim() && password && confirmPassword && securityQuestion && securityAnswer.trim();
   };
 
   const toasterContainerStyle: ViewStyle = {
@@ -185,7 +188,7 @@ export default function SignupScreen() {
             className="flex-1"
             keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 20}
           >
-            <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 16 }}>
+            <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
               <View className="items-center mb-8">
                 <Text className="text-3xl font-bold text-slate-800">Create Account</Text>
                 <Text className="text-base text-slate-500 mt-2">Sign up for Petti Kadai</Text>
@@ -197,14 +200,7 @@ export default function SignupScreen() {
                   <Input
                     placeholder="Enter your full name"
                     value={name}
-                    onChangeText={text => {
-                      setName(text);
-                      if (validationErrors.name) {
-                        const newErrors = { ...validationErrors };
-                        delete newErrors.name;
-                        setValidationErrors(newErrors);
-                      }
-                    }}
+                    onChangeText={handleInputChange(setName, 'name')}
                     className="h-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
                     editable={!isLoading}
                   />
@@ -222,14 +218,7 @@ export default function SignupScreen() {
                   <Input
                     placeholder={isEmail ? 'Enter your email' : 'Enter your phone number'}
                     value={emailOrPhone}
-                    onChangeText={text => {
-                      setEmailOrPhone(text);
-                      if (validationErrors.emailOrPhone) {
-                        const newErrors = { ...validationErrors };
-                        delete newErrors.emailOrPhone;
-                        setValidationErrors(newErrors);
-                      }
-                    }}
+                    onChangeText={handleInputChange(setEmailOrPhone, 'emailOrPhone')}
                     keyboardType={isEmail ? 'email-address' : 'phone-pad'}
                     autoCapitalize="none"
                     className="h-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
@@ -243,14 +232,7 @@ export default function SignupScreen() {
                     <Input
                       placeholder="Create a password"
                       value={password}
-                      onChangeText={text => {
-                        setPassword(text);
-                        if (validationErrors.password) {
-                          const newErrors = { ...validationErrors };
-                          delete newErrors.password;
-                          setValidationErrors(newErrors);
-                        }
-                      }}
+                      onChangeText={handleInputChange(setPassword, 'password')}
                       secureTextEntry={!showPassword}
                       className="h-12 pr-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
                       editable={!isLoading}
@@ -274,14 +256,7 @@ export default function SignupScreen() {
                   <Input
                     placeholder="Confirm your password"
                     value={confirmPassword}
-                    onChangeText={text => {
-                      setConfirmPassword(text);
-                      if (validationErrors.confirmPassword) {
-                        const newErrors = { ...validationErrors };
-                        delete newErrors.confirmPassword;
-                        setValidationErrors(newErrors);
-                      }
-                    }}
+                    onChangeText={handleInputChange(setConfirmPassword, 'confirmPassword')}
                     secureTextEntry={!showPassword}
                     className="h-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
                     editable={!isLoading}
@@ -291,7 +266,7 @@ export default function SignupScreen() {
                 <View>
                   <Text className="text-base text-slate-800 font-medium mb-2">Security Question</Text>
                   <Select
-                    defaultValue=""
+                    defaultValue="" // Keep empty to enforce selection
                     onValueChange={handleSecurityQuestionChange}
                     open={selectOpen}
                     onOpenChange={setSelectOpen}
@@ -314,31 +289,31 @@ export default function SignupScreen() {
                   <Input
                     placeholder="Answer to your security question"
                     value={securityAnswer}
-                    onChangeText={text => {
-                      setSecurityAnswer(text);
-                      if (validationErrors.securityAnswer) {
-                        const newErrors = { ...validationErrors };
-                        delete newErrors.securityAnswer;
-                        setValidationErrors(newErrors);
-                      }
-                    }}
+                    onChangeText={handleInputChange(setSecurityAnswer, 'securityAnswer')}
                     className="h-12 bg-white rounded-2xl shadow-sm border border-slate-200/60"
                     editable={!isLoading}
                   />
                 </View>
               </View>
 
-              <Button
+              <TouchableOpacity
                 onPress={handleSignup}
-                disabled={isLoading}
-                className="h-12 bg-amber-400 rounded-2xl shadow-lg mb-4"
+                disabled={isLoading || !isFormSubmittable()}
+                style={[
+                  styles.actionButtonBase,
+                  { backgroundColor: (isLoading || !isFormSubmittable()) ? DISABLED_BUTTON_COLOR : ACTIVE_BUTTON_COLOR }
+                ]}
+                activeOpacity={0.85}
               >
-                <Text className="text-slate-800 font-bold text-base">
-                  {isLoading ? 'Creating Account...' : 'Create Account'}
-                </Text>
-              </Button>
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#334155" />
+                ) : (
+                  <Text className="text-white font-bold text-base">Create Account</Text>
+                )}
+              </TouchableOpacity>
 
-              <View className="flex-row justify-center items-center">
+
+              <View className="flex-row justify-center items-center mt-4">
                 <Text className="text-slate-500">Already have an account?</Text>
                 <Link href="/(auth)/login" asChild>
                   <TouchableOpacity className="ml-1" disabled={isLoading}>
@@ -359,3 +334,14 @@ export default function SignupScreen() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  actionButtonBase: {
+    height: 48, // h-12
+    borderRadius: 16, // rounded-2xl
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16, // mb-4
+  },
+});
