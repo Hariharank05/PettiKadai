@@ -1,14 +1,16 @@
 import { Stack } from 'expo-router';
-import { TouchableOpacity } from 'react-native';
-import { Bell } from 'lucide-react-native';
+import { ThemeToggle } from '~/components/ThemeToggle';
+import { UserProfileHeaderIcon } from '~/components/UserProfileHeaderIcon';
 import { useColorScheme } from '~/lib/useColorScheme';
-import { Alert } from 'react-native';
+import { Alert, TouchableOpacity } from 'react-native';
 import { NativeStackNavigationOptions } from '@react-navigation/native-stack';
+import { Bell } from 'lucide-react-native';
 
 export default function SettingsStackLayout() {
     const { isDarkColorScheme } = useColorScheme();
 
-    const commonHeaderOptions: NativeStackNavigationOptions = {
+    const commonHeaderOptions = {
+        headerRight: () => <UserProfileHeaderIcon />,
         headerStyle: {
             backgroundColor: isDarkColorScheme ? '#000000' : '#FFFFFF',
         },

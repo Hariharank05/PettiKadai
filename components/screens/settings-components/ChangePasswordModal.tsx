@@ -34,9 +34,9 @@ export function ChangePasswordModal({
       setError('All fields are required.');
       return;
     }
-    if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters long.');
-      return;
+    if (newPassword.length < 8) { // Basic strength check
+        setError('New password must be at least 8 characters long.');
+        return;
     }
     if (newPassword !== confirmNewPassword) {
       setError('New passwords do not match.');
@@ -173,25 +173,21 @@ export function ChangePasswordModal({
             </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>New Password</Text>
-            <View style={styles.inputWrapper}>
-              <Input
-                placeholder="Enter new password (min. 8 chars)"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                secureTextEntry={!showNewPassword}
-                className="h-12 pr-12"
-              />
-              <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.eyeIcon}>
-                {showNewPassword ? (
-                  <EyeOff size={20} color={isDarkColorScheme ? '#909090' : '#555555'} />
-                ) : (
-                  <Eye size={20} color={isDarkColorScheme ? '#909090' : '#555555'} />
-                )}
-              </TouchableOpacity>
-            </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>New Password</Text>
+           <View style={styles.inputWrapper}>
+            <Input
+              placeholder="Enter new password (min. 8 chars)"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry={!showNewPassword}
+              className="h-12 pr-12"
+            />
+            <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.eyeIcon}>
+              {showNewPassword ? <EyeOff size={20} color={isDarkColorScheme ? '#909090' : '#555555'} /> : <Eye size={20} color={isDarkColorScheme ? '#909090' : '#555555'} />}
+            </TouchableOpacity>
           </View>
+        </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Confirm New Password</Text>
@@ -204,24 +200,20 @@ export function ChangePasswordModal({
             />
           </View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.button} onPress={handleClose} disabled={isLoading}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.submitButton, isLoading && { opacity: 0.7 }]}
-              onPress={handleSubmit}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Update Password</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.button} onPress={handleClose} disabled={isLoading}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, styles.submitButton, isLoading && { opacity: 0.7 }]} onPress={handleSubmit} disabled={isLoading}>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Update Password</Text>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
-    </Modal>
+    </View>
+  </Modal>
   );
 }

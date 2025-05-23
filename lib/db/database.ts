@@ -77,7 +77,7 @@ export const initDatabase = (): void => {
         FOREIGN KEY (userId) REFERENCES Users(id) -- ADDED
        );
     `);
-      // --- Patch: Add missing column 'isActive' if not exists ---
+    // --- Patch: Add missing column 'isActive' if not exists ---
       const columnCheck = db.getFirstSync<{ count: number }>(
         `SELECT COUNT(*) as count FROM pragma_table_info('products') WHERE name = 'isActive'`
       );
@@ -567,7 +567,7 @@ export const initDatabase = (): void => {
     console.error('Failed to initialize database with multi-user schema:', error);
     // If running on web, SQLite might not be fully supported by expo-sqlite in all browsers/environments
     if (Platform.OS === 'web') {
-      console.warn("SQLite operations on web might have limitations. Ensure your environment supports it fully or consider alternative storage for web.");
+        console.warn("SQLite operations on web might have limitations. Ensure your environment supports it fully or consider alternative storage for web.");
     }
     throw error; // Re-throw to signal failure
   }

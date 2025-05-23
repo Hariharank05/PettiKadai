@@ -1,6 +1,6 @@
+import { Customer } from '../stores/types';
 import { getDatabase } from './database';
 import { v4 as uuidv4 } from 'uuid';
-import { Customer } from './types';
 
 const db = getDatabase();
 

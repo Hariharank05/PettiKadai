@@ -1,13 +1,14 @@
 // app/(tabs)/inventory/_layout.tsx
 import { Stack } from 'expo-router';
 import { ThemeToggle } from '~/components/ThemeToggle';
+import { UserProfileHeaderIcon } from '~/components/UserProfileHeaderIcon';
 import { useColorScheme } from '~/lib/useColorScheme';
 
 export default function InventoryStackLayout() {
     const { isDarkColorScheme } = useColorScheme();
 
     const commonHeaderOptions = {
-        headerRight: () => <ThemeToggle />,
+        headerRight: () => <UserProfileHeaderIcon />,
         headerStyle: {
             backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
         },
