@@ -3,9 +3,10 @@ import { Tabs, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { ThemeToggle } from '~/components/ThemeToggle';
+// import { ThemeToggle } from '~/components/ThemeToggle';
 import { useColorScheme } from '~/lib/useColorScheme';
 import CustomTabBar from '~/components/CustomTabBar';
+import { UserProfileHeaderIcon } from '~/components/UserProfileHeaderIcon';
 export default function TabsLayout() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -34,7 +35,7 @@ export default function TabsLayout() {
 
   // Common header options for top-level tabs
   const tabHeaderOptions = {
-    headerRight: () => <ThemeToggle />,
+    headerRight: () => <UserProfileHeaderIcon />,
     headerStyle: {
       backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
     },
