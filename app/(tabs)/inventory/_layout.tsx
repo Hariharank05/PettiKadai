@@ -1,52 +1,51 @@
 // app/(tabs)/inventory/_layout.tsx
 import { Stack } from 'expo-router';
-import { ThemeToggle } from '~/components/ThemeToggle';
+// import { ThemeToggle } from '~/components/ThemeToggle'; // Not used
 import { UserProfileHeaderIcon } from '~/components/UserProfileHeaderIcon';
-import { useColorScheme } from '~/lib/useColorScheme';
+// import { useColorScheme } from '~/lib/useColorScheme'; // Not directly needed if colors are hardcoded
+
+const VIBRANT_HEADER_COLOR = '#f9c00c';
+const HEADER_TEXT_ICON_COLOR = '#FFFFFF';
 
 export default function InventoryStackLayout() {
-    const { isDarkColorScheme } = useColorScheme();
+    // const { isDarkColorScheme } = useColorScheme(); // Not needed if colors are fixed
 
     const commonHeaderOptions = {
         headerRight: () => <UserProfileHeaderIcon />,
         headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+            backgroundColor: VIBRANT_HEADER_COLOR,
         },
-        headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937', // For back arrow and title if not overridden
+        headerTintColor: HEADER_TEXT_ICON_COLOR,
         headerTitleStyle: {
-            color: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+            color: HEADER_TEXT_ICON_COLOR,
+            fontWeight: '600' as '600',
         },
         headerBackTitleVisible: false,
+        headerShadowVisible: false,
     };
 
     return (
         <Stack screenOptions={commonHeaderOptions}>
             <Stack.Screen
-                name="index" // This will correspond to app/(tabs)/inventory/index.tsx
+                name="index" 
                 options={{
-                    title: 'Inventory Hub', // Or just 'Inventory'
-                    // No headerRight here if you want it consistent with other stack screens
-                    // or you can override commonHeaderOptions if needed.
+                    title: 'Inventory Hub',
                 }}
             />
             <Stack.Screen
-                name="products" // Corresponds to app/(tabs)/inventory/products.tsx (if moved)
-                // OR if you keep products.tsx at app/(tabs)/products.tsx,
-                // Expo Router might still pick it up due to file-based routing,
-                // but it's cleaner to co-locate.
-                // For this example, I'll assume we're referencing the existing top-level one.
+                name="products"
                 options={{
                     title: 'Manage Products',
                 }}
             />
             <Stack.Screen
-                name="category" // Corresponds to app/(tabs)/inventory/category.tsx (if moved)
+                name="category"
                 options={{
                     title: 'Categories',
                 }}
             />
             <Stack.Screen
-                name="customers" // Corresponds to app/(tabs)/inventory/customers.tsx (if moved)
+                name="customers"
                 options={{
                     title: 'Customers',
                 }}

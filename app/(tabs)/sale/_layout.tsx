@@ -1,40 +1,45 @@
-// app/(tabs)/sales/_layout.tsx
+// app/(tabs)/sale/_layout.tsx
 import { Stack } from 'expo-router';
-import { ThemeToggle } from '~/components/ThemeToggle';
+// import { ThemeToggle } from '~/components/ThemeToggle'; // Not used
 import { UserProfileHeaderIcon } from '~/components/UserProfileHeaderIcon';
-import { useColorScheme } from '~/lib/useColorScheme';
+// import { useColorScheme } from '~/lib/useColorScheme'; // Not directly needed if colors are hardcoded
+
+const VIBRANT_HEADER_COLOR = '#f9c00c';
+const HEADER_TEXT_ICON_COLOR = '#FFFFFF';
 
 export default function SalesStackLayout() {
-    const { isDarkColorScheme } = useColorScheme();
+    // const { isDarkColorScheme } = useColorScheme(); // Not needed if colors are fixed
 
     const commonHeaderOptions = {
         headerRight: () => <UserProfileHeaderIcon />,
         headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+            backgroundColor: VIBRANT_HEADER_COLOR,
         },
-        headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+        headerTintColor: HEADER_TEXT_ICON_COLOR,
         headerTitleStyle: {
-            color: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+            color: HEADER_TEXT_ICON_COLOR,
+            fontWeight: '600' as '600',
         },
         headerBackTitleVisible: false,
+        headerShadowVisible: false,
     };
 
     return (
         <Stack screenOptions={commonHeaderOptions}>
             <Stack.Screen
-                name="index" // Corresponds to app/(tabs)/sales/index.tsx
+                name="index"
                 options={{
                     title: 'Sales Hub',
                 }}
             />
             <Stack.Screen
-                name="sales-management" // Corresponds to app/(tabs)/sales/point-of-sale.tsx
+                name="sales-management"
                 options={{
                     title: 'Sales Management',
                 }}
             />
             <Stack.Screen
-                name="receipts" // Corresponds to app/(tabs)/sales/receipts.tsx
+                name="receipts"
                 options={{
                     title: 'Receipts History',
                 }}
