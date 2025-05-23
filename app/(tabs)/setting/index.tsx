@@ -1,36 +1,39 @@
-// app/(tabs)/settings.tsx
+// ~/screens/SettingsScreen.tsx
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, Alert, Switch as RNSwitch, ActivityIndicator, StyleSheet, TextInput as RNTextInput, Platform } from 'react-native';
+import {
+    View,
+    ScrollView,
+    TouchableOpacity,
+    Alert,
+    Switch as RNSwitch,
+    ActivityIndicator,
+    StyleSheet,
+    Platform,
+    Image
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
-import { Input } from '~/components/ui/input';
-import { Button } from '~/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Separator } from '~/components/ui/separator';
-
+import { useIsFocused } from '@react-navigation/native';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { getDatabase } from '~/lib/db/database';
+import * as FileSystem from 'expo-file-system';
 import {
-    User,
+    UserCircle,
     LogOut,
     Lock,
     Building,
-    Phone,
-    Mail,
-    Save,
-    Trash,
-    RefreshCw,
-    Settings as SettingsIcon,
-    Key,
-    Shield,
-    Info,
+    ChevronRight,
+    FileText,
     Moon,
-    Sun
+    Sun,
+    Info,
+    DatabaseZap,
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { ChangePasswordModal } from '~/components/screens/settings-components/ChangePasswordModal';
 
-// Shape of data fetched from DB and used for form state
 interface FormState {
     storeName: string;
     storeAddress: string;
@@ -38,20 +41,65 @@ interface FormState {
     storeEmail: string;
     currencySymbol: string;
     taxRate: number;
-    // darkModeForSave stores the preference that will be written to DB.
-    // It's initialized from DB, then updated by switch toggles.
-    darkModeForSave?: boolean; // Can be undefined if no DB preference yet
+    darkModeForSave?: boolean;
     language?: string;
 }
 
+interface CustomListItemProps {
+    icon: React.ReactElement<{ color?: string; [key: string]: any }>;
+    label: string;
+    onPress?: () => void;
+    showChevron?: boolean;
+    customRightContent?: React.ReactNode;
+    isFirst?: boolean;
+    isLast?: boolean;
+}
+
+const ListItem: React.FC<CustomListItemProps> = ({
+    icon,
+    label,
+    onPress,
+    showChevron = true,
+    customRightContent,
+    isFirst,
+    isLast,
+}) => {
+    const iconColorFromProps = icon.props.color;
+
+    return (
+        <TouchableOpacity
+            onPress={onPress}
+            className={`flex-row items-center bg-card active:opacity-70 h-[50px] px-4 
+                        ${isFirst && isLast ? 'rounded-lg' : ''} 
+                        ${isFirst && !isLast ? 'rounded-t-lg' : ''} 
+                        ${!isFirst && isLast ? 'rounded-b-lg' : ''}`}
+            disabled={!onPress && !customRightContent}
+        >
+            <View
+                className="w-8 h-8 rounded-full items-center justify-center mr-3" // Changed to rounded-full
+                style={{
+                    backgroundColor: iconColorFromProps
+                        ? `${iconColorFromProps}20`
+                        : 'transparent',
+                }}
+            >
+                {React.cloneElement(icon, { size: 20 })}
+            </View>
+            <Text className="text-base text-foreground ml-1 flex-1">{label}</Text>
+            {customRightContent}
+            {showChevron && !customRightContent && (
+                <ChevronRight size={20} className="text-muted-foreground opacity-50" />
+            )}
+        </TouchableOpacity>
+    );
+};
 
 export default function SettingsScreen() {
-    const { userName, userId, logout, isLoading: authIsLoading, updateAuthStoreUserName, changeUserPassword } = useAuthStore(); // Added updateAuthStoreUserName
-    const { setColorScheme, isDarkColorScheme } = useColorScheme(); // Global theme state
+    const { userName, userId, logout, isLoading: authIsLoading, updateAuthStoreUserName, changeUserPassword } = useAuthStore();
+    const { setColorScheme, isDarkColorScheme } = useColorScheme();
     const router = useRouter();
     const db = getDatabase();
-    const [changePasswordLoading, setChangePasswordLoading] = useState(false);
-    const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
+    const isFocused = useIsFocused();
 
     const [formState, setFormState] = useState<FormState>({
         storeName: 'My Store',
@@ -60,19 +108,19 @@ export default function SettingsScreen() {
         storeEmail: '',
         currencySymbol: '₹',
         taxRate: 0,
-        darkModeForSave: undefined, // Initialize as undefined
+        darkModeForSave: undefined,
         language: 'en',
     });
 
-    const [isLoading, setIsLoading] = useState(true);
+    const [userProfileImage, setUserProfileImage] = useState<string | null>(null);
+    const [dataLoading, setDataLoading] = useState(true);
     const [initialDbFetchComplete, setInitialDbFetchComplete] = useState(false);
     const [showResetDialog, setShowResetDialog] = useState(false);
     const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-    const [savedMessage, setSavedMessage] = useState('');
+    const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
+    const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
-    // Fetches settings from DB. Should be stable.
     const fetchUserSettingsFromDb = useCallback(async (currentUserId: string): Promise<Partial<FormState>> => {
-        console.log('[SettingsScreen] Fetching user settings for:', currentUserId);
         try {
             const settingsFromDb = await db.getFirstAsync<any>(
                 'SELECT storeName, storeAddress, storePhone, storeEmail, currencySymbol, taxRate, darkMode, language FROM Settings WHERE userId = ? AND id = ?',
@@ -80,7 +128,6 @@ export default function SettingsScreen() {
             );
 
             if (settingsFromDb) {
-                console.log('[SettingsScreen] Found settings in DB:', settingsFromDb);
                 return {
                     storeName: settingsFromDb.storeName || 'My Store',
                     storeAddress: settingsFromDb.storeAddress || '',
@@ -88,196 +135,176 @@ export default function SettingsScreen() {
                     storeEmail: settingsFromDb.storeEmail || '',
                     currencySymbol: settingsFromDb.currencySymbol || '₹',
                     taxRate: settingsFromDb.taxRate ?? 0,
-                    // darkModeForSave is the direct preference from DB
                     darkModeForSave: settingsFromDb.darkMode === 1 ? true : (settingsFromDb.darkMode === 0 ? false : undefined),
                     language: settingsFromDb.language || 'en',
                 };
             } else {
-                console.log(`[SettingsScreen] No settings found for user ${currentUserId}.`);
-                // Return minimal object, defaults will be applied by formState initializer or later logic
                 return { darkModeForSave: undefined };
             }
         } catch (error) {
             console.error('[SettingsScreen] Failed to load user settings:', error);
-            Alert.alert('Error', 'Could not load your settings.');
             return { darkModeForSave: undefined };
         }
     }, [db]);
 
-    // Effect 1: Fetch settings on userId change / initial mount.
+    const fetchProfileImageForUser = useCallback(async (currentUserId: string): Promise<string | null> => {
+        if (!currentUserId) return null;
+        try {
+            const user = await db.getFirstAsync<{ profileImage: string | null }>(
+                'SELECT profileImage FROM Users WHERE id = ?',
+                [currentUserId]
+            );
+            if (user && user.profileImage) {
+                const fileInfo = await FileSystem.getInfoAsync(user.profileImage);
+                if (fileInfo.exists) {
+                    return user.profileImage;
+                } else {
+                    console.warn('[SettingsScreen] Profile image file not found:', user.profileImage);
+                    return null;
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('[SettingsScreen] Failed to load profile image:', error);
+            return null;
+        }
+    }, [db]);
+
     useEffect(() => {
         if (userId) {
-            setIsLoading(true);
-            setInitialDbFetchComplete(false); // Reset flag before fetch
-            fetchUserSettingsFromDb(userId)
-                .then(fetchedSettings => {
-                    // Update formState with fetched data, or keep defaults if nothing specific was fetched.
-                    // Crucially, set darkModeForSave from the fetched data.
-                    setFormState(prev => ({
-                        ...prev, // keep existing defaults for non-fetched items
-                        ...fetchedSettings, // overwrite with fetched values
-                    }));
-                    setInitialDbFetchComplete(true); // Mark fetch as complete
-                })
-                .finally(() => {
-                    setIsLoading(false);
-                });
+            setDataLoading(true);
+            setInitialDbFetchComplete(false);
+            Promise.all([
+                fetchUserSettingsFromDb(userId),
+                fetchProfileImageForUser(userId)
+            ]).then(([fetchedSettings, imageUri]) => {
+                setFormState(prev => ({ ...prev, ...fetchedSettings }));
+                setUserProfileImage(imageUri);
+                setInitialDbFetchComplete(true);
+            }).catch(error => {
+                console.error("[SettingsScreen] Error fetching initial user data:", error);
+                setUserProfileImage(null);
+                setFormState(prev => ({
+                    ...prev,
+                    storeName: 'My Store', storeAddress: '', storePhone: '',
+                    storeEmail: '', currencySymbol: '₹', taxRate: 0,
+                    darkModeForSave: prev.darkModeForSave === undefined ? isDarkColorScheme : prev.darkModeForSave,
+                    language: 'en'
+                }));
+            }).finally(() => {
+                setDataLoading(false);
+            });
         } else {
-            // Reset to complete defaults if no user
             setFormState({
                 storeName: 'My Store', storeAddress: '', storePhone: '',
                 storeEmail: '', currencySymbol: '₹', taxRate: 0,
-                darkModeForSave: undefined, // No user, no preference
-                language: 'en',
+                darkModeForSave: undefined, language: 'en',
             });
+            setUserProfileImage(null);
             setInitialDbFetchComplete(false);
-            setIsLoading(false);
+            setDataLoading(false);
         }
-    }, [userId, fetchUserSettingsFromDb]);
+    }, [userId, fetchUserSettingsFromDb, fetchProfileImageForUser, isDarkColorScheme]);
 
-    // Effect 2: Synchronize global theme with DB preference ONCE after initial fetch.
     useEffect(() => {
-        // Only run if initial fetch is done and we have a user
+        if (isFocused && userId && initialDbFetchComplete) {
+            fetchProfileImageForUser(userId).then(imageUri => {
+                setUserProfileImage(imageUri);
+            });
+        }
+    }, [isFocused, userId, initialDbFetchComplete, fetchProfileImageForUser]);
+
+    useEffect(() => {
         if (initialDbFetchComplete && userId) {
-            // If DB has a preference and it's different from current global theme
             if (formState.darkModeForSave !== undefined && formState.darkModeForSave !== isDarkColorScheme) {
-                console.log(`[SettingsScreen] Initial DB Sync: DB preference (${formState.darkModeForSave}) differs from app theme (${isDarkColorScheme}). Syncing app theme.`);
                 setColorScheme(formState.darkModeForSave ? 'dark' : 'light');
-            }
-            // If DB has no preference, the global theme (isDarkColorScheme) remains as is (e.g., system or previous session).
-            // Then, ensure `darkModeForSave` (what will be saved) is initialized to match the *effective* global theme.
-            else if (formState.darkModeForSave === undefined) {
-                console.log(`[SettingsScreen] Initial DB Sync: No DB preference. Initializing darkModeForSave (${isDarkColorScheme}) from current app theme.`);
+            } else if (formState.darkModeForSave === undefined) {
                 setFormState(prev => ({ ...prev, darkModeForSave: isDarkColorScheme }));
             }
         }
-    }, [initialDbFetchComplete, userId, formState.darkModeForSave /* Rerun if this changes from fetch */, isDarkColorScheme, setColorScheme]);
+    }, [initialDbFetchComplete, userId, formState.darkModeForSave, isDarkColorScheme, setColorScheme]);
 
-
-    const saveUserSettings = async () => {
-        if (!userId) {
-            Alert.alert("Error", "User not identified. Cannot save settings.");
-            return;
-        }
-        setIsLoading(true);
+    const saveDarkModePreference = async (newThemeIsDark: boolean) => {
+        if (!userId) return;
         try {
+            const darkModeDbValue = newThemeIsDark ? 1 : 0;
             const now = new Date().toISOString();
-            const existingSettings = await db.getFirstAsync(
-                'SELECT id FROM Settings WHERE userId = ? AND id = ?', [userId, userId]
-            );
-
-            // Value to save to DB is formState.darkModeForSave
-            // It's explicitly set to 'undefined' if no preference, so handle that.
-            const darkModeDbValue = formState.darkModeForSave === true ? 1 : (formState.darkModeForSave === false ? 0 : null);
-            const languageToSave = formState.language || 'en';
+            const existingSettings = await db.getFirstAsync('SELECT id FROM Settings WHERE userId = ? AND id = ?', [userId, userId]);
 
             if (existingSettings) {
-                console.log('[SettingsScreen] Updating existing settings. darkMode to save:', darkModeDbValue);
-                await db.runAsync(
-                    `UPDATE Settings SET
-                        storeName = ?, storeAddress = ?, storePhone = ?, storeEmail = ?,
-                        currencySymbol = ?, taxRate = ?, darkMode = ?, language = ?, updatedAt = ?
-                    WHERE userId = ? AND id = ?`,
-                    [
-                        formState.storeName, formState.storeAddress, formState.storePhone,
-                        formState.storeEmail, formState.currencySymbol, formState.taxRate,
-                        darkModeDbValue, languageToSave, now,
-                        userId, userId
-                    ]
+                await db.runAsync('UPDATE Settings SET darkMode = ?, updatedAt = ? WHERE userId = ? AND id = ?',
+                    [darkModeDbValue, now, userId, userId]
                 );
             } else {
-                console.log('[SettingsScreen] Inserting new settings. darkMode to save:', darkModeDbValue);
                 await db.runAsync(
                     `INSERT INTO Settings (
                         id, userId, storeName, storeAddress, storePhone, storeEmail,
-                        currencySymbol, taxRate, defaultDiscountRate, darkMode, language, receiptFooter, backupFrequency, updatedAt
+                        currencySymbol, taxRate, defaultDiscountRate, darkMode, language,
+                        receiptFooter, backupFrequency, updatedAt
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         userId, userId, formState.storeName, formState.storeAddress,
                         formState.storePhone, formState.storeEmail, formState.currencySymbol,
-                        formState.taxRate, 0, darkModeDbValue, languageToSave,
-                        '', 'WEEKLY', now
+                        formState.taxRate, 0,
+                        darkModeDbValue, formState.language || 'en',
+                        '', 'WEEKLY',
+                        now
                     ]
                 );
             }
-
-            // If storeName was changed, update it in AuthStore so it reflects elsewhere (e.g. _layout welcome message)
-            if (userName !== formState.storeName) {
-                updateAuthStoreUserName(formState.storeName, userId); // Pass userId to ensure correct update
-            }
-
-            setSavedMessage('Settings saved successfully!');
-            setTimeout(() => setSavedMessage(''), 3000);
+            console.log('[SettingsScreen] Dark mode preference saved.');
         } catch (error) {
-            console.error('Failed to save user settings:', error);
-            Alert.alert('Error', `Failed to save settings: ${error instanceof Error ? error.message : String(error)}`);
-        } finally {
-            setIsLoading(false);
+            console.error('[SettingsScreen] Failed to save dark mode preference:', error);
+            Alert.alert('Error', 'Could not save dark mode preference.');
         }
     };
 
     const handleToggleDarkModeSwitch = () => {
-        const newThemeIsDark = !isDarkColorScheme; // Toggle based on current global theme
-        // 1. Update global app theme
+        const newThemeIsDark = !isDarkColorScheme;
         setColorScheme(newThemeIsDark ? 'dark' : 'light');
-        // 2. Update formState.darkModeForSave to reflect this new choice, ready for DB.
         setFormState(prev => ({ ...prev, darkModeForSave: newThemeIsDark }));
+        saveDarkModePreference(newThemeIsDark);
     };
 
-    // --- Other Handlers (Logout, Reset Data) ---
     const handleAttemptLogout = () => setShowLogoutDialog(true);
     const handleConfirmLogout = async () => {
         setShowLogoutDialog(false);
         await logout();
         router.replace('/(auth)/login');
     };
+
     const handleAttemptResetData = () => setShowResetDialog(true);
     const handleConfirmResetData = async () => {
         setShowResetDialog(false);
         if (!userId) {
-            Alert.alert("Error", "User not identified. Cannot reset data.");
+            Alert.alert("Error", "User not identified. Cannot reset data.!");
             return;
         }
-        setIsLoading(true);
+        setDataLoading(true);
         try {
             await db.withTransactionSync(() => {
                 const tablesToClearForUser = [
                     'products', 'Categories', 'Suppliers', 'StockAdjustments',
                     'ProductBatches', 'Sales', 'DraftSales', 'Reports',
-                    'ReportMetrics', 'AppUsage', 'Customers', 'SaleItems', // Added SaleItems
-                    'Receipts', // Added Receipts
-                    // Note: Add other dependent tables like ReceiptSharing, ReceiptQRCodes etc. if they exist and need clearing.
+                    'ReportMetrics', 'AppUsage', 'Customers', 'SaleItems',
+                    'Receipts',
                 ];
                 for (const table of tablesToClearForUser) {
                     try {
                         const tableInfoPragma = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table});`);
                         const hasUserIdColumn = tableInfoPragma.some(col => col.name === 'userId');
-
                         if (hasUserIdColumn) {
                             db.runSync(`DELETE FROM ${table} WHERE userId = ?`, [userId]);
-                            console.log(`Cleared ${table} for user ${userId}`);
-                        } else {
-                            // For tables without direct userId, check for cascades or handle specific parent tables
-                            // Example for SaleItems: Delete where saleId is from a Sale belonging to the user
-                            if (table === 'SaleItems') {
-                                db.runSync(`DELETE FROM SaleItems WHERE saleId IN (SELECT id FROM Sales WHERE userId = ?)`, [userId]);
-                                console.log(`Cleared SaleItems for user ${userId} (via Sales table)`);
-                            } else if (table === 'Receipts') {
-                                db.runSync(`DELETE FROM Receipts WHERE saleId IN (SELECT id FROM Sales WHERE userId = ?)`, [userId]);
-                                console.log(`Cleared Receipts for user ${userId} (via Sales table)`);
-                            }
-                            // Add more else if blocks for other dependent tables as needed
-                            else {
-                                console.warn(`Table ${table} does not have a direct userId column and no specific clearing logic defined. Skipping direct delete. (Cascading deletes might apply if PRAGMA foreign_keys=ON and schema supports it)`);
-                            }
+                        } else if (table === 'SaleItems') {
+                            db.runSync(`DELETE FROM SaleItems WHERE saleId IN (SELECT id FROM Sales WHERE userId = ?)`, [userId]);
+                        } else if (table === 'Receipts') {
+                            db.runSync(`DELETE FROM Receipts WHERE saleId IN (SELECT id FROM Sales WHERE userId = ?)`, [userId]);
                         }
                     } catch (e: any) {
-                        console.warn(`Could not clear table ${table} for user ${userId}: ${e.message}. It might not exist or issue with PRAGMA.`);
+                        console.warn(`Could not clear table ${table}: ${e.message}.`);
                     }
                 }
-                // Delete the user-specific settings row
                 db.runSync(`DELETE FROM Settings WHERE userId = ? AND id = ?`, [userId, userId]);
-                console.log(`Cleared Settings for user ${userId}`);
             });
             Alert.alert('Success', 'Your application data has been reset. You will now be logged out.');
             await handleConfirmLogout();
@@ -285,7 +312,7 @@ export default function SettingsScreen() {
             console.error('Failed to reset data:', error);
             Alert.alert('Error', 'Failed to reset your data.');
         } finally {
-            setIsLoading(false);
+            setDataLoading(false);
         }
     };
 
@@ -295,43 +322,56 @@ export default function SettingsScreen() {
         setChangePasswordLoading(false);
         if (result.success) {
             Alert.alert('Success', result.message || 'Password changed successfully!');
-            setIsChangePasswordModalVisible(false); // Close modal on success
+            setIsChangePasswordModalVisible(false);
         } else {
-            // Error will be shown within the modal, but you could also Alert here
             Alert.alert('Error', result.message || 'Failed to change password.');
         }
-        return result; // Return result so modal can also act on it
+        return result;
     };
 
-
     const styles = StyleSheet.create({
-        container: { flex: 1, paddingVertical: 16, paddingHorizontal: 12, backgroundColor: isDarkColorScheme ? '#121212' : '#f0f2f5' },
-        titleText: { fontSize: 24, fontWeight: 'bold', marginBottom: 24, color: isDarkColorScheme ? '#e0e0e0' : '#111', textAlign: 'center' },
-        card: {
-            backgroundColor: isDarkColorScheme ? '#1e1e1e' : '#ffffff',
-            borderRadius: 12,
-            marginBottom: 16,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDarkColorScheme ? 0.25 : 0.08,
-            shadowRadius: 4,
-            elevation: 4,
+        container: { flex: 1, backgroundColor: isDarkColorScheme ? 'black' : '#F0F2F5' },
+        profileSection: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingVertical: 15,
+            backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
+            marginTop: Platform.OS === 'android' ? 10 : 0,
+            marginHorizontal: Platform.OS === 'ios' ? 15 : 0,
+            borderRadius: Platform.OS === 'ios' ? 10 : 0,
         },
-        cardHeader: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' },
-        cardTitleContainer: { flexDirection: 'row', alignItems: 'center' },
-        cardTitle: { fontSize: 18, fontWeight: '600', color: isDarkColorScheme ? '#dadada' : '#2c3e50', marginLeft: 10 },
-        cardContent: { padding: 16 },
-        label: { fontSize: 14, color: isDarkColorScheme ? '#909090' : '#555555', marginBottom: 6, marginTop: 10, fontWeight: '500' },
-        inputComponent: {
-            marginBottom: 12,
+        profileAvatar: {
+            width: 60, height: 60, borderRadius: 30,
+            backgroundColor: isDarkColorScheme ? '#3A3A3C' : '#E5E5EA',
+            justifyContent: 'center', alignItems: 'center', marginRight: 15,
+            overflow: 'hidden',
         },
-        buttonComponent: { marginTop: 16, height: 50, borderRadius: 8 },
-        settingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' },
-        settingItemText: { fontSize: 16, color: isDarkColorScheme ? '#c0c0c0' : '#34495e' },
-        icon: { marginRight: 12 },
-        successMessage: { color: '#27ae60', textAlign: 'center', marginVertical: 12, fontSize: 14, fontWeight: '500' },
+        profileAvatarImage: {
+            width: '100%',
+            height: '100%',
+        },
+        profileTextContainer: { flex: 1 },
+        profileName: { fontSize: 20, fontWeight: '600', color: isDarkColorScheme ? '#FFFFFF' : '#000000' },
+        profileSubtitle: { fontSize: 14, color: isDarkColorScheme ? '#8E8E93' : '#666666', marginTop: 2 },
+        settingsSectionTitle: {
+            fontSize: 13,
+            fontWeight: 'normal',
+            color: isDarkColorScheme ? '#8E8E93' : '#6D6D72',
+            textTransform: 'uppercase',
+            paddingHorizontal: Platform.OS === 'ios' ? 30 : 15,
+            paddingTop: 25,
+            paddingBottom: 8,
+        },
+        settingsGroup: {
+            backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
+            borderRadius: Platform.OS === 'ios' ? 10 : 0,
+            marginHorizontal: Platform.OS === 'ios' ? 15 : 0,
+            marginBottom: 20,
+            overflow: 'hidden',
+        },
         dialogOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, zIndex: 1000 },
-        dialogViewContent: { backgroundColor: isDarkColorScheme ? '#252525' : '#fff', borderRadius: 10, padding: 20, width: '100%', maxWidth: 360, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
+        dialogViewContent: { backgroundColor: isDarkColorScheme ? '#252525' : '#fff', borderRadius: 10, padding: 20, width: '100%', maxWidth: 360, elevation: 5 },
         dialogTitleText: { fontSize: 20, fontWeight: 'bold', marginBottom: 12, color: isDarkColorScheme ? '#e0e0e0' : '#222' },
         dialogMessageText: { fontSize: 16, marginBottom: 24, color: isDarkColorScheme ? '#b0b0b0' : '#555', lineHeight: 23 },
         dialogActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
@@ -342,215 +382,114 @@ export default function SettingsScreen() {
         dialogConfirmButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
     });
 
-    if (isLoading && !initialDbFetchComplete) {
+    const iconColor = isDarkColorScheme ? '#0A84FF' : '#007AFF';
+    const destructiveIconColor = isDarkColorScheme ? '#FF453A' : '#FF3B30';
+
+    if (dataLoading && !initialDbFetchComplete) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} />
-                <Text style={{ marginTop: 10, color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading Settings...</Text>
+                <ActivityIndicator size="large" color={iconColor} />
+                <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading...</Text>
             </View>
         );
     }
 
     return (
-        <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <Text style={styles.titleText}>Settings</Text>
+        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+            <TouchableOpacity style={styles.profileSection} onPress={() => router.push('/(tabs)/setting/profile')}>
+                <View style={styles.profileAvatar}>
+                    {userProfileImage ? (
+                        <Image source={{ uri: userProfileImage }} style={styles.profileAvatarImage} />
+                    ) : (
+                        <UserCircle size={36} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                    )}
+                </View>
+                <View style={styles.profileTextContainer}>
+                    <Text style={styles.profileName}>{userName || 'Store Owner'}</Text>
+                    <Text style={styles.profileSubtitle}>Show profile</Text>
+                </View>
+                <ChevronRight size={22} color={isDarkColorScheme ? '#5A5A5E' : '#C7C7CC'} />
+            </TouchableOpacity>
 
-            <Card style={styles.card}>
-                <CardHeader style={styles.cardHeader}>
-                    <View style={styles.cardTitleContainer}>
-                        <User size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
-                        <Text style={styles.cardTitle}>User Profile</Text>
-                    </View>
-                </CardHeader>
-                <CardContent style={styles.cardContent}>
-                    <Text style={[styles.settingItemText, { marginBottom: 16 }]}>Logged in as: {userName || 'Store Owner'}</Text>
-                    <Button variant="outline" onPress={() => router.push('/(tabs)/setting/profile')} style={styles.buttonComponent} className="mb-3">
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <User size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
-                            <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>View/Edit Profile</Text>
-                        </View>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        onPress={() => setIsChangePasswordModalVisible(true)} // Open the modal
-                        style={styles.buttonComponent}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Lock size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
-                            <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>Change Password</Text>
-                        </View>
-                    </Button>
-                </CardContent>
-            </Card>
+            <Text style={styles.settingsSectionTitle}>General</Text>
+            <View style={styles.settingsGroup}>
+                <ListItem
+                    icon={<UserCircle color={iconColor} />}
+                    label="Personal Information"
+                    onPress={() => router.push('/(tabs)/setting/profile')}
+                    isFirst
+                />
+                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                <ListItem
+                    icon={<Building color={iconColor} />}
+                    label="Store Settings"
+                    onPress={() => router.push('/(tabs)/setting/store-settings')}
+                />
+                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                <ListItem
+                    icon={<FileText color={iconColor} />}
+                    label="Application Preferences"
+                    onPress={() => router.push('/(tabs)/setting/app-preferences')}
+                    isLast
+                />
+            </View>
 
-            <Card style={styles.card}>
-                <CardHeader style={styles.cardHeader}>
-                    <View style={styles.cardTitleContainer}>
-                        <Building size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
-                        <Text style={styles.cardTitle}>Store Information</Text>
-                    </View>
-                </CardHeader>
-                <CardContent style={styles.cardContent}>
-                    <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Store Name (shown in app)</Text>
-                        <Input
-                            value={formState.storeName}
-                            onChangeText={(text) => setFormState(prev => ({ ...prev, storeName: text }))}
-                            placeholder="Your Store Name"
-                            className="h-12 text-base"
-                        />
-                    </View>
-                    <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Store Address (for receipts)</Text>
-                        <Input
-                            value={formState.storeAddress}
-                            onChangeText={(text) => setFormState(prev => ({ ...prev, storeAddress: text }))}
-                            placeholder="123 Main St, City"
-                            className="h-12 text-base"
-                        />
-                    </View>
-                    <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Phone (for receipts)</Text>
-                        <Input
-                            value={formState.storePhone}
-                            onChangeText={(text) => setFormState(prev => ({ ...prev, storePhone: text }))}
-                            placeholder="+1234567890"
-                            keyboardType="phone-pad"
-                            className="h-12 text-base"
-                        />
-                    </View>
-                    <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Email (for receipts)</Text>
-                        <Input
-                            value={formState.storeEmail}
-                            onChangeText={(text) => setFormState(prev => ({ ...prev, storeEmail: text }))}
-                            placeholder="store@example.com"
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            className="h-12 text-base"
-                        />
-                    </View>
-                </CardContent>
-            </Card>
-
-            <Card style={styles.card}>
-                <CardHeader style={styles.cardHeader}>
-                    <View style={styles.cardTitleContainer}>
-                        <SettingsIcon size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
-                        <Text style={styles.cardTitle}>App Preferences</Text>
-                    </View>
-                </CardHeader>
-                <CardContent style={styles.cardContent}>
-                    <View style={styles.settingItem}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            {isDarkColorScheme ? <Moon size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} /> : <Sun size={20} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />}
-                            <Text style={styles.settingItemText}>Dark Mode</Text>
-                        </View>
+            <Text style={styles.settingsSectionTitle}>Appearance & Security</Text>
+            <View style={styles.settingsGroup}>
+                <ListItem
+                    icon={isDarkColorScheme ? <Moon color={iconColor} /> : <Sun color={iconColor} />}
+                    label="Dark Mode"
+                    showChevron={false}
+                    customRightContent={
                         <RNSwitch
-                            value={isDarkColorScheme} // Switch reflects global theme
+                            value={isDarkColorScheme}
                             onValueChange={handleToggleDarkModeSwitch}
                             trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
-                            thumbColor={isDarkColorScheme ? (isDarkColorScheme ? "#00AEEF" : "#f4f3f4") : (isDarkColorScheme ? "#007AFF" : "#f4f3f4")}
+                            thumbColor={"#FFFFFF"}
+                            ios_backgroundColor="#3e3e3e"
                         />
-                    </View>
-                    <Separator style={{ marginVertical: 8, backgroundColor: isDarkColorScheme ? '#2a2a2a' : '#f0f0f0' }} />
-                    <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Currency Symbol</Text>
-                        <Input
-                            value={formState.currencySymbol}
-                            onChangeText={(text) => setFormState(prev => ({ ...prev, currencySymbol: text }))}
-                            placeholder="₹"
-                            className="h-12 text-base"
-                        />
-                    </View>
-                    <View style={styles.inputComponent}>
-                        <Text style={styles.label}>Default Tax Rate (%)</Text>
-                        <Input
-                            value={String(formState.taxRate)}
-                            onChangeText={(text) => {
-                                const rate = parseFloat(text);
-                                setFormState(prev => ({ ...prev, taxRate: isNaN(rate) ? 0 : rate }));
-                            }}
-                            placeholder="0"
-                            keyboardType="numeric"
-                            className="h-12 text-base"
-                        />
-                    </View>
-                    {savedMessage ? <Text style={styles.successMessage}>{savedMessage}</Text> : null}
-                    <Button onPress={saveUserSettings} disabled={isLoading || authIsLoading} style={styles.buttonComponent}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Save size={18} color="#fff" style={styles.icon} />
-                            <Text style={{ fontWeight: '600', fontSize: 16, color: '#fff' }}>{(isLoading || authIsLoading) ? 'Saving...' : 'Save All Settings'}</Text>
-                        </View>
-                    </Button>
-                </CardContent>
-            </Card>
+                    }
+                    isFirst
+                />
+                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                <ListItem
+                    icon={<Lock color={iconColor} />}
+                    label="Change Password"
+                    onPress={() => setIsChangePasswordModalVisible(true)}
+                    showChevron={false}
+                    isLast
+                />
+            </View>
 
-            <Card style={styles.card}>
-                <CardHeader style={styles.cardHeader}>
-                    <View style={styles.cardTitleContainer}>
-                        <Shield size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
-                        <Text style={styles.cardTitle}>Data Management</Text>
-                    </View>
-                </CardHeader>
-                <CardContent style={styles.cardContent}>
-                    <Button
-                        variant="outline"
-                        onPress={() => Alert.alert('Backup Data', 'Manual backup feature coming soon!')}
-                        style={styles.buttonComponent}
-                        className="mb-3"
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <RefreshCw size={18} color={isDarkColorScheme ? '#CBD5E0' : '#4A5568'} style={styles.icon} />
-                            <Text className="font-semibold" style={{ color: isDarkColorScheme ? '#CBD5E0' : '#4A5568' }}>Backup My Data</Text>
-                        </View>
-                    </Button>
-                    <Button
-                        variant="destructive"
-                        onPress={handleAttemptResetData}
-                        disabled={authIsLoading || isLoading}
-                        style={styles.buttonComponent}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Trash size={18} color="#fff" style={styles.icon} />
-                            <Text className="font-semibold" style={{ color: '#fff' }}>
-                                {(authIsLoading || isLoading) ? 'Processing...' : 'Reset My Data'}
-                            </Text>
-                        </View>
-                    </Button>
-                </CardContent>
-            </Card>
+            <Text style={styles.settingsSectionTitle}>Data & Information</Text>
+            <View style={styles.settingsGroup}>
+                <ListItem
+                    icon={<DatabaseZap color={destructiveIconColor} />}
+                    label="Reset My Data"
+                    onPress={handleAttemptResetData}
+                    showChevron={false}
+                    isFirst
+                />
+                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                <ListItem
+                    icon={<Info color={iconColor} />}
+                    label="About Petti Kadai"
+                    onPress={() => Alert.alert('Petti Kadai v1.0.2', 'Simple Inventory for Small Shops')}
+                    showChevron={false}
+                    isLast
+                />
+            </View>
 
-            <Card style={styles.card}>
-                <CardContent style={[styles.cardContent, { paddingTop: 16 }]}>
-                    <Button
-                        variant="destructive"
-                        onPress={handleAttemptLogout}
-                        disabled={authIsLoading}
-                        style={styles.buttonComponent}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <LogOut size={18} color="#fff" style={styles.icon} />
-                            <Text className="font-semibold" style={{ color: '#fff' }}>
-                                {authIsLoading ? 'Logging out...' : 'Logout'}
-                            </Text>
-                        </View>
-                    </Button>
-                </CardContent>
-            </Card>
-
-            <Card style={styles.card}>
-                <CardHeader style={styles.cardHeader}>
-                    <View style={styles.cardTitleContainer}>
-                        <Info size={20} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={styles.icon} />
-                        <Text style={styles.cardTitle}>About Petti Kadai</Text>
-                    </View>
-                </CardHeader>
-                <CardContent style={styles.cardContent}>
-                    <Text style={styles.settingItemText}>Version: 1.0.2</Text>
-                    <Text style={[styles.settingItemText, { fontSize: 14, marginTop: 4, color: isDarkColorScheme ? '#9CA3AF' : '#6B7280' }]}>Simple Inventory for Small Shops</Text>
-                </CardContent>
-            </Card>
+            <View style={[styles.settingsGroup, { marginTop: 30 }]}>
+                <ListItem
+                    icon={<LogOut color={destructiveIconColor} />}
+                    label="Logout"
+                    onPress={handleAttemptLogout}
+                    showChevron={false}
+                    isFirst
+                    isLast
+                />
+            </View>
 
             {showLogoutDialog && (
                 <View style={styles.dialogOverlay}>
@@ -574,7 +513,7 @@ export default function SettingsScreen() {
                     <View style={styles.dialogViewContent}>
                         <Text style={styles.dialogTitleText}>Reset All Your Data?</Text>
                         <Text style={styles.dialogMessageText}>
-                            This will permanently delete all your application data (products, sales, etc.) associated with your account ({userName || 'current user'}). This action cannot be undone.
+                            This will permanently delete all your application data associated with your account ({userName || 'current user'}). This action cannot be undone.
                         </Text>
                         <View style={styles.dialogActions}>
                             <TouchableOpacity style={styles.dialogButton} onPress={() => setShowResetDialog(false)}>
@@ -588,12 +527,11 @@ export default function SettingsScreen() {
                 </View>
             )}
 
-            {/* Change Password Modal */}
             <ChangePasswordModal
                 visible={isChangePasswordModalVisible}
                 onClose={() => setIsChangePasswordModalVisible(false)}
                 onSubmit={handleChangePasswordSubmit}
-                isLoading={changePasswordLoading}
+                isLoading={changePasswordLoading || authIsLoading}
             />
         </ScrollView>
     );

@@ -1,8 +1,10 @@
-// app/(tabs)/settings/_layout.tsx
 import { Stack } from 'expo-router';
 import { ThemeToggle } from '~/components/ThemeToggle';
 import { UserProfileHeaderIcon } from '~/components/UserProfileHeaderIcon';
 import { useColorScheme } from '~/lib/useColorScheme';
+import { Alert, TouchableOpacity } from 'react-native';
+import { NativeStackNavigationOptions } from '@react-navigation/native-stack';
+import { Bell } from 'lucide-react-native';
 
 export default function SettingsStackLayout() {
     const { isDarkColorScheme } = useColorScheme();
@@ -10,13 +12,14 @@ export default function SettingsStackLayout() {
     const commonHeaderOptions = {
         headerRight: () => <UserProfileHeaderIcon />,
         headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#111827' : '#FFFFFF',
+            backgroundColor: isDarkColorScheme ? '#000000' : '#FFFFFF',
         },
-        headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+        headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#000000',
         headerTitleStyle: {
-            color: isDarkColorScheme ? '#FFFFFF' : '#1F2937',
+            color: isDarkColorScheme ? '#FFFFFF' : '#000000',
+            fontWeight: 'bold' as 'bold',
         },
-        headerBackTitleVisible: false,
+        headerShadowVisible: false,
     };
 
     return (
@@ -25,12 +28,45 @@ export default function SettingsStackLayout() {
                 name="index" // Corresponds to app/(tabs)/settings/index.tsx
                 options={{
                     title: 'Settings',
+                    headerLargeTitle: true,
+                    headerStyle: {
+                        backgroundColor: isDarkColorScheme ? '#000000' : '#F0F2F5',
+                    },
+                    headerRight: () => (
+                        <TouchableOpacity
+                            onPress={() => Alert.alert('Notifications', 'No new notifications.')}
+                            style={{ marginRight: 15 }}
+                        >
+                            <Bell size={24} color={isDarkColorScheme ? '#FFFFFF' : '#000000'} />
+                        </TouchableOpacity>
+                    ),
                 }}
             />
             <Stack.Screen
-                name="profile" // Corresponds to app/(tabs)/settings/profile.tsx
+                name="profile"
                 options={{
-                    title: 'Profile',
+                    title: 'Edit Profile',
+                    headerStyle: {
+                        backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
+                    },
+                }}
+            />
+            <Stack.Screen
+                name="store-settings"
+                options={{
+                    title: 'Store Settings',
+                    headerStyle: {
+                        backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
+                    },
+                }}
+            />
+            <Stack.Screen
+                name="app-preferences"
+                options={{
+                    title: 'Application Preferences',
+                    headerStyle: {
+                        backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
+                    },
                 }}
             />
             {/* Add other settings-related screens here if needed in the future */}

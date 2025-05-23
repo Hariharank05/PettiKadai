@@ -86,9 +86,9 @@ export function ChangePasswordModal({
   return (
     <View style={styles.overlay}>
       <View style={styles.content}>
-        <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16}}>
-            <Key size={22} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={{marginRight: 8}} />
-            <Text style={styles.titleText}>Change Password</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <Key className='mb-2' size={22} color={isDarkColorScheme ? '#00AEEF' : '#007AFF'} style={{ marginRight: 8 }} />
+          <Text className='mt-4' style={styles.titleText}>Change Password</Text>
         </View>
 
         {error && <Text style={styles.errorText}>{error}</Text>}
