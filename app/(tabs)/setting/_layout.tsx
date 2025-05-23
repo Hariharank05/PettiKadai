@@ -1,75 +1,59 @@
 import { Stack } from 'expo-router';
-import { ThemeToggle } from '~/components/ThemeToggle';
+import { Platform } from 'react-native';
+// import { ThemeToggle } from '~/components/ThemeToggle'; // Not used
 import { UserProfileHeaderIcon } from '~/components/UserProfileHeaderIcon';
-import { useColorScheme } from '~/lib/useColorScheme';
-import { Alert, TouchableOpacity } from 'react-native';
-import { NativeStackNavigationOptions } from '@react-navigation/native-stack';
-import { Bell } from 'lucide-react-native';
+// import { useColorScheme } from '~/lib/useColorScheme'; // Not needed if colors fixed for header
+// import { Alert, TouchableOpacity } from 'react-native'; // Bell icon related
+// import { Bell } from 'lucide-react-native'; // Bell icon related
+
+const VIBRANT_HEADER_COLOR = '#f9c00c';
+const HEADER_TEXT_ICON_COLOR = '#FFFFFF';
 
 export default function SettingsStackLayout() {
-    const { isDarkColorScheme } = useColorScheme();
+    // const { isDarkColorScheme } = useColorScheme(); // Not needed for fixed header colors
 
     const commonHeaderOptions = {
-        headerRight: () => <UserProfileHeaderIcon />,
+        headerRight: () => <UserProfileHeaderIcon />, // Standard user profile icon
         headerStyle: {
-            backgroundColor: isDarkColorScheme ? '#000000' : '#FFFFFF',
+            backgroundColor: VIBRANT_HEADER_COLOR,
         },
-        headerTintColor: isDarkColorScheme ? '#FFFFFF' : '#000000',
+        headerTintColor: HEADER_TEXT_ICON_COLOR,
         headerTitleStyle: {
-            color: isDarkColorScheme ? '#FFFFFF' : '#000000',
+            color: HEADER_TEXT_ICON_COLOR,
             fontWeight: 'bold' as 'bold',
         },
         headerShadowVisible: false,
+        headerBackTitleVisible: false, // Ensure back title is not visible on iOS
     };
 
     return (
         <Stack screenOptions={commonHeaderOptions}>
             <Stack.Screen
-                name="index" // Corresponds to app/(tabs)/settings/index.tsx
+                name="index" // Corresponds to app/(tabs)/setting/index.tsx
                 options={{
                     title: 'Settings',
-                    headerLargeTitle: true,
-                    headerStyle: {
-                        backgroundColor: isDarkColorScheme ? '#000000' : '#F0F2F5',
-                    },
-                    headerRight: () => (
-                        <TouchableOpacity
-                            onPress={() => Alert.alert('Notifications', 'No new notifications.')}
-                            style={{ marginRight: 15 }}
-                        >
-                            <Bell size={24} color={isDarkColorScheme ? '#FFFFFF' : '#000000'} />
-                        </TouchableOpacity>
-                    ),
+                    headerLargeTitle: Platform.OS === 'ios' ? true : false, // iOS specific large title
+                    // headerRight is now handled by commonHeaderOptions, Bell icon removed
                 }}
             />
             <Stack.Screen
                 name="profile"
                 options={{
                     title: 'Edit Profile',
-                    headerStyle: {
-                        backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-                    },
                 }}
             />
             <Stack.Screen
                 name="store-settings"
                 options={{
                     title: 'Store Settings',
-                    headerStyle: {
-                        backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-                    },
                 }}
             />
             <Stack.Screen
                 name="app-preferences"
                 options={{
                     title: 'Application Preferences',
-                    headerStyle: {
-                        backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-                    },
                 }}
             />
-            {/* Add other settings-related screens here if needed in the future */}
         </Stack>
     );
 }

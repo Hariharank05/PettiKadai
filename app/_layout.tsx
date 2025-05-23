@@ -29,11 +29,11 @@ const useIsomorphicLayoutEffect =
 
 export default function RootLayout() {
   const hasMounted = React.useRef(false);
-  const { colorScheme, isDarkColorScheme } = useColorScheme();
+  const { colorScheme, isDarkColorScheme, setColorScheme } = useColorScheme(); // Added setColorScheme
   const [isColorSchemeLoaded, setIsColorSchemeLoaded] = React.useState(false);
   const [isDbInitialized, setIsDbInitialized] = React.useState(false);
   const [isInitializing, setIsInitializing] = React.useState(true);
-  const initialize = useAuthStore(state => state.initialize);
+  const initializeAuth = useAuthStore(state => state.initialize); // Renamed to avoid conflict
 
   // Initialize database and auth state
   React.useEffect(() => {
@@ -48,7 +48,7 @@ export default function RootLayout() {
         // await loginWithTestUser();
         
         // Initialize auth state
-        await initialize();
+        await initializeAuth();
         
         setIsInitializing(false);
       } catch (error) {
@@ -58,11 +58,12 @@ export default function RootLayout() {
     };
     
     setupApp();
-  }, [initialize]);
+  }, [initializeAuth]);
 
   useIsomorphicLayoutEffect(() => {
     // Only run logic on initial mount
     if (hasMounted.current) {
+      setAndroidNavigationBar(colorScheme);
       return;
     }
 
@@ -70,12 +71,13 @@ export default function RootLayout() {
       // Adds the background color to the html element to prevent white background on overscroll.
       document.documentElement.classList.add('bg-background');
     }
-    // Set Android nav bar color based on the detected scheme
-    setAndroidNavigationBar(colorScheme);
+    setColorScheme('light'); 
+    setAndroidNavigationBar('light'); // Set nav bar for light theme initially
+
     setIsColorSchemeLoaded(true);
     hasMounted.current = true;
     
-  }, [colorScheme]); // Depend on colorScheme to re-run if it changes *before* mount
+  }, [colorScheme, setColorScheme]); // Depend on colorScheme and setColorScheme
 
   if (isInitializing || !isColorSchemeLoaded) {
     // Initial loading screen
