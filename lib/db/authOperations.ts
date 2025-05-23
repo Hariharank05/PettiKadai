@@ -220,6 +220,37 @@ export const getCurrentAuthState = async (): Promise<AuthState | null> => {
   }
 };
 
+/**
+ * Get user details (id and security question) for password reset initiation
+ */
+export const getUserDetailsForPasswordReset = async (
+  emailOrPhone: string
+): Promise<{ securityQuestion: string; userId: string }> => {
+  // console.log('[AuthOps] Fetching user details for password reset:', emailOrPhone);
+  try {
+    const normalizedIdentifier = emailOrPhone.includes('@') ? normalizeEmail(emailOrPhone) : emailOrPhone;
+    // Select only necessary fields: id and securityQuestion
+    const user = await db.getFirstAsync<{ id: string; securityQuestion: string }>(
+      'SELECT id, securityQuestion FROM Users WHERE email = ? OR phone = ?',
+      [normalizedIdentifier, emailOrPhone]
+    );
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+    // The schema defines securityQuestion as NOT NULL.
+    // Adding a check here for robustness, in case data somehow becomes inconsistent.
+    if (!user.securityQuestion) {
+        throw new Error('Security question not set for this user.');
+    }
+    // console.log('[AuthOps] User details found for password reset:', user.id);
+    return { securityQuestion: user.securityQuestion, userId: user.id };
+  } catch (error) {
+    // console.error('[AuthOps] Error fetching user details for password reset:', error);
+    throw error; // Re-throw to be caught by store
+  }
+};
+
 
 /**
  * Verify security question for password reset
@@ -246,7 +277,7 @@ export const verifySecurityQuestion = async (
     // console.log('[AuthOps] Security question verified for user:', user.id);
     return user;
   } catch (error) {
-    console.error('[AuthOps] Error verifying security question:', error);
+    // console.error('[AuthOps] Error verifying security question:', error);
     throw error;
   }
 };
@@ -281,7 +312,7 @@ export const resetPassword = async (input: PasswordResetInput): Promise<boolean>
     return true;
   } catch (error) {
     console.error('[AuthOps] Error resetting password:', error);
-    return false; // Or throw error to be handled by store
+    throw error; // Throw error to be handled by store
   }
 };
 

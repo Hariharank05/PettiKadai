@@ -8,6 +8,7 @@ import {
   resetPassword,
   verifySecurityQuestion,
   changePassword as dbChangePassword,
+  getUserDetailsForPasswordReset, // Import new function
 } from '../db/authOperations';
 import {
   AuthState,
@@ -25,11 +26,12 @@ interface AuthStoreState extends AuthState {
   signup: (userData: UserRegistrationInput) => Promise<boolean>;
   login: (credentials: UserLoginInput) => Promise<boolean>;
   logout: () => Promise<void>;
-  verifySecurityAnswer: (emailOrPhone: string, answer: string) => Promise<User | null>; // Return User or null
-  resetUserPassword: (resetData: PasswordResetInput) => Promise<boolean>; // Renamed to avoid conflict with model
+  fetchUserAndSecurityQuestion: (emailOrPhone: string) => Promise<{ securityQuestion: string; userId: string } | null>; // New function signature
+  verifySecurityAnswer: (emailOrPhone: string, answer: string) => Promise<User | null>;
+  resetUserPassword: (resetData: PasswordResetInput) => Promise<boolean>;
   clearError: () => void;
     updateAuthStoreUserName: (newName: string, userIdToUpdate: string) => Promise<void>; // New function
-    changeUserPassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
+  changeUserPassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
@@ -55,7 +57,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         });
       } else {
         // console.log('[AuthStore] No persisted auth state found, defaulting.');
-        set({ // Ensure defaults are set if nothing is returned
+        set({
             isAuthenticated: false,
             userId: undefined,
             userName: undefined,
@@ -127,6 +129,20 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     }
   },
 
+  fetchUserAndSecurityQuestion: async (emailOrPhone: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const userDetails = await getUserDetailsForPasswordReset(emailOrPhone);
+      set({ isLoading: false });
+      return userDetails; // Returns { securityQuestion: string, userId: string }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch user details';
+      // console.error('[AuthStore] Fetch user details error:', errorMessage);
+      set({ isLoading: false, error: errorMessage });
+      return null;
+    }
+  },
+
   verifySecurityAnswer: async (emailOrPhone: string, answer: string) => {
     set({ isLoading: true, error: null });
     try {
@@ -135,7 +151,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       return user; // Returns the user object if successful, or null if verifySecurityQuestion throws (which it should on failure)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to verify security answer';
-      console.error('[AuthStore] Verify security answer error:', errorMessage);
+      // console.error('[AuthStore] Verify security answer error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
       return null; // Ensure null is returned on error
     }
@@ -149,7 +165,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       return success;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to reset password';
-      console.error('[AuthStore] Reset password error:', errorMessage);
+      // console.error('[AuthStore] Reset password error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
       return false;
     }
@@ -170,7 +186,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           'UPDATE AuthState SET userName = ?, updatedAt = ? WHERE id = "current_auth" AND userId = ?',
           [newName, new Date().toISOString(), userIdToUpdate]
         );
-        console.log('[AuthStore] Updated userName in AuthState table.');
+        // console.log('[AuthStore] Updated userName in AuthState table.');
       } catch (dbError) {
         console.error('[AuthStore] Failed to update userName in AuthState table:', dbError);
       }
@@ -193,7 +209,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       return { success: true, message: 'Password changed successfully!' };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to change password';
-      console.error('[AuthStore] Change password error:', errorMessage);
+      // console.error('[AuthStore] Change password error:', errorMessage);
       set({ isLoading: false, error: errorMessage });
       return { success: false, message: errorMessage };
     }

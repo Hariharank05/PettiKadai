@@ -4,60 +4,60 @@ import { Stack } from 'expo-router/stack';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
-import { Eye, EyeOff, User, ArrowRight, ShoppingBag } from 'lucide-react-native';
+import { Eye, EyeOff, ArrowRight, ShoppingBag } from 'lucide-react-native';
 import { initDatabase } from '~/lib/db/database';
 import { toast, Toaster } from 'sonner-native';
-import { 
-  View, 
-  KeyboardAvoidingView, 
-  Platform, 
-  TouchableOpacity, 
-  ScrollView, 
-  ActivityIndicator, 
-  SafeAreaView, 
-  Dimensions, 
-  Image,
+import {
+  View,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  SafeAreaView,
   StatusBar,
   ViewStyle,
+  Image,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AnimatedBackground from '~/components/AnimatedBackground';
 
 // Toast styles using NativeWind colors but as style objects for sonner-native compatibility
 const toasterOptionsConfig = {
   style: {
-    backgroundColor: '#FEF3C7', // Corresponds to COLORS.surface or your desired default
-    borderColor: '#E2E8F0', // Corresponds to COLORS.border
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: 16, 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    marginHorizontal: 16, 
-    elevation: 8, // For Android shadow
-    shadowColor: '#000000', // For iOS shadow
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    elevation: 8,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
   },
   titleStyle: {
-    color: '#1E293B', // Corresponds to COLORS.text
-    fontWeight: '600' as '600', 
-    fontSize: 14, 
+    color: '#1E293B',
+    fontWeight: '600' as '600',
+    fontSize: 14,
     marginBottom: 2,
   },
   descriptionStyle: {
-    color: '#64748B', // Corresponds to COLORS.textLight
-    fontSize: 12, 
+    color: '#64748B',
+    fontSize: 12,
   },
-  success: { // Styles for success type toasts
+  success: {
     style: {
-      backgroundColor: '#ECFDF5', // Your desired success background (e.g., emerald-50)
-      borderColor: '#A7F3D0',   // Your desired success border (e.g., emerald-200)
+      backgroundColor: '#ECFDF5',
+      borderColor: '#A7F3D0',
     },
   },
-  error: { // Styles for error type toasts
+  error: {
     style: {
-      backgroundColor: '#FEF2F2', // Your desired error background (e.g., red-50)
-      borderColor: '#FECACA',   // Your desired error border (e.g., red-200)
+      backgroundColor: '#FEF2F2',
+      borderColor: '#FECACA',
     },
   },
 };
@@ -118,10 +118,9 @@ export default function LoginScreen() {
       toast.success('Welcome back!', {
         description: 'You have successfully signed in',
       });
-      // Delay navigation to allow the toast to be visible
       setTimeout(() => {
         router.replace('/(tabs)/home');
-      }, 1000); // 1-second delay to ensure the toast is visible
+      }, 1000);
     }
   };
 
@@ -135,22 +134,21 @@ export default function LoginScreen() {
     setPassword(text);
   };
 
-  // Define the style with explicit typing to satisfy TypeScript
-  const toasterContainerStyle: ViewStyle = { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
-    right: 0, 
+  const toasterContainerStyle: ViewStyle = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 10000,
   };
 
   if (initializingDb) {
     return (
       <GestureHandlerRootView className="flex-1">
-        <SafeAreaView className="flex-1 bg-white">
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF9D9' }}>
           <Stack.Screen options={{ headerShown: false }} />
-          <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-          <View className="flex-1 justify-center items-center bg-white px-6" style={{ zIndex: 1 }}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFF9D9" />
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF9D9', paddingHorizontal: 24, zIndex: 1 }}>
             <ShoppingBag size={48} color="#FBBF24" />
             <ActivityIndicator size="large" color="#FBBF24" style={{ marginVertical: 16 }} />
             <Text className="mt-4 text-slate-800 font-semibold text-base">
@@ -161,9 +159,9 @@ export default function LoginScreen() {
             </Text>
           </View>
           <View style={toasterContainerStyle}>
-            <Toaster 
+            <Toaster
               position="top-center"
-              toastOptions={toasterOptionsConfig} 
+              toastOptions={toasterOptionsConfig}
             />
           </View>
         </SafeAreaView>
@@ -173,10 +171,10 @@ export default function LoginScreen() {
 
   return (
     <GestureHandlerRootView className="flex-1">
-      <SafeAreaView className="flex-1 bg-white">
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF9D9' }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-        {/* Main content wrapped in a View with lower zIndex */}
+        <StatusBar barStyle="dark-content" backgroundColor="#FFF9D9" />
+        <AnimatedBackground />
         <View style={{ zIndex: 1, flex: 1 }}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -263,11 +261,7 @@ export default function LoginScreen() {
                     <TouchableOpacity
                       onPress={handleLogin}
                       disabled={isLoading || !emailOrPhone.trim() || !password}
-                      className={`${
-                        (!emailOrPhone.trim() || !password) 
-                          ? 'bg-amber-300/60 shadow-sm' 
-                          : 'bg-amber-400 shadow-lg'
-                      } h-14 rounded-2xl justify-center items-center w-full`}
+                      className={`${(!emailOrPhone.trim() || !password) ? 'bg-amber-300/60 shadow-sm' : 'bg-amber-400 shadow-lg'} h-14 rounded-2xl justify-center items-center w-full`}
                       activeOpacity={0.85}
                     >
                       {isLoading ? (
@@ -299,11 +293,10 @@ export default function LoginScreen() {
             </ScrollView>
           </KeyboardAvoidingView>
         </View>
-        {/* Toaster is rendered last and absolutely positioned to ensure it’s on top */}
         <View style={toasterContainerStyle}>
-          <Toaster 
+          <Toaster
             position="top-center"
-            toastOptions={toasterOptionsConfig} 
+            toastOptions={toasterOptionsConfig}
           />
         </View>
       </SafeAreaView>
