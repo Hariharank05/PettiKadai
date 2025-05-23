@@ -1,5 +1,3 @@
-// ~/screens/SettingsScreen.tsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
@@ -10,7 +8,8 @@ import {
     ActivityIndicator,
     StyleSheet,
     Platform,
-    Image
+    Image,
+    Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
@@ -46,7 +45,7 @@ interface FormState {
 }
 
 interface CustomListItemProps {
-    icon: React.ReactElement<{ color?: string; [key: string]: any }>;
+    icon: React.ReactElement<{ color?: string;[key: string]: any }>;
     label: string;
     onPress?: () => void;
     showChevron?: boolean;
@@ -76,7 +75,7 @@ const ListItem: React.FC<CustomListItemProps> = ({
             disabled={!onPress && !customRightContent}
         >
             <View
-                className="w-8 h-8 rounded-full items-center justify-center mr-3" // Changed to rounded-full
+                className="w-8 h-8 rounded-full items-center justify-center mr-3"
                 style={{
                     backgroundColor: iconColorFromProps
                         ? `${iconColorFromProps}20`
@@ -370,16 +369,59 @@ export default function SettingsScreen() {
             marginBottom: 20,
             overflow: 'hidden',
         },
-        dialogOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, zIndex: 1000 },
-        dialogViewContent: { backgroundColor: isDarkColorScheme ? '#252525' : '#fff', borderRadius: 10, padding: 20, width: '100%', maxWidth: 360, elevation: 5 },
-        dialogTitleText: { fontSize: 20, fontWeight: 'bold', marginBottom: 12, color: isDarkColorScheme ? '#e0e0e0' : '#222' },
-        dialogMessageText: { fontSize: 16, marginBottom: 24, color: isDarkColorScheme ? '#b0b0b0' : '#555', lineHeight: 23 },
-        dialogActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-        dialogButton: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 6 },
-        dialogCancelButtonText: { color: isDarkColorScheme ? '#9CA3AF' : '#6B7280', fontSize: 16, fontWeight: '500' },
-        dialogConfirmButton: { backgroundColor: isDarkColorScheme ? '#00AEEF' : '#007AFF' },
-        dialogDestructiveButton: { backgroundColor: '#EF4444' },
-        dialogConfirmButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+        dialogOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 20,
+        },
+        dialogViewContent: {
+            backgroundColor: isDarkColorScheme ? '#252525' : '#fff',
+            borderRadius: 10,
+            padding: 20,
+            width: '100%',
+            maxWidth: 360,
+            elevation: 5,
+        },
+        dialogTitleText: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            marginBottom: 12,
+            color: isDarkColorScheme ? '#e0e0e0' : '#222',
+        },
+        dialogMessageText: {
+            fontSize: 16,
+            marginBottom: 24,
+            color: isDarkColorScheme ? '#b0b0b0' : '#555',
+            lineHeight: 23,
+        },
+        dialogActions: {
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            gap: 12,
+        },
+        dialogButton: {
+            paddingVertical: 10,
+            paddingHorizontal: 18,
+            borderRadius: 6,
+        },
+        dialogCancelButtonText: {
+            color: isDarkColorScheme ? '#9CA3AF' : '#6B7280',
+            fontSize: 16,
+            fontWeight: '500',
+        },
+        dialogConfirmButton: {
+            backgroundColor: isDarkColorScheme ? '#00AEEF' : '#007AFF',
+        },
+        dialogDestructiveButton: {
+            backgroundColor: '#EF4444',
+        },
+        dialogConfirmButtonText: {
+            color: '#fff',
+            fontSize: 16,
+            fontWeight: '600',
+        },
     });
 
     const iconColor = isDarkColorScheme ? '#0A84FF' : '#007AFF';
@@ -491,7 +533,12 @@ export default function SettingsScreen() {
                 />
             </View>
 
-            {showLogoutDialog && (
+            <Modal
+                visible={showLogoutDialog}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowLogoutDialog(false)}
+            >
                 <View style={styles.dialogOverlay}>
                     <View style={styles.dialogViewContent}>
                         <Text style={styles.dialogTitleText}>Confirm Logout</Text>
@@ -506,9 +553,14 @@ export default function SettingsScreen() {
                         </View>
                     </View>
                 </View>
-            )}
+            </Modal>
 
-            {showResetDialog && (
+            <Modal
+                visible={showResetDialog}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowResetDialog(false)}
+            >
                 <View style={styles.dialogOverlay}>
                     <View style={styles.dialogViewContent}>
                         <Text style={styles.dialogTitleText}>Reset All Your Data?</Text>
@@ -525,7 +577,7 @@ export default function SettingsScreen() {
                         </View>
                     </View>
                 </View>
-            )}
+            </Modal>
 
             <ChangePasswordModal
                 visible={isChangePasswordModalVisible}

@@ -1,7 +1,5 @@
-
-// ~/screens/ProfileScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Platform, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Platform, Image, ActivityIndicator, Alert, Modal } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Separator } from '~/components/ui/separator';
 import { Input } from '~/components/ui/input';
@@ -14,6 +12,7 @@ import { getDatabase } from '~/lib/db/database';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ChangePasswordModal } from '~/components/screens/settings-components/ChangePasswordModal';
 
 type RootStackParamList = {
   Profile: undefined;
@@ -56,13 +55,15 @@ const ListItem: React.FC<{
 );
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { userName, userId } = useAuthStore();
+  const { userName, userId, changeUserPassword } = useAuthStore();
   const { isDarkColorScheme } = useColorScheme();
   const isFocused = useIsFocused();
   const [isLoading, setIsLoading] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [showImageActionModal, setShowImageActionModal] = useState(false);
+  const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
   const [formData, setFormData] = useState<UserProfileData>({
     name: userName || 'Store Owner',
     email: null,
@@ -299,6 +300,19 @@ export default function ProfileScreen({ navigation }: Props) {
     }
   };
 
+  const handleChangePasswordSubmit = async (currentPass: string, newPass: string) => {
+    setChangePasswordLoading(true);
+    const result = await changeUserPassword(currentPass, newPass);
+    setChangePasswordLoading(false);
+    if (result.success) {
+      Alert.alert('Success', result.message || 'Password changed successfully!');
+      setIsChangePasswordModalVisible(false);
+    } else {
+      Alert.alert('Error', result.message || 'Failed to change password.');
+    }
+    return result;
+  };
+
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: isDarkColorScheme ? 'black' : '#F0F2F5' },
     profileSection: {
@@ -355,15 +369,10 @@ export default function ProfileScreen({ navigation }: Props) {
       marginRight: 8,
     },
     modalOverlay: {
-      position: 'absolute',
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
+      flex: 1,
       backgroundColor: 'rgba(0,0,0,0.5)',
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 1000,
     },
     modalContent: {
       backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
@@ -442,7 +451,7 @@ export default function ProfileScreen({ navigation }: Props) {
               <EditIcon size={12} color="white" />
             </View>
           </TouchableOpacity>
-         <View className='text-right mr-2 mt-4' style={[styles.profileTextContainer, { paddingLeft: 8 }]}>
+          <View className='text-right mr-2 mt-4' style={[styles.profileTextContainer, { paddingLeft: 8 }]}>
             <Text style={styles.profileName}>{formData.name}</Text>
             <Text style={styles.profileSubtitle}>Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}</Text>
           </View>
@@ -570,7 +579,8 @@ export default function ProfileScreen({ navigation }: Props) {
           <ListItem
             icon={<Key color={iconColor} />}
             label="Change Password"
-            onPress={() => navigation.navigate('ChangePassword')}
+            onPress={() => setIsChangePasswordModalVisible(true)}
+            showChevron={false}
             isFirst
           />
           <Separator className="bg-separator" style={{ marginLeft: 60 }} />
@@ -612,11 +622,17 @@ export default function ProfileScreen({ navigation }: Props) {
             label="About Petti Kadai"
             onPress={() => Alert.alert('About', 'Petti Kadai is a simple inventory management app for small stores.')}
             isLast
+            showChevron={false}
           />
         </View>
       </ScrollView>
 
-      {showImageActionModal && (
+      <Modal
+        visible={showImageActionModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowImageActionModal(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Profile Picture</Text>
@@ -644,7 +660,14 @@ export default function ProfileScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
+
+      <ChangePasswordModal
+        visible={isChangePasswordModalVisible}
+        onClose={() => setIsChangePasswordModalVisible(false)}
+        onSubmit={handleChangePasswordSubmit}
+        isLoading={changePasswordLoading}
+      />
     </>
   );
 }
