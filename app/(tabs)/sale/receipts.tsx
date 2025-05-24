@@ -254,7 +254,7 @@ export default function ReceiptsScreen() {
     return (
         <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
             <View className="flex-1 p-4 bg-transparent">
-                <Text className="text-2xl font-bold text-foreground mb-4 native:text-black">Receipts History</Text>
+                {/* <Text className="text-2xl font-bold text-foreground mb-4 native:text-black">Receipts History</Text> */}
                 <View className="mb-4 flex-row items-center bg-card border border-border rounded-lg px-3">
                     <Search size={20} color={iconColorSearch} />
                     <Input

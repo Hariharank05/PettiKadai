@@ -1180,7 +1180,7 @@ const ProductManagementScreen = () => {
     >
         <View className="p-4 flex-1 bg-transparent">
         <View className="flex-row justify-between items-center mb-4">
-            <Text className="text-2xl font-bold text-[#7200da] dark:text-[#00b9f1]">Products</Text>
+            <Text className="text-2xl font-bold text-black dark:text-[#00b9f1]">Products</Text>
             <View className="flex-row items-center gap-x-2">
             <ShadcnButton
                 variant="ghost"

@@ -5,7 +5,7 @@ import { Card, CardContent } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '~/components/ui/dialog';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
-import { Tag, Pencil, Trash2, Search, ArrowDownUp, XCircle } from 'lucide-react-native';
+import { Tag, Pencil, Trash2, Search, ArrowDownUp, XCircle, PlusIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Category } from '~/lib/stores/types';
 import { useCategoryStore } from '~/lib/stores/categoryStore';
@@ -273,7 +273,7 @@ const CategoryManagementScreen = () => {
       <View className="flex-1">
         <View className="p-4">
           <View className="flex-row justify-between items-center mb-2">
-            <Text className="text-2xl font-bold text-foreground">Categories</Text>
+            <Text className="text-2xl font-bold text-foreground">Manage Categories</Text>
             <Button
               onPress={() => {
                 resetFormAndCloseDialog();
@@ -284,7 +284,10 @@ const CategoryManagementScreen = () => {
               size="icon"
               variant="ghost"
             >
-              <Tag size={20} color="#3B82F6" className="mr-2" />
+              <View className="flex-row items-center ">
+                <PlusIcon size={20} color="#3B82F6" className="mr-2" />
+                <Tag size={20} color="#3B82F6" className="mr-2" />
+              </View>
             </Button>
           </View>
 

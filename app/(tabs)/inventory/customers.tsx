@@ -228,7 +228,7 @@ const CustomerManagementScreen = () => {
       <View className="flex-1 bg-transparent">
         <View className="p-4">
           <View className="flex-row justify-between items-center mb-2">
-            <Text className="text-2xl font-bold text-foreground">Customers</Text>
+            <Text className="text-2xl font-bold text-foreground">Manage Customers</Text>
             <Button
               onPress={() => {
                 resetFormAndCloseDialog();

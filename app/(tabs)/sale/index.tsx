@@ -122,7 +122,7 @@ export default function SalesHubScreen() {
             <ScrollView className="flex-1 bg-transparent">
                 <View className="p-4 pt-6">
                     <View className="mb-6">
-                        <Text className="text-3xl font-bold text-foreground">Sales Hub</Text>
+                        {/* <Text className="text-3xl font-bold text-foreground">Sales Hub</Text> */}
                         <Text className="text-base text-muted-foreground mt-1">
                             Manage your sales operations and view transaction history.
                         </Text>

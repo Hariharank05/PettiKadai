@@ -205,11 +205,11 @@ export default function LoginScreen() {
                     </View>
                     <View className="items-center">
                       <Text className="text-sm text-slate-500 mb-1 font-medium">Welcome to</Text>
-                      <Text className="text-4xl font-bold text-slate-800 leading-tight tracking-wide">
+                      <Text className="text-4xl font-bold text-purple-900 leading-tight tracking-wide">
                         Petti Kadai
                       </Text>
                       <Text className="text-xs text-slate-500 italic mt-1">
-                        Your neighborhood shop, online
+                        Store Management Made Easy
                       </Text>
                     </View>
                   </View>
@@ -220,7 +220,7 @@ export default function LoginScreen() {
 
                       <View className="mb-4 bg-white rounded-2xl shadow-sm border border-slate-200/60">
                         <Input
-                          placeholder="Phone number, username, or email"
+                          placeholder="Phone number/username/email"
                           value={emailOrPhone}
                           onChangeText={handleEmailOrPhoneChange}
                           autoCapitalize="none"
