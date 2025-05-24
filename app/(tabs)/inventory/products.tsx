@@ -712,7 +712,7 @@ const ProductFormDialogContent = React.memo(
               </ShadcnButton>
               <ShadcnButton
                 size="lg"
-                className="h-12 px-6 bg-[#00b9f1] dark:bg-[#00b9f1]"
+                className="h-12 px-6 bg-[#a855f7] dark:bg-[#00b9f1]"
                 onPress={handleSubmit}
                 disabled={isLoading || !isFormValid}
               >
@@ -1204,7 +1204,7 @@ const ProductManagementScreen = () => {
                 setDialogOpen(true);
                 }}
                 disabled={isLoading}
-                className="bg-[#00b9f1] dark:bg-[#00b9f1] px-4 py-2.5 rounded-lg"
+                className="bg-[#a855f7] dark:bg-[#00b9f1] px-4 py-2.5 rounded-lg"
             >
                 <Text className="text-white font-semibold">Add Product</Text>
             </ShadcnButton>

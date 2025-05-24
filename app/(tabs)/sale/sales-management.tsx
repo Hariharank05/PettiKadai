@@ -685,231 +685,231 @@ export default function SalesScreen() {
 
   return (
     <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-        <SafeAreaView className="flex-1" style={{ backgroundColor: 'transparent' }}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: 'transparent' }}>
         <View className="flex-1 p-4 pt-2 bg-transparent">
-            <View className="mb-4 flex-row items-center rounded-lg px-3 shadow-md" style={{ backgroundColor: COLORS.white }}>
+          <View className="mb-4 flex-row items-center rounded-lg px-3 shadow-md" style={{ backgroundColor: COLORS.white }}>
             <Search size={20} color={COLORS.secondary} />
             <Input
-                placeholder="Search products..."
-                className="flex-1 h-12 border-0 bg-transparent ml-2 text-base font-medium"
-                placeholderTextColor={COLORS.gray}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                style={{ color: COLORS.dark }}
+              placeholder="Search products..."
+              className="flex-1 h-12 border-0 bg-transparent ml-2 text-base font-medium"
+              placeholderTextColor={COLORS.gray}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={{ color: COLORS.dark }}
             />
-            </View>
-            {isLoading ? (
+          </View>
+          {isLoading ? (
             <View className="flex-1 items-center justify-center">
-                <ActivityIndicator size="large" color={COLORS.secondary} />
-                <Text className="font-medium mt-2" style={{ color: COLORS.dark }}>Loading Products...</Text>
+              <ActivityIndicator size="large" color={COLORS.secondary} />
+              <Text className="font-medium mt-2" style={{ color: COLORS.dark }}>Loading Products...</Text>
             </View>
-            ) : filteredProducts.length === 0 ? (
+          ) : filteredProducts.length === 0 ? (
             <View className="flex-1 items-center justify-center">
-                <AlertCircle size={40} color={COLORS.danger} />
-                <Text className="font-semibold mt-2" style={{ color: COLORS.dark }}>No products found</Text>
-                {products.length > 0 && searchQuery !== '' && (
+              <AlertCircle size={40} color={COLORS.danger} />
+              <Text className="font-semibold mt-2" style={{ color: COLORS.dark }}>No products found</Text>
+              {products.length > 0 && searchQuery !== '' && (
                 <Text className="text-center mt-1 text-sm" style={{ color: COLORS.gray }}>Try adjusting your search.</Text>
-                )}
-                {products.length === 0 && (
+              )}
+              {products.length === 0 && (
                 <View className="items-center mt-4">
-                    <Text className="text-center text-sm mb-2" style={{ color: COLORS.gray }}>Your inventory is empty.</Text>
-                    <Button
+                  <Text className="text-center text-sm mb-2" style={{ color: COLORS.gray }}>Your inventory is empty.</Text>
+                  <Button
                     variant="outline"
                     className="border"
                     style={{ backgroundColor: `${COLORS.secondary}1A` }}
                     onPress={() => router.push('/(tabs)/inventory/products')}
-                    >
+                  >
                     <Text className="font-semibold" style={{ color: COLORS.gray }}>Add Your First Product</Text>
-                    </Button>
+                  </Button>
                 </View>
-                )}
+              )}
             </View>
-            ) : (
+          ) : (
             <FlatList
-                data={filteredProducts}
-                renderItem={renderProductItem}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 80 }}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.secondary} colors={[COLORS.secondary]} />}
-                keyboardShouldPersistTaps="handled"
+              data={filteredProducts}
+              renderItem={renderProductItem}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 80 }}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.secondary} colors={[COLORS.secondary]} />}
+              keyboardShouldPersistTaps="handled"
             />
-            )}
+          )}
         </View>
 
         {cartItems.length > 0 && !isLoading && (
-            <TouchableOpacity
+          <TouchableOpacity
             className="rounded-full shadow-lg items-center justify-center absolute bottom-8 right-8 w-16 h-16"
             style={{ backgroundColor: COLORS.secondary }}
             onPress={() => setIsCartOpen(true)}
             activeOpacity={0.7}
-            >
+          >
             <ShoppingCart size={24} color={COLORS.white} />
             <View className="rounded-full items-center justify-center absolute -top-1 -right-1 min-w-6 h-6 px-1" style={{ backgroundColor: COLORS.danger }}>
-                <Text className="text-white font-bold text-xs">
+              <Text className="text-white font-bold text-xs">
                 {cartItems.reduce((sum, item) => sum + item.quantityInCart, 0)}
-                </Text>
+              </Text>
             </View>
-            </TouchableOpacity>
+          </TouchableOpacity>
         )}
 
         <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
-            <DialogContent
+          <DialogContent
             className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
             style={{ maxHeight: '100%', minHeight: 720 }}
-            >
+          >
             <DialogHeader className="p-6 pb-1 border-b border-gray-200 dark:border-gray-700">
-                <View className="flex-row items-center">
+              <View className="flex-row items-center">
                 <ShoppingCart size={24} color={COLORS.secondary} className="mr-2" />
                 <DialogTitle className="text-xl font-bold" style={{ color: COLORS.gray }}>
-                    Current Sale
+                  Current Sale
                 </DialogTitle>
-                </View>
+              </View>
             </DialogHeader>
             <View style={{ padding: 16, width: '100%', flex: 1 }}>
-                {cartItems.length === 0 ? (
+              {cartItems.length === 0 ? (
                 <View className="items-center justify-center rounded-lg p-6 my-4">
-                    <ShoppingCart size={40} color={COLORS.danger} />
-                    <Text className="font-semibold mt-2" style={{ color: COLORS.dark }}>Cart is empty</Text>
-                    <Text className="text-xs mt-1" style={{ color: COLORS.gray }}>Select products to add them here</Text>
+                  <ShoppingCart size={40} color={COLORS.danger} />
+                  <Text className="font-semibold mt-2" style={{ color: COLORS.dark }}>Cart is empty</Text>
+                  <Text className="text-xs mt-1" style={{ color: COLORS.gray }}>Select products to add them here</Text>
                 </View>
-                ) : (
+              ) : (
                 <View style={{ flex: 1, width: 320 }}>
-                    {/* Customer Section */}
-                    <View className="mb-3 border-b" style={{ borderColor: COLORS.border }}>
+                  {/* Customer Section */}
+                  <View className="mb-3 border-b" style={{ borderColor: COLORS.border }}>
                     <Text className="text-sm font-medium mb-1" style={{ color: COLORS.gray }}>Customer</Text>
                     {selectedCustomer ? (
-                        <View className="flex-row justify-between items-center p-2 rounded-md" style={{ backgroundColor: COLORS.inputBackground }}>
+                      <View className="flex-row justify-between items-center p-2 rounded-md" style={{ backgroundColor: COLORS.inputBackground }}>
                         <View>
-                            <Text className="text-base font-semibold" style={{ color: COLORS.dark }}>{selectedCustomer.name}</Text>
-                            {selectedCustomer.phone && <Text className="text-xs" style={{ color: COLORS.gray }}>{selectedCustomer.phone}</Text>}
+                          <Text className="text-base font-semibold" style={{ color: COLORS.dark }}>{selectedCustomer.name}</Text>
+                          {selectedCustomer.phone && <Text className="text-xs" style={{ color: COLORS.gray }}>{selectedCustomer.phone}</Text>}
                         </View>
                         <Button variant="ghost" size="sm" onPress={() => setIsCustomerModalOpen(true)}>
-                            <Edit3 size={16} color={COLORS.primary} />
+                          <Edit3 size={16} color={COLORS.primary} />
                         </Button>
-                        </View>
+                      </View>
                     ) : (
-                        <Button
+                      <Button
                         variant="outline"
                         className="w-full h-10 justify-start px-3 border"
-                        style={{ borderColor: COLORS.border, backgroundColor: COLORS.inputBackground }}
+                        style={{ borderColor: COLORS.border, backgroundColor: COLORS.primary }}
                         onPress={() => setIsCustomerModalOpen(true)}
-                        >
+                      >
                         <View className="flex-row justify-between items-center">
-                            <UserPlus size={18} color={COLORS.primary} className='mr-3' />
-                            <Text style={{ color: COLORS.primary }}>Add / Select Customer</Text>
+                          <UserPlus size={18} color={COLORS.white} className='mr-3' />
+                          <Text style={{ color: COLORS.white }}>Add / Select Customer</Text>
                         </View>
-                        </Button>
+                      </Button>
                     )}
-                    </View>
-                    {/* Cart Items */}
-                    <Text className="text-base font-semibold mt-0 mb-4" style={{ color: COLORS.dark }}>Items in Cart:</Text>
-                    <View style={{ flex: 1, minHeight: cartItems.length === 0 ? 100 : 80, maxHeight: 400 }}>
+                  </View>
+                  {/* Cart Items */}
+                  <Text className="text-base font-semibold mt-0 mb-4" style={{ color: COLORS.dark }}>Items in Cart:</Text>
+                  <View style={{ flex: 1, minHeight: cartItems.length === 0 ? 100 : 80, maxHeight: 400 }}>
                     <FlatList
-                        data={cartItems}
-                        renderItem={renderCartItem}
-                        keyExtractor={(item) => item.id}
-                        showsVerticalScrollIndicator={true}
-                        contentContainerStyle={{ paddingBottom: 16, flexGrow: 1 }}
-                        key={cartItems.length}
+                      data={cartItems}
+                      renderItem={renderCartItem}
+                      keyExtractor={(item) => item.id}
+                      showsVerticalScrollIndicator={true}
+                      contentContainerStyle={{ paddingBottom: 16, flexGrow: 1 }}
+                      key={cartItems.length}
                     />
-                    </View>
-                    {/* Payment Method and Totals */}
-                    <View style={{ paddingTop: 2, paddingHorizontal: 12 }}>
+                  </View>
+                  {/* Payment Method and Totals */}
+                  <View style={{ paddingTop: 2, paddingHorizontal: 12 }}>
                     <View className="mb-3">
-                        <Text className="text-sm font-medium mb-1" style={{ color: COLORS.gray }}>Payment Method</Text>
-                        <View className="rounded-md border" style={{ borderColor: COLORS.border, backgroundColor: COLORS.inputBackground, width: '100%' }}>
+                      <Text className="text-sm font-medium mb-1" style={{ color: COLORS.gray }}>Payment Method</Text>
+                      <View className="rounded-md border" style={{ borderColor: COLORS.border, backgroundColor: COLORS.inputBackground, width: '100%' }}>
                         <Picker
-                            selectedValue={selectedPaymentMethod}
-                            onValueChange={(itemValue) => setSelectedPaymentMethod(itemValue)}
-                            style={{ height: Platform.OS === 'ios' ? 120 : 44, color: COLORS.dark, width: '100%', paddingHorizontal: 8 }}
-                            itemStyle={{ color: COLORS.dark, fontSize: 14, paddingHorizontal: 8 }}
+                          selectedValue={selectedPaymentMethod}
+                          onValueChange={(itemValue) => setSelectedPaymentMethod(itemValue)}
+                          style={{ height: Platform.OS === 'ios' ? 120 : 44, color: COLORS.dark, width: '100%', paddingHorizontal: 8 }}
+                          itemStyle={{ color: COLORS.dark, fontSize: 14, paddingHorizontal: 8 }}
                         >
-                            {PAYMENT_METHODS.map(method => (
+                          {PAYMENT_METHODS.map(method => (
                             <Picker.Item key={method.value} label={method.label} value={method.value} />
-                            ))}
+                          ))}
                         </Picker>
-                        </View>
+                      </View>
                     </View>
                     <View className="mb-2">
-                        <View className="flex-row justify-between items-center mt-4">
+                      <View className="flex-row justify-between items-center mt-4">
                         <Text className="text-sm" style={{ color: COLORS.gray }}>Subtotal:</Text>
                         <Text className="text-sm font-semibold" style={{ color: COLORS.dark }}>₹{subtotal.toFixed(2)}</Text>
-                        </View>
-                        <View className="flex-row justify-between items-center mt-2">
+                      </View>
+                      <View className="flex-row justify-between items-center mt-2">
                         <Text className="text-base font-bold" style={{ color: COLORS.dark }}>Total:</Text>
                         <Text className="text-base font-bold" style={{ color: COLORS.green }}>₹{totalAmount.toFixed(2)}</Text>
-                        </View>
-                        <View className="flex-row justify-between items-center mt-2">
+                      </View>
+                      <View className="flex-row justify-between items-center mt-2">
                         <Text className="text-xs" style={{ color: COLORS.gray }}>Est. Profit:</Text>
                         <Text className="text-xs font-semibold" style={{ color: COLORS.accent }}>₹{totalProfit.toFixed(2)}</Text>
-                        </View>
+                      </View>
                     </View>
                     <DialogFooter className="flex-row gap-x-2 mt-4">
-                        <Button
+                      <Button
                         variant="outline"
                         className="flex-1 h-10 border border-gray-300 dark:border-gray-600 mt-1"
                         style={{ backgroundColor: COLORS.white }}
                         onPress={clearCart}
                         disabled={isProcessing}
-                        >
+                      >
                         <Text className="font-semibold text-sm" style={{ color: COLORS.dark }}>Clear Sale</Text>
-                        </Button>
-                        <Button
+                      </Button>
+                      <Button
                         className="flex-1 h-10 mt-1"
-                        style={{ backgroundColor: COLORS.secondary }}
+                        style={{ backgroundColor: COLORS.primary }}
                         onPress={handleProceedToPayment}
                         disabled={isProcessing}
-                        >
+                      >
                         {isProcessing ? (
-                            <ActivityIndicator size="small" color={COLORS.white} />
+                          <ActivityIndicator size="small" color={COLORS.primary} />
                         ) : (
-                            <Text className="font-semibold text-sm" style={{ color: COLORS.white }}>Proceed to Payment</Text>
+                          <Text className="font-semibold text-sm" style={{ color: COLORS.white }}>Proceed to Payment</Text>
                         )}
-                        </Button>
+                      </Button>
                     </DialogFooter>
-                    </View>
+                  </View>
                 </View>
-                )}
+              )}
             </View>
-            </DialogContent>
+          </DialogContent>
         </Dialog>
 
         <Dialog
-            open={isCustomerModalOpen}
-            onOpenChange={(open) => {
+          open={isCustomerModalOpen}
+          onOpenChange={(open) => {
             if (!open) {
-                setIsAddingNewCustomer(false);
-                setNewCustomerForm({ name: '', phone: '', email: '' });
-                setCustomerSearchQuery('');
+              setIsAddingNewCustomer(false);
+              setNewCustomerForm({ name: '', phone: '', email: '' });
+              setCustomerSearchQuery('');
             }
             setIsCustomerModalOpen(open);
-            }}
+          }}
         >
-            <DialogContent
+          <DialogContent
             className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-xl w-11/12 mx-auto"
             style={{ maxHeight: '90%', minHeight: 600 }}
-            >
+          >
             <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-                <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center justify-between">
                 <DialogTitle className="text-lg font-bold" style={{ color: COLORS.gray }}>
-                    {isAddingNewCustomer ? 'Add New Customer' : 'Select Customer'}
+                  {isAddingNewCustomer ? 'Add New Customer' : 'Select Customer'}
                 </DialogTitle>
-                </View>
+              </View>
             </DialogHeader>
             <View className="p-4 h-80 w-80">
-                {isAddingNewCustomer ? (
+              {isAddingNewCustomer ? (
                 <View>
-                    <Input
+                  <Input
                     placeholder="Customer Name*"
                     value={newCustomerForm.name}
                     onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, name: text }))}
                     className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
                     style={{ backgroundColor: COLORS.inputBackground, color: COLORS.dark }}
                     placeholderTextColor={COLORS.gray}
-                    />
-                    <Input
+                  />
+                  <Input
                     placeholder="Phone Number*"
                     value={newCustomerForm.phone}
                     onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, phone: text }))}
@@ -917,8 +917,8 @@ export default function SalesScreen() {
                     className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
                     style={{ backgroundColor: COLORS.inputBackground, color: COLORS.dark }}
                     placeholderTextColor={COLORS.gray}
-                    />
-                    <Input
+                  />
+                  <Input
                     placeholder="Email (Optional)"
                     value={newCustomerForm.email}
                     onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, email: text }))}
@@ -927,191 +927,194 @@ export default function SalesScreen() {
                     className="mb-4 h-11 border border-gray-300 dark:border-gray-600"
                     style={{ backgroundColor: COLORS.inputBackground, color: COLORS.dark }}
                     placeholderTextColor={COLORS.gray}
-                    />
-                    <View className="flex-row justify-end gap-x-2">
+                  />
+                  <View className="flex-row justify-end gap-x-2">
                     <Button variant="ghost" onPress={() => setIsAddingNewCustomer(false)}>
-                        <Text style={{ color: COLORS.gray }}>Cancel</Text>
+                      <Text style={{ color: COLORS.gray }}>Cancel</Text>
                     </Button>
                     <Button
-                        onPress={handleAddNewCustomer}
-                        disabled={isProcessing}
-                        style={{ backgroundColor: COLORS.secondary }}
+                      onPress={handleAddNewCustomer}
+                      disabled={isProcessing}
+                      style={{ backgroundColor: COLORS.secondary }}
                     >
-                        {isProcessing ? (
+                      {isProcessing ? (
                         <ActivityIndicator color={COLORS.white} size="small" />
-                        ) : (
+                      ) : (
                         <Text className="text-white">Save Customer</Text>
-                        )}
+                      )}
                     </Button>
-                    </View>
+                  </View>
                 </View>
-                ) : (
+              ) : (
                 <View style={{ flex: 1, minHeight: 500 }}>
-                    <View
+                  <View
                     className="mb-5 flex-row items-center rounded-md px-3 border border-gray-300 dark:border-gray-600"
                     style={{ backgroundColor: COLORS.inputBackground }}
-                    >
+                  >
                     <Search size={18} color={COLORS.gray} />
                     <Input
-                        placeholder="Search by name or phone..."
-                        value={customerSearchQuery}
-                        onChangeText={setCustomerSearchQuery}
-                        className="flex-1 h-10 border-0 bg-transparent ml-2 text-sm"
-                        style={{ color: COLORS.dark }}
-                        placeholderTextColor={COLORS.gray}
+                      placeholder="Search by name or phone..."
+                      value={customerSearchQuery}
+                      onChangeText={setCustomerSearchQuery}
+                      className="flex-1 h-10 border-0 bg-transparent ml-2 text-sm"
+                      style={{ color: COLORS.dark }}
+                      placeholderTextColor={COLORS.gray}
                     />
-                    </View>
-                    <FlatList
+                  </View>
+                  <FlatList
                     data={filteredCustomers}
                     keyExtractor={(item) => item.id}
                     renderItem={({ item }) => (
-                        <TouchableOpacity
+                      <TouchableOpacity
                         className="py-3 px-2 border-b border-gray-200 dark:border-gray-700"
                         onPress={() => {
-                            setSelectedCustomer(item);
-                            setIsCustomerModalOpen(false);
-                            setCustomerSearchQuery('');
+                          setSelectedCustomer(item);
+                          setIsCustomerModalOpen(false);
+                          setCustomerSearchQuery('');
                         }}
-                        >
+                      >
                         <Text className="text-base font-medium" style={{ color: COLORS.dark }}>
-                            {item.name}
+                          {item.name}
                         </Text>
                         <Text className="text-xs" style={{ color: COLORS.gray }}>
-                            {item.phone}
+                          {item.phone}
                         </Text>
-                        </TouchableOpacity>
+                      </TouchableOpacity>
                     )}
                     ListEmptyComponent={
-                        <View className="items-center py-4">
+                      <View className="items-center py-4">
                         <Text style={{ color: COLORS.gray }}>No customers found.</Text>
-                        </View>
+                      </View>
                     }
                     style={{ flex: 1 }}
-                    />
-                    <Button
+                  />
+                  <Button
                     variant="outline"
                     className="mt-4 h-10 border border-gray-300 dark:border-gray-600"
-                    style={{ backgroundColor: COLORS.white }}
+                    style={{ backgroundColor: COLORS.primary }}
                     onPress={() => setIsAddingNewCustomer(true)}
-                    >
-                    <UserPlus size={18} color={COLORS.primary} className="mr-2" />
-                    <Text style={{ color: COLORS.primary }}>Add New Customer</Text>
-                    </Button>
+                  >
+                    <View className='text-center justify-between flex-row items-center'>
+                      <UserPlus size={18} color={COLORS.white} className="mr-2" />
+                      <Text style={{ color: COLORS.white }}>Add New Customer</Text>
+                    </View>
+                  </Button>
                 </View>
-                )}
+              )}
             </View>
-            </DialogContent>
+          </DialogContent>
         </Dialog>
 
         <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
-            <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto">
+          <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto">
             <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-                <DialogTitle className="text-xl font-bold" style={{ color: COLORS.gray }}>
+              <DialogTitle className="text-xl font-bold" style={{ color: COLORS.gray }}>
                 Confirm Sale
-                </DialogTitle>
+              </DialogTitle>
             </DialogHeader>
             <View className="p-4 h-80 w-80">
-                <Text className="mb-4 text-base font-medium" style={{ color: COLORS.dark }}>
+              <Text className="mb-4 text-base font-medium" style={{ color: COLORS.dark }}>
                 Please confirm the following sale:
-                </Text>
-                {selectedCustomer && (
+              </Text>
+              {selectedCustomer && (
                 <View className="mb-2 p-2 rounded-md" style={{ backgroundColor: COLORS.inputBackground }}>
-                    <Text className="text-sm font-semibold" style={{ color: COLORS.dark }}>Customer: {selectedCustomer.name}</Text>
-                    {selectedCustomer.phone && <Text className="text-xs" style={{ color: COLORS.gray }}>{selectedCustomer.phone}</Text>}
+                  <Text className="text-sm font-semibold" style={{ color: COLORS.dark }}>Customer: {selectedCustomer.name}</Text>
+                  {selectedCustomer.phone && <Text className="text-xs" style={{ color: COLORS.gray }}>{selectedCustomer.phone}</Text>}
                 </View>
-                )}
-                <Text className="text-sm font-medium mb-2" style={{ color: COLORS.dark }}>
+              )}
+              <Text className="text-sm font-medium mb-2" style={{ color: COLORS.dark }}>
                 Payment Method: <Text className="font-semibold">{PAYMENT_METHODS.find(p => p.value === selectedPaymentMethod)?.label || selectedPaymentMethod}</Text>
-                </Text>
-                <ScrollView
+              </Text>
+              <ScrollView
                 style={{ flexGrow: 1, maxHeight: 200 }}
                 showsVerticalScrollIndicator={true}
-                >
+              >
                 {cartItems.map((item) => (
-                    <View key={item.id} className="flex-row justify-between py-1">
+                  <View key={item.id} className="flex-row justify-between py-1">
                     <Text
-                        className="text-sm font-medium"
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                        style={{ flex: 1, marginRight: 8, color: COLORS.gray }}
+                      className="text-sm font-medium"
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      style={{ flex: 1, marginRight: 8, color: COLORS.gray }}
                     >
-                        {item.name} {item.category ? `(${item.category})` : ''} × {item.quantityInCart}
+                      {item.name} {item.category ? `(${item.category})` : ''} × {item.quantityInCart}
                     </Text>
                     <Text className="text-sm font-semibold" style={{ color: COLORS.accent }}>
-                        ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
+                      ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
                     </Text>
-                    </View>
+                  </View>
                 ))}
-                </ScrollView>
-                <Separator className="my-2" style={{ backgroundColor: COLORS.gray }} />
-                <View className="flex-row justify-between py-1">
+              </ScrollView>
+              <Separator className="my-2" style={{ backgroundColor: COLORS.gray }} />
+              <View className="flex-row justify-between py-1">
                 <Text className="text-lg font-bold" style={{ color: COLORS.dark }}>Total:</Text>
                 <Text className="text-lg font-bold" style={{ color: COLORS.green }}>
-                    ₹{totalAmount.toFixed(2)}
+                  ₹{totalAmount.toFixed(2)}
                 </Text>
-                </View>
+              </View>
             </View>
             <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
-                <Button
+              <Button
                 variant="outline"
                 className="h-12 px-6 border border-gray-300 dark:border-gray-600"
                 style={{ backgroundColor: COLORS.white }}
                 onPress={() => setIsConfirmDialogOpen(false)}
                 disabled={isProcessing}
-                >
+              >
                 <Text className="font-semibold" style={{ color: COLORS.dark }}>Cancel</Text>
-                </Button>
-                <Button
+              </Button>
+              <Button
                 className="h-12 px-6"
-                style={{ backgroundColor: COLORS.secondary }}
+                style={{ backgroundColor: COLORS.primary }}
                 onPress={confirmSale}
                 disabled={isProcessing}
-                >
+              >
                 {isProcessing ? (
-                    <ActivityIndicator size="small" color={COLORS.white} />
+                  <ActivityIndicator size="small" color={COLORS.white} />
                 ) : (
-                    <Text className="font-semibold" style={{ color: COLORS.white }}>Confirm Sale</Text>
+                  <Text className="font-semibold" style={{ color: COLORS.white }}>Confirm Sale</Text>
                 )}
-                </Button>
+              </Button>
             </DialogFooter>
-            </DialogContent>
+          </DialogContent>
         </Dialog>
 
         <Dialog open={isClearCartDialogOpen} onOpenChange={setIsClearCartDialogOpen}>
-            <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto">
+          <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[90%] max-w-sm mx-auto">
             <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-                <DialogTitle className="text-xl font-bold" style={{ color: COLORS.primary }}>
+              <DialogTitle className="text-xl font-bold" style={{ color: COLORS.primary }}>
                 Clear Cart
-                </DialogTitle>
+              </DialogTitle>
             </DialogHeader>
             <View className="p-4">
-                <Text className="text-base font-medium" style={{ color: COLORS.dark }}>
+              <Text className="text-base font-medium" style={{ color: COLORS.dark }}>
                 Are you sure you want to clear all items from the cart? This will also remove any selected customer.
-                </Text>
+              </Text>
             </View>
-            <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
-                <Button
+            <DialogFooter className="p-4 pt-2 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
+              <Button
                 variant="outline"
-                className="h-12 px-6 border border-gray-300 dark:border-gray-600"
+                className="h-12 px-5 border border-gray-300 dark:border-gray-600"
                 style={{ backgroundColor: COLORS.white }}
                 onPress={() => setIsClearCartDialogOpen(false)}
                 disabled={isProcessing}
-                >
+              >
                 <Text className="font-semibold" style={{ color: COLORS.dark }}>Cancel</Text>
-                </Button>
-                <Button
+              </Button>
+              <Button
                 variant="destructive"
-                className="h-12 px-6"
+                className="h-12 px-5"
                 style={{ backgroundColor: COLORS.danger }}
                 onPress={confirmClearCart}
                 disabled={isProcessing}
-                >
+              >
                 <Text className="font-semibold" style={{ color: COLORS.white }}>Clear</Text>
-                </Button>
+              </Button>
             </DialogFooter>
-            </DialogContent>
+          </DialogContent>
         </Dialog>
-        </SafeAreaView>
+
+      </SafeAreaView>
     </LinearGradient>
   );
 }

@@ -413,6 +413,7 @@ const CustomerManagementScreen = () => {
                 <Text>Cancel</Text>
               </Button>
               <Button
+                 className='bg-[#a855f7]'
                 onPress={formMode === 'edit' ? handleEditSubmit : handleAddCustomer}
                 disabled={storeIsLoading || (dialogOpen && formError !== null && formError !== storeError)} // Disable if form validation error exists
               >
