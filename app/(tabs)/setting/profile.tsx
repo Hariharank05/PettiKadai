@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Platform, Image, ActivityIndicator, Alert, Modal, useColorScheme as rnColorScheme } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Platform, Image, ActivityIndicator, Alert, Modal, useColorScheme as rnColorScheme } from 'react-native';
 import { Text } from '~/components/ui/text';
-import { Separator } from '~/components/ui/separator';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { UserCircle, Mail, Phone, Key, Shield, RefreshCcw, Info, ChevronRight, EditIcon, Image as GalleryIcon, Trash2 } from 'lucide-react-native';
+import { UserCircle, Mail, Phone, Key, Shield, RefreshCcw, Info, EditIcon, Image as GalleryIcon, Trash2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { getDatabase } from '~/lib/db/database';
@@ -17,19 +16,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 // Define the color palette based on theme
 export const getColors = (colorScheme: 'light' | 'dark') => ({
-    primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
-    secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
-    accent: '#f9c00c',
-    danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
-    lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
-    lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
-    lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
-    lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
-    white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
-    dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
-    gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
-    border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
-    yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+  primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+  secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+  accent: '#f9c00c',
+  danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+  lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+  lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+  lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+  lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+  white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+  dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+  gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+  border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+  yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
 });
 
 type RootStackParamList = {
@@ -46,36 +45,34 @@ interface UserProfileData {
   profileImage?: string | null;
 }
 
-const ListItem: React.FC<{
-  icon: React.ReactElement;
+// DisplayField component adapted from StoreSettingsScreen
+const DisplayField = ({ icon: Icon, label, value, placeholder, iconColor }: {
+  icon: any;
   label: string;
-  onPress?: () => void;
-  showChevron?: boolean;
-  customRightContent?: React.ReactNode;
-  isFirst?: boolean;
-  isLast?: boolean;
-}> = ({ icon, label, onPress, showChevron = true, customRightContent, isFirst, isLast }) => (
-  <TouchableOpacity
-    onPress={onPress}
-    className={`flex-row items-center bg-card active:opacity-70 h-[50px] px-4 
-                ${isFirst && isLast ? 'rounded-lg' : ''} 
-                ${isFirst && !isLast ? 'rounded-t-lg' : ''} 
-                ${!isFirst && isLast ? 'rounded-b-lg' : ''}`}
-    disabled={!onPress && !customRightContent}
-  >
-    <View className="w-8 h-8 rounded-full items-center justify-center mr-3" style={{ backgroundColor: icon.props.color ? `${icon.props.color}20` : 'transparent' }}>
-      {React.cloneElement(icon, { size: 20 })}
+  value: string | number;
+  placeholder: string;
+  iconColor: string;
+}) => {
+  const { isDarkColorScheme } = useColorScheme();
+  return (
+    <View className={`${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} rounded-xl p-4 mb-3 border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}>
+      <View className="flex-row items-center">
+        <Icon size={20} color={iconColor} />
+        <View className="ml-3 flex-1">
+          <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>{label}</Text>
+          <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+            {typeof value === 'number' ? value.toString() : (value || placeholder)}
+          </Text>
+        </View>
+      </View>
     </View>
-    <Text className="text-base text-foreground ml-1 flex-1">{label}</Text>
-    {customRightContent}
-    {showChevron && !customRightContent && <ChevronRight size={20} className="text-muted-foreground opacity-50" />}
-  </TouchableOpacity>
-);
+  );
+};
 
 export default function ProfileScreen({ navigation }: Props) {
   const { userName, userId, changeUserPassword } = useAuthStore();
-  const { isDarkColorScheme } = useColorScheme(); // Your custom hook for UI components
-  const currentRNColorScheme = rnColorScheme(); // From react-native for gradient colors
+  const { isDarkColorScheme } = useColorScheme();
+  const currentRNColorScheme = rnColorScheme();
   const COLORS = getColors(currentRNColorScheme || 'light');
 
   const isFocused = useIsFocused();
@@ -334,118 +331,14 @@ export default function ProfileScreen({ navigation }: Props) {
     return result;
   };
 
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: 'transparent' }, // Made transparent
-    profileSection: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingVertical: 15,
-      backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-      marginTop: Platform.OS === 'android' ? 10 : 0,
-      marginHorizontal: Platform.OS === 'ios' ? 15 : 0,
-      borderRadius: Platform.OS === 'ios' ? 10 : 0,
-    },
-    profileAvatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: isDarkColorScheme ? '#3A3A3C' : '#E5E5EA',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 15,
-      overflow: 'hidden',
-      borderColor: isDarkColorScheme ? '#4A004A' : '#800080',
-      borderWidth: 2,
-    },
-    profileTextContainer: { flex: 1 },
-    profileName: { fontSize: 20, fontWeight: '600', color: isDarkColorScheme ? '#FFFFFF' : '#000000' },
-    profileSubtitle: { fontSize: 14, color: isDarkColorScheme ? '#8E8E93' : '#666666', marginTop: 2 },
-    settingsSectionTitle: {
-      fontSize: 13,
-      fontWeight: 'normal',
-      color: isDarkColorScheme ? '#8E8E93' : '#6D6D72',
-      textTransform: 'uppercase',
-      paddingHorizontal: Platform.OS === 'ios' ? 30 : 15,
-      paddingTop: 25,
-      paddingBottom: 8,
-    },
-    settingsGroup: {
-      backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-      borderRadius: Platform.OS === 'ios' ? 10 : 0,
-      marginHorizontal: Platform.OS === 'ios' ? 15 : 0,
-      marginBottom: 20,
-      overflow: 'hidden',
-    },
-    inputContainer: { paddingHorizontal: 16, paddingVertical: 10 },
-    label: { fontSize: 14, color: isDarkColorScheme ? '#909090' : '#555555', marginBottom: 6, marginTop: 10, fontWeight: '500' },
-    buttonComponent: { marginTop: 16, height: 50, borderRadius: 8 },
-    iconContainer: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: isDarkColorScheme ? '#3A3A3C' : '#E5E5EA',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 8,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    modalContent: {
-      backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-      borderRadius: 12,
-      padding: 20,
-      width: '80%',
-      maxWidth: 320,
-      elevation: 5,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDarkColorScheme ? '#FFFFFF' : '#000000',
-      marginBottom: 16,
-      textAlign: 'center',
-    },
-    modalActionRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderRadius: 8,
-      marginBottom: 8,
-    },
-    modalActionText: {
-      fontSize: 16,
-      fontWeight: '500',
-      marginLeft: 12,
-    },
-    modalCancelButton: {
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    modalCancelText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: isDarkColorScheme ? '#0A84FF' : '#007AFF',
-    },
-  });
-
-  const iconColor = isDarkColorScheme ? '#0A84FF' : '#007AFF';
-  const destructiveColor = isDarkColorScheme ? '#FF453A' : '#FF3B30';
-
   if (isLoading && !profileImage && !formData.email) {
     return (
       <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color={iconColor} />
-          <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading Profile...</Text>
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text className={`mt-4 text-lg font-medium ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-600'}`}>
+            Loading Profile...
+          </Text>
         </View>
       </LinearGradient>
     );
@@ -453,10 +346,12 @@ export default function ProfileScreen({ navigation }: Props) {
 
   return (
     <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-      <>
-        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-          <View style={styles.profileSection}>
-            <TouchableOpacity onPress={handleProfileImagePress} className="relative w-20 h-20">
+      <View className="flex-1 bg-transparent">
+        <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          {/* Profile Section */}
+          <View className="mb-6">
+            <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Profile</Text>
+            <TouchableOpacity onPress={handleProfileImagePress} className="relative w-20 h-20 mb-4">
               <View className="w-full h-full rounded-full overflow-hidden justify-center items-center bg-gray-200 dark:bg-gray-800">
                 {isLoading && !profileImage ? (
                   <ActivityIndicator size="small" color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
@@ -475,179 +370,175 @@ export default function ProfileScreen({ navigation }: Props) {
                 <EditIcon size={12} color="white" />
               </View>
             </TouchableOpacity>
-            <View className='text-right mr-2 mt-4' style={[styles.profileTextContainer, { paddingLeft: 8 }]}>
-              <Text style={styles.profileName}>{formData.name}</Text>
-              <Text style={styles.profileSubtitle}>Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}</Text>
-            </View>
+            <Text className={`text-xl font-semibold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>{formData.name}</Text>
+            <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>
+              Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}
+            </Text>
           </View>
 
-          <Text style={styles.settingsSectionTitle}>Personal Information</Text>
-          <View style={styles.settingsGroup}>
+          {/* Personal Information */}
+          <View className="mb-6">
+            <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Personal Information</Text>
             {!isEditingProfile ? (
               <>
-                <ListItem
-                  icon={<UserCircle color={iconColor} />}
+                <DisplayField
+                  icon={UserCircle}
                   label="Full Name"
-                  customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.name}</Text>}
-                  showChevron={false}
-                  isFirst
+                  value={formData.name}
+                  placeholder="Not provided"
+                  iconColor="#4F46E5"
                 />
-                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                <ListItem
-                  icon={<Mail color={iconColor} />}
+                <DisplayField
+                  icon={Mail}
                   label="Email"
-                  customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.email || 'Not provided'}</Text>}
-                  showChevron={false}
+                  value={formData.email || ''}
+                  placeholder="Not provided"
+                  iconColor="#DC2626"
                 />
-                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                <ListItem
-                  icon={<Phone color={iconColor} />}
+                <DisplayField
+                  icon={Phone}
                   label="Phone"
-                  customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.phone || 'Not provided'}</Text>}
-                  showChevron={false}
-                  isLast
+                  value={formData.phone || ''}
+                  placeholder="Not provided"
+                  iconColor="#EA580C"
                 />
-                <View style={[styles.inputContainer, { paddingTop: 10, paddingBottom: 10 }]}>
-                  <Button
-                    variant="outline"
-                    onPress={() => setIsEditingProfile(true)}
-                    disabled={isLoading}
-                    style={[styles.buttonComponent, { marginTop: 0 }]}
-                  >
-                    <Text>Edit Profile</Text>
-                  </Button>
-                </View>
+                <Button
+                  onPress={() => setIsEditingProfile(true)}
+                  className="flex-row justify-center items-center py-4 rounded-xl mt-4"
+                  style={{ backgroundColor: COLORS.primary }}
+                >
+                  <EditIcon size={20} color="white" />
+                  <Text className="ml-2 font-semibold text-white">Edit Profile</Text>
+                </Button>
               </>
             ) : (
-              <>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Full Name</Text>
-                  <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
-                    <View style={styles.iconContainer}>
-                      <UserCircle size={18} className="text-muted-foreground" />
-                    </View>
+              <View className="bg-transparent rounded-2xl p-6">
+                <View className="mb-4">
+                  <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Full Name *</Text>
+                  <View className="flex-row items-center">
+                    <UserCircle size={20} color="#4F46E5" />
                     <Input
+                      className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
                       value={formData.name}
                       onChangeText={(text) => setFormData({ ...formData, name: text })}
                       placeholder="Your Full Name"
-                      editable={!isLoading}
-                      className="flex-1 h-[42px] border-0 bg-transparent"
+                      placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
                     />
                   </View>
                 </View>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Email</Text>
-                  <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
-                    <View style={styles.iconContainer}>
-                      <Mail size={18} className="text-muted-foreground" />
-                    </View>
+                <View className="mb-4">
+                  <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Email</Text>
+                  <View className="flex-row items-center">
+                    <Mail size={20} color="#DC2626" />
                     <Input
+                      className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
                       value={formData.email || ''}
                       onChangeText={(text) => setFormData({ ...formData, email: text })}
                       placeholder="Your Email"
+                      placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
                       keyboardType="email-address"
                       autoCapitalize="none"
-                      editable={!isLoading}
-                      className="flex-1 h-[42px] border-0 bg-transparent"
                     />
                   </View>
                 </View>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Phone</Text>
-                  <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
-                    <View style={styles.iconContainer}>
-                      <Phone size={18} className="text-muted-foreground" />
-                    </View>
+                <View className="mb-4">
+                  <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Phone</Text>
+                  <View className="flex-row items-center">
+                    <Phone size={20} color="#EA580C" />
                     <Input
+                      className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
                       value={formData.phone || ''}
                       onChangeText={(text) => setFormData({ ...formData, phone: text })}
                       placeholder="Your Phone Number"
+                      placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
                       keyboardType="phone-pad"
-                      editable={!isLoading}
-                      className="flex-1 h-[42px] border-0 bg-transparent"
                     />
                   </View>
                 </View>
-                <View style={[styles.inputContainer, { paddingBottom: 10 }]}>
-                  <View className="flex-row gap-3 mt-2">
-                    <Button
-                      variant="outline"
-                      onPress={() => {
-                        setIsEditingProfile(false);
-                        fetchUserData();
-                      }}
-                      disabled={isLoading}
-                      style={[styles.buttonComponent, { flex: 1, marginTop: 0 }]}
-                    >
-                      <Text>Cancel</Text>
-                    </Button>
-                    <Button
-                      onPress={handleUpdateProfile}
-                      disabled={isLoading}
-                      style={[styles.buttonComponent, { flex: 1, marginTop: 0 }]}
-                    >
-                      {isLoading ? (
-                        <ActivityIndicator size="small" color={isDarkColorScheme ? 'black' : 'white'} />
-                      ) : (
-                        <Text className="text-primary-foreground">Save Changes</Text>
-                      )}
-                    </Button>
-                  </View>
+                <View className="flex-row gap-3">
+                  <Button
+                    onPress={() => {
+                      setIsEditingProfile(false);
+                      fetchUserData();
+                    }}
+                    className={`flex-1 py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                  >
+                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                  </Button>
+                  <Button
+                    onPress={handleUpdateProfile}
+                    disabled={isLoading}
+                    className={`flex-1 py-3 rounded-xl flex-row justify-center items-center ${isLoading ? (isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-300') : (isDarkColorScheme ? 'bg-blue-600' : 'bg-blue-500')}`}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text className="font-semibold text-white text-center">Save Changes</Text>
+                    )}
+                  </Button>
                 </View>
-              </>
+              </View>
             )}
           </View>
 
-          <Text style={styles.settingsSectionTitle}>Security</Text>
-          <View style={styles.settingsGroup}>
-            <ListItem
-              icon={<Key color={iconColor} />}
-              label="Change Password"
-              onPress={() => setIsChangePasswordModalVisible(true)}
-              showChevron={false}
-              isFirst
-            />
-            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-            <ListItem
-              icon={<Shield color={iconColor} />}
-              label="Security Question"
-              onPress={() => Alert.alert('Security Question', 'This feature will be available in a future update.')}
-            />
-            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-            <ListItem
-              icon={<RefreshCcw color={iconColor} />}
-              label="Account Recovery"
-              onPress={() => Alert.alert('Account Recovery', 'This feature will be available in a future update.')}
-              isLast
-            />
+          {/* Security */}
+          <View className="mb-6">
+            <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Security</Text>
+            <TouchableOpacity onPress={() => setIsChangePasswordModalVisible(true)}>
+              <DisplayField
+                icon={Key}
+                label="Change Password"
+                value=""
+                placeholder="Tap to change"
+                iconColor="#0891B2"
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => Alert.alert('Security Question', 'This feature will be available in a future update.')}>
+              <DisplayField
+                icon={Shield}
+                label="Security Question"
+                value=""
+                placeholder="Tap to set"
+                iconColor="#0891B2"
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => Alert.alert('Account Recovery', 'This feature will be available in a future update.')}>
+              <DisplayField
+                icon={RefreshCcw}
+                label="Account Recovery"
+                value=""
+                placeholder="Tap to configure"
+                iconColor="#0891B2"
+              />
+            </TouchableOpacity>
           </View>
 
-          <Text style={styles.settingsSectionTitle}>App Information</Text>
-          <View style={styles.settingsGroup}>
-            <ListItem
-              icon={<Info color={iconColor} />}
+          {/* App Information */}
+          <View className="mb-6">
+            <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>App Information</Text>
+            <DisplayField
+              icon={Info}
               label="Version"
-              customRightContent={<Text className="text-muted-foreground">1.0.0</Text>}
-              showChevron={false}
-              isFirst
+              value="1.0.0"
+              placeholder="N/A"
+              iconColor="#D97706"
             />
-            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-            <ListItem
-              icon={<Info color={iconColor} />}
+            <DisplayField
+              icon={Info}
               label="Build"
-              customRightContent={
-                <Text className="text-muted-foreground">{`${new Date().getFullYear()}.${new Date().getMonth() + 1}.${new Date().getDate()}`}</Text>
-              }
-              showChevron={false}
+              value={`${new Date().getFullYear()}.${new Date().getMonth() + 1}.${new Date().getDate()}`}
+              placeholder="N/A"
+              iconColor="#D97706"
             />
-            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-            <ListItem
-              icon={<Info color={iconColor} />}
-              label="About Petti Kadai"
-              onPress={() => Alert.alert('About', 'Petti Kadai is a simple inventory management app for small stores.')}
-              isLast
-              showChevron={false}
-            />
+            <TouchableOpacity onPress={() => Alert.alert('About', 'Petti Kadai is a simple inventory management app for small stores.')}>
+              <DisplayField
+                icon={Info}
+                label="About Petti Kadai"
+                value=""
+                placeholder="Tap for details"
+                iconColor="#D97706"
+              />
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -657,31 +548,38 @@ export default function ProfileScreen({ navigation }: Props) {
           animationType="fade"
           onRequestClose={() => setShowImageActionModal(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Profile Picture</Text>
-              <TouchableOpacity
-                style={[styles.modalActionRow, { backgroundColor: isDarkColorScheme ? '#2A2A2C' : '#F5F5F5' }]}
-                onPress={pickImage}
-              >
-                <GalleryIcon size={20} color={iconColor} />
-                <Text style={[styles.modalActionText, { color: isDarkColorScheme ? '#FFFFFF' : '#000000' }]}>Select Image</Text>
-              </TouchableOpacity>
-              {profileImage && (
-                <TouchableOpacity
-                  style={[styles.modalActionRow, { backgroundColor: isDarkColorScheme ? '#2A2A2C' : '#F5F5F5' }]}
-                  onPress={deleteImage}
-                >
-                  <Trash2 size={20} color={destructiveColor} />
-                  <Text style={[styles.modalActionText, { color: destructiveColor }]}>Delete Image</Text>
+          <View className="flex-1 bg-black/50 justify-center items-center px-4">
+            <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+              <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Profile Picture</Text>
+                <TouchableOpacity onPress={() => setShowImageActionModal(false)}>
+                  <Trash2 size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowImageActionModal(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
+              </View>
+              <View className="p-6">
+                <TouchableOpacity
+                  className={`flex-row items-center p-4 rounded-lg mb-3 ${isDarkColorScheme ? 'bg-gray-700' : 'bg-gray-50'}`}
+                  onPress={pickImage}
+                >
+                  <GalleryIcon size={20} color={COLORS.primary} />
+                  <Text className={`ml-3 font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Select Image</Text>
+                </TouchableOpacity>
+                {profileImage && (
+                  <TouchableOpacity
+                    className={`flex-row items-center p-4 rounded-lg mb-3 ${isDarkColorScheme ? 'bg-gray-700' : 'bg-gray-50'}`}
+                    onPress={deleteImage}
+                  >
+                    <Trash2 size={20} color={COLORS.danger} />
+                    <Text className={`ml-3 font-medium text-red-500`}>Delete Image</Text>
+                  </TouchableOpacity>
+                )}
+                <Button
+                  onPress={() => setShowImageActionModal(false)}
+                  className={`py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                >
+                  <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                </Button>
+              </View>
             </View>
           </View>
         </Modal>
@@ -692,7 +590,7 @@ export default function ProfileScreen({ navigation }: Props) {
           onSubmit={handleChangePasswordSubmit}
           isLoading={changePasswordLoading}
         />
-      </>
+      </View>
     </LinearGradient>
   );
 }

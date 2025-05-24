@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
-import { Separator } from '~/components/ui/separator';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { getDatabase } from '~/lib/db/database';
@@ -34,6 +33,8 @@ import {
 import { useColorScheme } from '~/lib/useColorScheme';
 import { ChangePasswordModal } from '~/components/screens/settings-components/ChangePasswordModal';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Button } from '~/components/ui/button';
+import { X } from 'lucide-react-native';
 
 // Define the color palette based on theme
 export const getColors = (colorScheme: 'light' | 'dark') => ({
@@ -50,7 +51,7 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
     gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
     border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
     yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
-  });
+});
 
 interface FormState {
     storeName: string;
@@ -63,59 +64,54 @@ interface FormState {
     language?: string;
 }
 
-interface CustomListItemProps {
-    icon: React.ReactElement<{ color?: string;[key: string]: any }>;
-    label: string;
-    onPress?: () => void;
-    showChevron?: boolean;
-    customRightContent?: React.ReactNode;
-    isFirst?: boolean;
-    isLast?: boolean;
-}
-
-const ListItem: React.FC<CustomListItemProps> = ({
-    icon,
+// DisplayField component adapted from AppPreferencesScreen
+const DisplayField = ({
+    icon: Icon,
     label,
+    value,
+    placeholder,
+    iconColor,
     onPress,
-    showChevron = true,
     customRightContent,
-    isFirst,
-    isLast,
+    showChevron = true,
+}: {
+    icon: any;
+    label: string;
+    value?: string | number;
+    placeholder?: string;
+    iconColor: string;
+    onPress?: () => void;
+    customRightContent?: React.ReactNode;
+    showChevron?: boolean;
 }) => {
-    const iconColorFromProps = icon.props.color;
-
+    const { isDarkColorScheme } = useColorScheme();
     return (
-        <TouchableOpacity
-            onPress={onPress}
-            className={`flex-row items-center bg-card active:opacity-70 h-[50px] px-4 
-                        ${isFirst && isLast ? 'rounded-lg' : ''} 
-                        ${isFirst && !isLast ? 'rounded-t-lg' : ''} 
-                        ${!isFirst && isLast ? 'rounded-b-lg' : ''}`}
-            disabled={!onPress && !customRightContent}
-        >
-            <View
-                className="w-8 h-8 rounded-full items-center justify-center mr-3"
-                style={{
-                    backgroundColor: iconColorFromProps
-                        ? `${iconColorFromProps}20`
-                        : 'transparent',
-                }}
-            >
-                {React.cloneElement(icon, { size: 20 })}
+        <TouchableOpacity onPress={onPress} disabled={!onPress && !customRightContent}>
+            <View className={`${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} rounded-xl p-4 mb-3 border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}>
+                <View className="flex-row items-center">
+                    <Icon size={20} color={iconColor} />
+                    <View className="ml-3 flex-1">
+                        <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>{label}</Text>
+                        {value && (
+                            <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                {typeof value === 'number' ? value.toString() : (value || placeholder)}
+                            </Text>
+                        )}
+                    </View>
+                    {customRightContent}
+                    {showChevron && !customRightContent && (
+                        <ChevronRight size={20} color={isDarkColorScheme ? '#5A5A5E' : '#C7C7CC'} />
+                    )}
+                </View>
             </View>
-            <Text className="text-base text-foreground ml-1 flex-1">{label}</Text>
-            {customRightContent}
-            {showChevron && !customRightContent && (
-                <ChevronRight size={20} className="text-muted-foreground opacity-50" />
-            )}
         </TouchableOpacity>
     );
 };
 
 export default function SettingsScreen() {
     const { userName, userId, logout, isLoading: authIsLoading, updateAuthStoreUserName, changeUserPassword } = useAuthStore();
-    const { setColorScheme, isDarkColorScheme } = useColorScheme(); // Your custom hook
-    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const { setColorScheme, isDarkColorScheme } = useColorScheme();
+    const currentRNColorScheme = rnColorScheme();
     const COLORS = getColors(currentRNColorScheme || 'light');
 
     const router = useRouter();
@@ -262,7 +258,7 @@ export default function SettingsScreen() {
                         id, userId, storeName, storeAddress, storePhone, storeEmail,
                         currencySymbol, taxRate, defaultDiscountRate, darkMode, language,
                         receiptFooter, backupFrequency, updatedAt
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?}`,
                     [
                         userId, userId, formState.storeName, formState.storeAddress,
                         formState.storePhone, formState.storeEmail, formState.currencySymbol,
@@ -280,11 +276,14 @@ export default function SettingsScreen() {
         }
     };
 
+    // const handleToggleDarkModeSwitch = () => {
+    //     const newThemeIsDark = !isDarkColorScheme;
+    //     setColorScheme(newThemeIsDark ? 'dark' : 'light');
+    //     setFormState(prev => ({ ...prev, darkModeForSave: newThemeIsDark }));
+    //     saveDarkModePreference(newThemeIsDark);
+    // };
     const handleToggleDarkModeSwitch = () => {
-        const newThemeIsDark = !isDarkColorScheme;
-        setColorScheme(newThemeIsDark ? 'dark' : 'light');
-        setFormState(prev => ({ ...prev, darkModeForSave: newThemeIsDark }));
-        saveDarkModePreference(newThemeIsDark);
+        Alert.alert('Info', 'Dark mode will be implemented in the next version.');
     };
 
     const handleAttemptLogout = () => setShowLogoutDialog(true);
@@ -298,7 +297,7 @@ export default function SettingsScreen() {
     const handleConfirmResetData = async () => {
         setShowResetDialog(false);
         if (!userId) {
-            Alert.alert("Error", "User not identified. Cannot reset data.!");
+            Alert.alert("Error", "User not identified. Cannot reset data!");
             return;
         }
         setDataLoading(true);
@@ -351,21 +350,26 @@ export default function SettingsScreen() {
     };
 
     const styles = StyleSheet.create({
-        container: { flex: 1, backgroundColor: 'transparent' }, // Made transparent
+        container: { flex: 1, backgroundColor: 'transparent' },
         profileSection: {
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 20,
-            paddingVertical: 15,
+            padding: 16,
             backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
             marginTop: Platform.OS === 'android' ? 10 : 0,
-            marginHorizontal: Platform.OS === 'ios' ? 15 : 0,
-            borderRadius: Platform.OS === 'ios' ? 10 : 0,
+            marginHorizontal: Platform.OS === 'ios' ? 15 : 10,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: isDarkColorScheme ? '#374151' : '#e5e7eb',
         },
         profileAvatar: {
-            width: 60, height: 60, borderRadius: 30,
+            width: 60,
+            height: 60,
+            borderRadius: 30,
             backgroundColor: isDarkColorScheme ? '#3A3A3C' : '#E5E5EA',
-            justifyContent: 'center', alignItems: 'center', marginRight: 15,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 15,
             overflow: 'hidden',
         },
         profileAvatarImage: {
@@ -373,76 +377,15 @@ export default function SettingsScreen() {
             height: '100%',
         },
         profileTextContainer: { flex: 1 },
-        profileName: { fontSize: 20, fontWeight: '600', color: isDarkColorScheme ? '#FFFFFF' : '#000000' },
-        profileSubtitle: { fontSize: 14, color: isDarkColorScheme ? '#8E8E93' : '#666666', marginTop: 2 },
-        settingsSectionTitle: {
-            fontSize: 13,
-            fontWeight: 'normal',
-            color: isDarkColorScheme ? '#8E8E93' : '#6D6D72',
-            textTransform: 'uppercase',
-            paddingHorizontal: Platform.OS === 'ios' ? 30 : 15,
-            paddingTop: 25,
-            paddingBottom: 8,
-        },
-        settingsGroup: {
-            backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-            borderRadius: Platform.OS === 'ios' ? 10 : 0,
-            marginHorizontal: Platform.OS === 'ios' ? 15 : 0,
-            marginBottom: 20,
-            overflow: 'hidden',
-        },
-        dialogOverlay: {
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingHorizontal: 20,
-        },
-        dialogViewContent: {
-            backgroundColor: isDarkColorScheme ? '#252525' : '#fff',
-            borderRadius: 10,
-            padding: 20,
-            width: '100%',
-            maxWidth: 360,
-            elevation: 5,
-        },
-        dialogTitleText: {
+        profileName: {
             fontSize: 20,
-            fontWeight: 'bold',
-            marginBottom: 12,
-            color: isDarkColorScheme ? '#e0e0e0' : '#222',
-        },
-        dialogMessageText: {
-            fontSize: 16,
-            marginBottom: 24,
-            color: isDarkColorScheme ? '#b0b0b0' : '#555',
-            lineHeight: 23,
-        },
-        dialogActions: {
-            flexDirection: 'row',
-            justifyContent: 'flex-end',
-            gap: 12,
-        },
-        dialogButton: {
-            paddingVertical: 10,
-            paddingHorizontal: 18,
-            borderRadius: 6,
-        },
-        dialogCancelButtonText: {
-            color: isDarkColorScheme ? '#9CA3AF' : '#6B7280',
-            fontSize: 16,
-            fontWeight: '500',
-        },
-        dialogConfirmButton: {
-            backgroundColor: isDarkColorScheme ? '#00AEEF' : '#007AFF',
-        },
-        dialogDestructiveButton: {
-            backgroundColor: '#EF4444',
-        },
-        dialogConfirmButtonText: {
-            color: '#fff',
-            fontSize: 16,
             fontWeight: '600',
+            color: isDarkColorScheme ? '#FFFFFF' : '#000000',
+        },
+        profileSubtitle: {
+            fontSize: 14,
+            color: isDarkColorScheme ? '#8E8E93' : '#666666',
+            marginTop: 2,
         },
     });
 
@@ -452,9 +395,11 @@ export default function SettingsScreen() {
     if (dataLoading && !initialDbFetchComplete) {
         return (
             <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <View className="flex-1 justify-center items-center">
                     <ActivityIndicator size="large" color={iconColor} />
-                    <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading...</Text>
+                    <Text className={`mt-4 text-lg font-medium ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-600'}`}>
+                        Loading...
+                    </Text>
                 </View>
             </LinearGradient>
         );
@@ -462,7 +407,8 @@ export default function SettingsScreen() {
 
     return (
         <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-            <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+            <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                {/* Profile Section */}
                 <TouchableOpacity style={styles.profileSection} onPress={() => router.push('/(tabs)/setting/profile')}>
                     <View style={styles.profileAvatar}>
                         {userProfileImage ? (
@@ -478,127 +424,160 @@ export default function SettingsScreen() {
                     <ChevronRight size={22} color={isDarkColorScheme ? '#5A5A5E' : '#C7C7CC'} />
                 </TouchableOpacity>
 
-                <Text style={styles.settingsSectionTitle}>General</Text>
-                <View style={styles.settingsGroup}>
-                    <ListItem
-                        icon={<UserCircle color={iconColor} />}
+                {/* General Section */}
+                <View className="mb-6">
+                    <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>General</Text>
+                    <DisplayField
+                        icon={UserCircle}
                         label="Personal Information"
+                        iconColor={iconColor}
                         onPress={() => router.push('/(tabs)/setting/profile')}
-                        isFirst
                     />
-                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                    <ListItem
-                        icon={<Building color={iconColor} />}
+                    <DisplayField
+                        icon={Building}
                         label="Store Settings"
+                        iconColor={iconColor}
                         onPress={() => router.push('/(tabs)/setting/store-settings')}
                     />
-                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                    <ListItem
-                        icon={<FileText color={iconColor} />}
+                    <DisplayField
+                        icon={FileText}
                         label="Application Preferences"
+                        iconColor={iconColor}
                         onPress={() => router.push('/(tabs)/setting/app-preferences')}
-                        isLast
                     />
                 </View>
 
-                <Text style={styles.settingsSectionTitle}>Appearance & Security</Text>
-                <View style={styles.settingsGroup}>
-                    <ListItem
-                        icon={isDarkColorScheme ? <Moon color={iconColor} /> : <Sun color={iconColor} />}
-                        label="Dark Mode"
-                        showChevron={false}
-                        customRightContent={
+                {/* Appearance & Security Section */}
+                <View className="mb-6">
+                    <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Appearance & Security</Text>
+                    <View className={`${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} rounded-xl p-4 mb-3 border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}>
+                        <View className="flex-row items-center justify-between">
+                            <View className="flex-row items-center flex-1">
+                                {isDarkColorScheme ? <Moon size={20} color={iconColor} /> : <Sun size={20} color={iconColor} />}
+                                <View className="ml-3">
+                                    <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>Dark Mode</Text>
+                                    <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                        {isDarkColorScheme ? 'Enabled' : 'Disabled'}
+                                    </Text>
+                                </View>
+                            </View>
                             <RNSwitch
                                 value={isDarkColorScheme}
                                 onValueChange={handleToggleDarkModeSwitch}
                                 trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
-                                thumbColor={"#FFFFFF"}
+                                thumbColor="#FFFFFF"
                                 ios_backgroundColor="#3e3e3e"
                             />
-                        }
-                        isFirst
-                    />
-                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                    <ListItem
-                        icon={<Lock color={iconColor} />}
+                        </View>
+                    </View>
+                    <DisplayField
+                        icon={Lock}
                         label="Change Password"
+                        iconColor={iconColor}
                         onPress={() => setIsChangePasswordModalVisible(true)}
                         showChevron={false}
-                        isLast
                     />
                 </View>
 
-                <Text style={styles.settingsSectionTitle}>Data & Information</Text>
-                <View style={styles.settingsGroup}>
-                    <ListItem
-                        icon={<DatabaseZap color={destructiveIconColor} />}
+                {/* Data & Information Section */}
+                <View className="mb-6">
+                    <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Data & Information</Text>
+                    <DisplayField
+                        icon={DatabaseZap}
                         label="Reset My Data"
+                        iconColor={destructiveIconColor}
                         onPress={handleAttemptResetData}
                         showChevron={false}
-                        isFirst
                     />
-                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                    <ListItem
-                        icon={<Info color={iconColor} />}
+                    <DisplayField
+                        icon={Info}
                         label="About Petti Kadai"
+                        iconColor={iconColor}
                         onPress={() => Alert.alert('Petti Kadai v1.0.2', 'Simple Inventory for Small Shops')}
                         showChevron={false}
-                        isLast
                     />
                 </View>
 
-                <View style={[styles.settingsGroup, { marginTop: 30 }]}>
-                    <ListItem
-                        icon={<LogOut color={destructiveIconColor} />}
+                {/* Logout Section */}
+                <View className="mb-6">
+                    <DisplayField
+                        icon={LogOut}
                         label="Logout"
+                        iconColor={destructiveIconColor}
                         onPress={handleAttemptLogout}
                         showChevron={false}
-                        isFirst
-                        isLast
                     />
                 </View>
 
+                {/* Logout Modal */}
                 <Modal
                     visible={showLogoutDialog}
                     transparent={true}
                     animationType="fade"
                     onRequestClose={() => setShowLogoutDialog(false)}
                 >
-                    <View style={styles.dialogOverlay}>
-                        <View style={styles.dialogViewContent}>
-                            <Text style={styles.dialogTitleText}>Confirm Logout</Text>
-                            <Text style={styles.dialogMessageText}>Are you sure you want to log out?</Text>
-                            <View style={styles.dialogActions}>
-                                <TouchableOpacity style={styles.dialogButton} onPress={() => setShowLogoutDialog(false)}>
-                                    <Text style={styles.dialogCancelButtonText}>Cancel</Text>
+                    <View className="flex-1 bg-black/50 justify-center items-center px-4">
+                        <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+                            <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Confirm Logout</Text>
+                                <TouchableOpacity onPress={() => setShowLogoutDialog(false)}>
+                                    <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmLogout}>
-                                    <Text style={styles.dialogConfirmButtonText}>Logout</Text>
-                                </TouchableOpacity>
+                            </View>
+                            <View className="p-6">
+                                <Text className={`text-base ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-600'}`}>Are you sure you want to log out?</Text>
+                            </View>
+                            <View className={`flex-row gap-3 p-6 border-t ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Button
+                                    onPress={() => setShowLogoutDialog(false)}
+                                    className={`flex-1 py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                                >
+                                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                                </Button>
+                                <Button
+                                    onPress={handleConfirmLogout}
+                                    className="flex-1 py-3 rounded-xl bg-red-500"
+                                >
+                                    <Text className="font-semibold text-white text-center">Logout</Text>
+                                </Button>
                             </View>
                         </View>
                     </View>
                 </Modal>
 
+                {/* Reset Data Modal */}
                 <Modal
                     visible={showResetDialog}
                     transparent={true}
                     animationType="fade"
                     onRequestClose={() => setShowResetDialog(false)}
                 >
-                    <View style={styles.dialogOverlay}>
-                        <View style={styles.dialogViewContent}>
-                            <Text style={styles.dialogTitleText}>Reset All Your Data?</Text>
-                            <Text style={styles.dialogMessageText}>
-                                This will permanently delete all your application data associated with your account ({userName || 'current user'}). This action cannot be undone.
-                            </Text>
-                            <View style={styles.dialogActions}>
-                                <TouchableOpacity style={styles.dialogButton} onPress={() => setShowResetDialog(false)}>
-                                    <Text style={styles.dialogCancelButtonText}>Cancel</Text>
+                    <View className="flex-1 bg-black/50 justify-center items-center px-4">
+                        <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+                            <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Reset All Your Data?</Text>
+                                <TouchableOpacity onPress={() => setShowResetDialog(false)}>
+                                    <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmResetData}>
-                                    <Text style={styles.dialogConfirmButtonText}>Yes, Reset Data</Text>
-                                </TouchableOpacity>
+                            </View>
+                            <View className="p-6">
+                                <Text className={`text-base ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    This will permanently delete all your application data associated with your account ({userName || 'current user'}). This action cannot be undone.
+                                </Text>
+                            </View>
+                            <View className={`flex-row gap-3 p-6 border-t ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Button
+                                    onPress={() => setShowResetDialog(false)}
+                                    className={`flex-1 py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                                >
+                                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                                </Button>
+                                <Button
+                                    onPress={handleConfirmResetData}
+                                    className="flex-1 py-3 rounded-xl bg-red-500"
+                                >
+                                    <Text className="font-semibold text-white text-center">Yes, Reset Data</Text>
+                                </Button>
                             </View>
                         </View>
                     </View>

@@ -6,14 +6,14 @@ import {
     Alert,
     Switch as RNSwitch,
     ActivityIndicator,
-    StyleSheet,
-    Platform,
     TextInput,
     useColorScheme as rnColorScheme,
+    Modal,
+    Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
-import { Separator } from '~/components/ui/separator';
+import { Button } from '~/components/ui/button';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { getDatabase } from '~/lib/db/database';
 import {
@@ -25,8 +25,8 @@ import {
     Archive,
     Bell,
     Smartphone,
-    ChevronRight,
-    CheckCircle
+    CheckCircle,
+    X,
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -46,7 +46,7 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
     gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
     border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
     yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
-  });
+});
 
 interface AppPreferencesState {
     language: string;
@@ -83,180 +83,37 @@ const CURRENCY_OPTIONS = [
     { symbol: '¥', name: 'Japanese Yen (¥)' }
 ];
 
-const ListItem: React.FC<{
-    icon: React.ReactElement;
-    label: string;
-    onPress?: () => void;
-    showChevron?: boolean;
-    customRightContent?: React.ReactNode;
-    isFirst?: boolean;
-    isLast?: boolean;
-    subtitle?: string;
-}> = ({ icon, label, onPress, showChevron = true, customRightContent, isFirst, isLast, subtitle }) => (
-    <TouchableOpacity
-        onPress={onPress}
-        className={`bg-card active:opacity-70 px-4 py-3
-                    ${isFirst && isLast ? 'rounded-lg' : ''} 
-                    ${isFirst && !isLast ? 'rounded-t-lg' : ''} 
-                    ${!isFirst && isLast ? 'rounded-b-lg' : ''}`}
-        disabled={!onPress && !customRightContent}
-    >
-        <View className="flex-row items-center">
-            <View className="w-8 h-8 rounded-md items-center justify-center mr-3"
-                style={{ backgroundColor: icon.props.color ? `${icon.props.color}20` : 'transparent' }}>
-                {React.cloneElement(icon, { size: 20 })}
-            </View>
-            <View className="flex-1 ml-1">
-                <Text className="text-base text-foreground">{label}</Text>
-                {subtitle && <Text className="text-sm text-muted-foreground mt-1">{subtitle}</Text>}
-            </View>
-            {customRightContent}
-            {showChevron && !customRightContent && <ChevronRight size={20} className="text-muted-foreground opacity-50" />}
-        </View>
-    </TouchableOpacity>
-);
-
-const InputItem: React.FC<{
-    icon: React.ReactElement;
+// DisplayField component adapted from StoreSettingsScreen
+const DisplayField = ({ icon: Icon, label, value, placeholder, iconColor, onPress }: {
+    icon: any;
     label: string;
     value: string | number;
-    onChangeText: (text: string) => void;
-    placeholder?: string;
-    keyboardType?: 'default' | 'numeric' | 'decimal-pad';
-    isFirst?: boolean;
-    isLast?: boolean;
-    suffix?: string;
-}> = ({ icon, label, value, onChangeText, placeholder, keyboardType = 'default', isFirst, isLast, suffix }) => {
+    placeholder: string;
+    iconColor: string;
+    onPress?: () => void;
+}) => {
     const { isDarkColorScheme } = useColorScheme();
-
     return (
-        <View className={`bg-card px-4 py-3
-                        ${isFirst && isLast ? 'rounded-lg' : ''} 
-                        ${isFirst && !isLast ? 'rounded-t-lg' : ''} 
-                        ${!isFirst && isLast ? 'rounded-b-lg' : ''}`}>
-            <View className="flex-row items-center">
-                <View className="w-8 h-8 rounded-md items-center justify-center mr-3"
-                    style={{ backgroundColor: icon.props.color ? `${icon.props.color}20` : 'transparent' }}>
-                    {React.cloneElement(icon, { size: 20 })}
-                </View>
-                <View className="flex-1 ml-1">
-                    <Text className="text-base text-foreground mb-2">{label}</Text>
-                    <View className="flex-row items-center">
-                        <TextInput
-                            value={String(value)}
-                            onChangeText={onChangeText}
-                            placeholder={placeholder}
-                            keyboardType={keyboardType}
-                            className="flex-1 text-base border border-border rounded-md px-3 py-2"
-                            style={{
-                                color: isDarkColorScheme ? '#FFFFFF' : '#000000',
-                                backgroundColor: isDarkColorScheme ? '#2C2C2E' : '#F2F2F7'
-                            }}
-                            placeholderTextColor={isDarkColorScheme ? '#8E8E93' : '#8E8E93'}
-                        />
-                        {suffix && <Text className="text-base text-muted-foreground ml-2">{suffix}</Text>}
+        <TouchableOpacity onPress={onPress} disabled={!onPress}>
+            <View className={`${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} rounded-xl p-4 mb-3 border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}>
+                <View className="flex-row items-center">
+                    <Icon size={20} color={iconColor} />
+                    <View className="ml-3 flex-1">
+                        <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>{label}</Text>
+                        <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                            {typeof value === 'number' ? value.toString() : (value || placeholder)}
+                        </Text>
                     </View>
                 </View>
             </View>
-        </View>
-    );
-};
-
-const SelectionModal: React.FC<{
-    visible: boolean;
-    title: string;
-    options: Array<{ value: string; label: string; name?: string }>;
-    selectedValue: string;
-    onSelect: (value: string) => void;
-    onClose: () => void;
-}> = ({ visible, title, options, selectedValue, onSelect, onClose }) => {
-    const { isDarkColorScheme } = useColorScheme();
-
-    if (!visible) return null;
-
-    return (
-        <View style={{
-            position: 'absolute',
-            top: 0, bottom: 0, left: 0, right: 0,
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingHorizontal: 20,
-            zIndex: 1000
-        }}>
-            <View style={{
-                backgroundColor: isDarkColorScheme ? '#252525' : '#fff',
-                borderRadius: 10,
-                width: '100%',
-                maxWidth: 360,
-                maxHeight: '70%',
-                elevation: 5
-            }}>
-                <View style={{ padding: 20, borderBottomWidth: 1, borderBottomColor: isDarkColorScheme ? '#333' : '#eee' }}>
-                    <Text style={{
-                        fontSize: 20,
-                        fontWeight: 'bold',
-                        color: isDarkColorScheme ? '#e0e0e0' : '#222',
-                        textAlign: 'center'
-                    }}>
-                        {title}
-                    </Text>
-                </View>
-                <ScrollView style={{ maxHeight: 300 }}>
-                    {options.map((option) => (
-                        <TouchableOpacity
-                            key={option.value}
-                            onPress={() => {
-                                onSelect(option.value);
-                                onClose();
-                            }}
-                            style={{
-                                padding: 15,
-                                borderBottomWidth: 1,
-                                borderBottomColor: isDarkColorScheme ? '#333' : '#eee',
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                            }}
-                        >
-                            <Text style={{
-                                fontSize: 16,
-                                color: isDarkColorScheme ? '#e0e0e0' : '#222'
-                            }}>
-                                {option.name || option.label}
-                            </Text>
-                            {selectedValue === option.value && (
-                                <CheckCircle size={20} color={isDarkColorScheme ? '#0A84FF' : '#007AFF'} />
-                            )}
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-                <TouchableOpacity
-                    onPress={onClose}
-                    style={{
-                        padding: 15,
-                        alignItems: 'center',
-                        borderTopWidth: 1,
-                        borderTopColor: isDarkColorScheme ? '#333' : '#eee'
-                    }}
-                >
-                    <Text style={{
-                        fontSize: 16,
-                        color: isDarkColorScheme ? '#0A84FF' : '#007AFF',
-                        fontWeight: '600'
-                    }}>
-                        Cancel
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        </View>
+        </TouchableOpacity>
     );
 };
 
 export default function AppPreferencesScreen() {
     const { userId } = useAuthStore();
-    const { isDarkColorScheme } = useColorScheme(); // Your custom hook
-    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const { isDarkColorScheme } = useColorScheme();
+    const currentRNColorScheme = rnColorScheme();
     const COLORS = getColors(currentRNColorScheme || 'light');
 
     const router = useRouter();
@@ -273,16 +130,20 @@ export default function AppPreferencesScreen() {
         autoBackup: true
     });
 
+    const [editPreferences, setEditPreferences] = useState<AppPreferencesState>({ ...preferences });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isModalVisible, setIsModalVisible] = useState(false);
     const [showLanguageModal, setShowLanguageModal] = useState(false);
     const [showCurrencyModal, setShowCurrencyModal] = useState(false);
     const [showBackupModal, setShowBackupModal] = useState(false);
+    const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
     const fetchPreferences = useCallback(async () => {
         if (!userId) return;
 
         try {
+            setIsLoading(true);
             const settings = await db.getFirstAsync<any>(
                 `SELECT language, currencySymbol, taxRate, defaultDiscountRate, 
                         receiptFooter, backupFrequency FROM Settings 
@@ -291,15 +152,18 @@ export default function AppPreferencesScreen() {
             );
 
             if (settings) {
-                setPreferences(prev => ({
-                    ...prev,
+                const newPreferences = {
                     language: settings.language || 'en',
                     currencySymbol: settings.currencySymbol || '₹',
                     taxRate: settings.taxRate ?? 0,
                     defaultDiscountRate: settings.defaultDiscountRate ?? 0,
                     receiptFooter: settings.receiptFooter || '',
-                    backupFrequency: settings.backupFrequency || 'WEEKLY'
-                }));
+                    backupFrequency: settings.backupFrequency || 'WEEKLY',
+                    enableNotifications: true, // Default, not stored in DB
+                    autoBackup: true // Default, not stored in DB
+                };
+                setPreferences(newPreferences);
+                setEditPreferences(newPreferences);
             }
         } catch (error) {
             console.error('[AppPreferences] Failed to load preferences:', error);
@@ -313,12 +177,73 @@ export default function AppPreferencesScreen() {
         fetchPreferences();
     }, [fetchPreferences]);
 
-    const savePreferences = async (updatedPreferences?: Partial<AppPreferencesState>) => {
-        if (!userId) return;
+    const validateForm = (data: AppPreferencesState) => {
+        const errors: Record<string, string> = {};
 
-        const prefsToSave = updatedPreferences ? { ...preferences, ...updatedPreferences } : preferences;
+        if (data.taxRate < 0 || data.taxRate > 100) {
+            errors.taxRate = 'Tax rate must be between 0-100%';
+        }
+
+        if (data.defaultDiscountRate < 0 || data.defaultDiscountRate > 100) {
+            errors.defaultDiscountRate = 'Discount rate must be between 0-100%';
+        }
+
+        setValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleInputChange = (field: keyof AppPreferencesState, value: string | number | boolean) => {
+        setEditPreferences(prev => ({ ...prev, [field]: value }));
+        if (validationErrors[field]) {
+            setValidationErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
+    };
+
+    const handleOpenModal = () => {
+        setEditPreferences({ ...preferences });
+        setValidationErrors({});
+        setIsModalVisible(true);
+    };
+
+    const handleCloseModal = () => {
+        const hasChanges = JSON.stringify(editPreferences) !== JSON.stringify(preferences);
+
+        if (hasChanges) {
+            Alert.alert(
+                'Unsaved Changes',
+                'You have unsaved changes. Do you want to discard them?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Discard',
+                        style: 'destructive',
+                        onPress: () => {
+                            setEditPreferences({ ...preferences });
+                            setValidationErrors({});
+                            setIsModalVisible(false);
+                            Keyboard.dismiss();
+                        },
+                    },
+                ]
+            );
+        } else {
+            setIsModalVisible(false);
+            Keyboard.dismiss();
+        }
+    };
+
+    const savePreferences = async () => {
+        if (!validateForm(editPreferences)) return;
+        if (!userId) {
+            Alert.alert('Error', 'User not identified.');
+            return;
+        }
+
         setIsSaving(true);
-
         try {
             const now = new Date().toISOString();
             const existingSettings = await db.getFirstAsync('SELECT id FROM Settings WHERE userId = ? AND id = ?', [userId, userId]);
@@ -330,12 +255,12 @@ export default function AppPreferencesScreen() {
                      receiptFooter = ?, backupFrequency = ?, updatedAt = ?
                      WHERE userId = ? AND id = ?`,
                     [
-                        prefsToSave.language,
-                        prefsToSave.currencySymbol,
-                        prefsToSave.taxRate,
-                        prefsToSave.defaultDiscountRate,
-                        prefsToSave.receiptFooter,
-                        prefsToSave.backupFrequency,
+                        editPreferences.language,
+                        editPreferences.currencySymbol,
+                        editPreferences.taxRate,
+                        editPreferences.defaultDiscountRate,
+                        editPreferences.receiptFooter,
+                        editPreferences.backupFrequency,
                         now,
                         userId,
                         userId
@@ -350,21 +275,22 @@ export default function AppPreferencesScreen() {
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         userId, userId, 'My Store', '', '', '',
-                        prefsToSave.currencySymbol,
-                        prefsToSave.taxRate,
-                        prefsToSave.defaultDiscountRate,
+                        editPreferences.currencySymbol,
+                        editPreferences.taxRate,
+                        editPreferences.defaultDiscountRate,
                         null,
-                        prefsToSave.language,
-                        prefsToSave.receiptFooter,
-                        prefsToSave.backupFrequency,
+                        editPreferences.language,
+                        editPreferences.receiptFooter,
+                        editPreferences.backupFrequency,
                         now
                     ]
                 );
             }
 
-            if (updatedPreferences) {
-                setPreferences(prev => ({ ...prev, ...updatedPreferences }));
-            }
+            setPreferences({ ...editPreferences });
+            setValidationErrors({});
+            setIsModalVisible(false);
+            Alert.alert('Success', 'Preferences saved successfully!');
         } catch (error) {
             console.error('[AppPreferences] Failed to save preferences:', error);
             Alert.alert('Error', 'Could not save preferences.');
@@ -374,114 +300,34 @@ export default function AppPreferencesScreen() {
     };
 
     const handleLanguageChange = (language: string) => {
-        const updatedPrefs = { language };
-        setPreferences(prev => ({ ...prev, ...updatedPrefs }));
-        savePreferences(updatedPrefs);
+        handleInputChange('language', language);
+        setShowLanguageModal(false);
     };
 
     const handleCurrencyChange = (currencySymbol: string) => {
-        const updatedPrefs = { currencySymbol };
-        setPreferences(prev => ({ ...prev, ...updatedPrefs }));
-        savePreferences(updatedPrefs);
+        handleInputChange('currencySymbol', currencySymbol);
+        setShowCurrencyModal(false);
     };
 
     const handleBackupFrequencyChange = (value: string) => {
-        const backupFrequency = value as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'NEVER';
-        const updatedPrefs = { backupFrequency };
-        setPreferences(prev => ({ ...prev, ...updatedPrefs }));
-        savePreferences(updatedPrefs);
-    };
-
-    const handleTaxRateChange = (text: string) => {
-        const taxRate = parseFloat(text) || 0;
-        setPreferences(prev => ({ ...prev, taxRate }));
-    };
-
-    const handleDiscountRateChange = (text: string) => {
-        const defaultDiscountRate = parseFloat(text) || 0;
-        setPreferences(prev => ({ ...prev, defaultDiscountRate }));
-    };
-
-    const handleReceiptFooterChange = (receiptFooter: string) => {
-        setPreferences(prev => ({ ...prev, receiptFooter }));
+        handleInputChange('backupFrequency', value as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'NEVER');
+        setShowBackupModal(false);
     };
 
     const handleToggleNotifications = () => {
-        const enableNotifications = !preferences.enableNotifications;
-        const updatedPrefs = { enableNotifications };
-        setPreferences(prev => ({ ...prev, ...updatedPrefs }));
-        // Note: Notifications settings might need additional platform-specific handling
+        handleInputChange('enableNotifications', !editPreferences.enableNotifications);
     };
 
     const handleToggleAutoBackup = () => {
-        const autoBackup = !preferences.autoBackup;
-        const updatedPrefs = { autoBackup };
-        setPreferences(prev => ({ ...prev, ...updatedPrefs }));
+        handleInputChange('autoBackup', !editPreferences.autoBackup);
     };
-
-    const handleSaveAll = () => {
-        savePreferences();
-        Alert.alert('Success', 'Preferences saved successfully!');
-    };
-
-    const styles = StyleSheet.create({
-        container: {
-            flex: 1,
-            backgroundColor: 'transparent' // Made transparent
-        },
-        header: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 20,
-            paddingVertical: 15,
-            backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-            borderBottomWidth: 1,
-            borderBottomColor: isDarkColorScheme ? '#333' : '#E5E5E5'
-        },
-        headerTitle: {
-            fontSize: 18,
-            fontWeight: '600',
-            color: isDarkColorScheme ? '#FFFFFF' : '#000000',
-            marginLeft: 15
-        },
-        sectionTitle: {
-            fontSize: 13,
-            fontWeight: 'normal',
-            color: isDarkColorScheme ? '#8E8E93' : '#6D6D72',
-            textTransform: 'uppercase',
-            paddingHorizontal: Platform.OS === 'ios' ? 30 : 15,
-            paddingTop: 25,
-            paddingBottom: 8,
-        },
-        settingsGroup: {
-            backgroundColor: isDarkColorScheme ? '#1C1C1E' : '#FFFFFF',
-            borderRadius: Platform.OS === 'ios' ? 10 : 0,
-            marginHorizontal: Platform.OS === 'ios' ? 15 : 0,
-            marginBottom: 20,
-            overflow: 'hidden',
-        },
-        saveButton: {
-            backgroundColor: isDarkColorScheme ? '#0A84FF' : '#007AFF',
-            margin: 15,
-            paddingVertical: 15,
-            borderRadius: 10,
-            alignItems: 'center'
-        },
-        saveButtonText: {
-            color: '#FFFFFF',
-            fontSize: 16,
-            fontWeight: '600'
-        }
-    });
-
-    const iconColor = isDarkColorScheme ? '#0A84FF' : '#007AFF';
 
     if (isLoading) {
         return (
             <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                    <ActivityIndicator size="large" color={iconColor} />
-                    <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>
+                <View className="flex-1 justify-center items-center">
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text className={`mt-4 text-lg font-medium ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-600'}`}>
                         Loading preferences...
                     </Text>
                 </View>
@@ -495,80 +341,85 @@ export default function AppPreferencesScreen() {
 
     return (
         <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-            <View style={styles.container}>
-                <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-                    <Text style={styles.sectionTitle}>Localization</Text>
-                    <View style={styles.settingsGroup}>
-                        <ListItem
-                            icon={<Globe color={iconColor} />}
-                            label="Language"
-                            subtitle={selectedLanguage?.name || 'English'}
-                            onPress={() => setShowLanguageModal(true)}
-                            isFirst
-                        />
-                        <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                        <ListItem
-                            icon={<DollarSign color={iconColor} />}
-                            label="Currency"
-                            subtitle={selectedCurrency?.name || 'Indian Rupee (₹)'}
-                            onPress={() => setShowCurrencyModal(true)}
-                            isLast
-                        />
+            <View className="flex-1 bg-transparent">
+                <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                    {/* Localization */}
+                    <View className="mb-6">
+                        <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Localization</Text>
+                        <TouchableOpacity onPress={() => setShowLanguageModal(true)}>
+                            <DisplayField
+                                icon={Globe}
+                                label="Language"
+                                value={selectedLanguage?.name || 'English'}
+                                placeholder="Select language"
+                                iconColor="#4F46E5"
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setShowCurrencyModal(true)}>
+                            <DisplayField
+                                icon={DollarSign}
+                                label="Currency"
+                                value={selectedCurrency?.name || 'Indian Rupee (₹)'}
+                                placeholder="Select currency"
+                                iconColor="#D97706"
+                            />
+                        </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.sectionTitle}>Business Settings</Text>
-                    <View style={styles.settingsGroup}>
-                        <InputItem
-                            icon={<Percent color={iconColor} />}
+                    {/* Business Settings */}
+                    <View className="mb-6">
+                        <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Business Settings</Text>
+                        <DisplayField
+                            icon={Percent}
                             label="Default Tax Rate"
-                            value={preferences.taxRate}
-                            onChangeText={handleTaxRateChange}
-                            placeholder="0"
-                            keyboardType="decimal-pad"
-                            suffix="%"
-                            isFirst
+                            value={`${preferences.taxRate}%`}
+                            placeholder="0%"
+                            iconColor="#0891B2"
                         />
-                        <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                        <InputItem
-                            icon={<Percent color={iconColor} />}
+                        <DisplayField
+                            icon={Percent}
                             label="Default Discount Rate"
-                            value={preferences.defaultDiscountRate}
-                            onChangeText={handleDiscountRateChange}
-                            placeholder="0"
-                            keyboardType="decimal-pad"
-                            suffix="%"
-                            isLast
+                            value={`${preferences.defaultDiscountRate}%`}
+                            placeholder="0%"
+                            iconColor="#0891B2"
                         />
                     </View>
 
-                    <Text style={styles.sectionTitle}>Receipt Settings</Text>
-                    <View style={styles.settingsGroup}>
-                        <InputItem
-                            icon={<Receipt color={iconColor} />}
+                    {/* Receipt Settings */}
+                    <View className="mb-6">
+                        <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Receipt Settings</Text>
+                        <DisplayField
+                            icon={Receipt}
                             label="Receipt Footer Text"
                             value={preferences.receiptFooter}
-                            onChangeText={handleReceiptFooterChange}
                             placeholder="Thank you for your business!"
-                            isFirst
-                            isLast
+                            iconColor="#EA580C"
                         />
                     </View>
 
-                    <Text style={styles.sectionTitle}>Data & Backup</Text>
-                    <View style={styles.settingsGroup}>
-                        <ListItem
-                            icon={<Archive color={iconColor} />}
-                            label="Auto Backup Frequency"
-                            subtitle={selectedBackupFreq?.label || 'Weekly'}
-                            onPress={() => setShowBackupModal(true)}
-                            isFirst
-                        />
-                        <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                        <ListItem
-                            icon={<Smartphone color={iconColor} />}
-                            label="Enable Auto Backup"
-                            showChevron={false}
-                            customRightContent={
+                    {/* Data & Backup */}
+                    <View className="mb-6">
+                        <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Data & Backup</Text>
+                        <TouchableOpacity onPress={() => setShowBackupModal(true)}>
+                            <DisplayField
+                                icon={Archive}
+                                label="Auto Backup Frequency"
+                                value={selectedBackupFreq?.label || 'Weekly'}
+                                placeholder="Select frequency"
+                                iconColor="#059669"
+                            />
+                        </TouchableOpacity>
+                        <View className={`${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} rounded-xl p-4 mb-3 border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}>
+                            <View className="flex-row items-center justify-between">
+                                <View className="flex-row items-center flex-1">
+                                    <Smartphone size={20} color="#059669" />
+                                    <View className="ml-3">
+                                        <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>Enable Auto Backup</Text>
+                                        <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                            {preferences.autoBackup ? 'Enabled' : 'Disabled'}
+                                        </Text>
+                                    </View>
+                                </View>
                                 <RNSwitch
                                     value={preferences.autoBackup}
                                     onValueChange={handleToggleAutoBackup}
@@ -576,19 +427,24 @@ export default function AppPreferencesScreen() {
                                     thumbColor="#FFFFFF"
                                     ios_backgroundColor="#3e3e3e"
                                 />
-                            }
-                            isLast
-                        />
+                            </View>
+                        </View>
                     </View>
 
-                    <Text style={styles.sectionTitle}>Notifications</Text>
-                    <View style={styles.settingsGroup}>
-                        <ListItem
-                            icon={<Bell color={iconColor} />}
-                            label="Enable Notifications"
-                            subtitle="Get notified about low stock and important updates"
-                            showChevron={false}
-                            customRightContent={
+                    {/* Notifications */}
+                    <View className="mb-6">
+                        <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Notifications</Text>
+                        <View className={`${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} rounded-xl p-4 mb-3 border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}>
+                            <View className="flex-row items-center justify-between">
+                                <View className="flex-row items-center flex-1">
+                                    <Bell size={20} color="#DC2626" />
+                                    <View className="ml-3">
+                                        <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>Enable Notifications</Text>
+                                        <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                            {preferences.enableNotifications ? 'Enabled' : 'Disabled'}
+                                        </Text>
+                                    </View>
+                                </View>
                                 <RNSwitch
                                     value={preferences.enableNotifications}
                                     onValueChange={handleToggleNotifications}
@@ -596,51 +452,299 @@ export default function AppPreferencesScreen() {
                                     thumbColor="#FFFFFF"
                                     ios_backgroundColor="#3e3e3e"
                                 />
-                            }
-                            isFirst
-                            isLast
-                        />
+                            </View>
+                        </View>
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.saveButton}
-                        onPress={handleSaveAll}
-                        disabled={isSaving}
-                    >
-                        {isSaving ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                            <Text style={styles.saveButtonText}>Save All Preferences</Text>
-                        )}
-                    </TouchableOpacity>
+                    {/* Edit Button */}
+                    <View className="mb-6">
+                        <Button
+                            onPress={handleOpenModal}
+                            className="flex-row justify-center items-center py-4 rounded-xl"
+                            style={{ backgroundColor: COLORS.primary }}
+                        >
+                            <CheckCircle size={20} color="white" />
+                            <Text className="ml-2 font-semibold text-white">Edit Preferences</Text>
+                        </Button>
+                    </View>
                 </ScrollView>
 
-                <SelectionModal
-                    visible={showLanguageModal}
-                    title="Select Language"
-                    options={LANGUAGE_OPTIONS.map(lang => ({ value: lang.code, label: lang.name, name: lang.name }))}
-                    selectedValue={preferences.language}
-                    onSelect={handleLanguageChange}
-                    onClose={() => setShowLanguageModal(false)}
-                />
+                {/* Edit Modal */}
+                <Modal visible={isModalVisible} animationType="slide" transparent={true}>
+                    <View className="flex-1 bg-black/50 justify-center items-center px-4">
+                        <View className={`w-[85%] h-[80%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+                            <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Edit Preferences</Text>
+                                <TouchableOpacity onPress={handleCloseModal}>
+                                    <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
+                                <View className="py-4">
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Language</Text>
+                                        <TouchableOpacity
+                                            className={`flex-row items-center ${isDarkColorScheme ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'} border rounded-lg px-4 py-3`}
+                                            onPress={() => setShowLanguageModal(true)}
+                                        >
+                                            <Globe size={20} color="#4F46E5" />
+                                            <Text className={`ml-3 text-base ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                                {LANGUAGE_OPTIONS.find(lang => lang.code === editPreferences.language)?.name || 'English'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Currency</Text>
+                                        <TouchableOpacity
+                                            className={`flex-row items-center ${isDarkColorScheme ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'} border rounded-lg px-4 py-3`}
+                                            onPress={() => setShowCurrencyModal(true)}
+                                        >
+                                            <DollarSign size={20} color="#D97706" />
+                                            <Text className={`ml-3 text-base ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                                {CURRENCY_OPTIONS.find(curr => curr.symbol === editPreferences.currencySymbol)?.name || 'Indian Rupee (₹)'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Default Tax Rate (%)</Text>
+                                        <View className="flex-row items-center">
+                                            <Percent size={20} color="#0891B2" />
+                                            <TextInput
+                                                className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                                value={editPreferences.taxRate.toString()}
+                                                onChangeText={(text) => {
+                                                    const rate = parseFloat(text.replace(/[^0-9.]/g, '')) || 0;
+                                                    handleInputChange('taxRate', rate);
+                                                }}
+                                                placeholder="0"
+                                                placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        {validationErrors.taxRate && (
+                                            <Text className="text-red-500 text-sm mt-1">{validationErrors.taxRate}</Text>
+                                        )}
+                                    </View>
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Default Discount Rate (%)</Text>
+                                        <View className="flex-row items-center">
+                                            <Percent size={20} color="#0891B2" />
+                                            <TextInput
+                                                className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                                value={editPreferences.defaultDiscountRate.toString()}
+                                                onChangeText={(text) => {
+                                                    const rate = parseFloat(text.replace(/[^0-9.]/g, '')) || 0;
+                                                    handleInputChange('defaultDiscountRate', rate);
+                                                }}
+                                                placeholder="0"
+                                                placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        {validationErrors.defaultDiscountRate && (
+                                            <Text className="text-red-500 text-sm mt-1">{validationErrors.defaultDiscountRate}</Text>
+                                        )}
+                                    </View>
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Receipt Footer Text</Text>
+                                        <View className="flex-row items-center">
+                                            <Receipt size={20} color="#EA580C" />
+                                            <TextInput
+                                                className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                                value={editPreferences.receiptFooter}
+                                                onChangeText={(text) => handleInputChange('receiptFooter', text)}
+                                                placeholder="Thank you for your business!"
+                                                placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                                multiline
+                                                numberOfLines={2}
+                                            />
+                                        </View>
+                                    </View>
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Auto Backup Frequency</Text>
+                                        <TouchableOpacity
+                                            className={`flex-row items-center ${isDarkColorScheme ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'} border rounded-lg px-4 py-3`}
+                                            onPress={() => setShowBackupModal(true)}
+                                        >
+                                            <Archive size={20} color="#059669" />
+                                            <Text className={`ml-3 text-base ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                                {BACKUP_FREQUENCY_OPTIONS.find(freq => freq.value === editPreferences.backupFrequency)?.label || 'Weekly'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View className="mb-4">
+                                        <View className="flex-row items-center justify-between">
+                                            <View className="flex-row items-center flex-1">
+                                                <Smartphone size={20} color="#059669" />
+                                                <View className="ml-3">
+                                                    <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Enable Auto Backup</Text>
+                                                    <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                                        {editPreferences.autoBackup ? 'Enabled' : 'Disabled'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <RNSwitch
+                                                value={editPreferences.autoBackup}
+                                                onValueChange={handleToggleAutoBackup}
+                                                trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
+                                                thumbColor="#FFFFFF"
+                                                ios_backgroundColor="#3e3e3e"
+                                            />
+                                        </View>
+                                    </View>
+                                    <View className="mb-4">
+                                        <View className="flex-row items-center justify-between">
+                                            <View className="flex-row items-center flex-1">
+                                                <Bell size={20} color="#DC2626" />
+                                                <View className="ml-3">
+                                                    <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Enable Notifications</Text>
+                                                    <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                                                        {editPreferences.enableNotifications ? 'Enabled' : 'Disabled'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <RNSwitch
+                                                value={editPreferences.enableNotifications}
+                                                onValueChange={handleToggleNotifications}
+                                                trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
+                                                thumbColor="#FFFFFF"
+                                                ios_backgroundColor="#3e3e3e"
+                                            />
+                                        </View>
+                                    </View>
+                                </View>
+                            </ScrollView>
+                            <View className={`flex-row gap-3 p-6 border-t ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Button
+                                    onPress={handleCloseModal}
+                                    className={`flex-1 py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                                >
+                                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                                </Button>
+                                <Button
+                                    onPress={savePreferences}
+                                    disabled={isSaving || JSON.stringify(editPreferences) === JSON.stringify(preferences)}
+                                    className={`flex-1 py-3 rounded-xl flex-row justify-center items-center ${isSaving || JSON.stringify(editPreferences) === JSON.stringify(preferences)
+                                        ? (isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-300')
+                                        : (isDarkColorScheme ? 'bg-blue-600' : 'bg-blue-500')
+                                        }`}
+                                >
+                                    {isSaving ? (
+                                        <ActivityIndicator size="small" color="white" />
+                                    ) : (
+                                        <Text className="font-semibold text-white text-center">Save Changes</Text>
+                                    )}
+                                </Button>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
 
-                <SelectionModal
-                    visible={showCurrencyModal}
-                    title="Select Currency"
-                    options={CURRENCY_OPTIONS.map(curr => ({ value: curr.symbol, label: curr.name, name: curr.name }))}
-                    selectedValue={preferences.currencySymbol}
-                    onSelect={handleCurrencyChange}
-                    onClose={() => setShowCurrencyModal(false)}
-                />
+                {/* Selection Modals */}
+                <Modal visible={showLanguageModal} animationType="fade" transparent={true}>
+                    <View className="flex-1 bg-black/50 justify-center items-center px-4">
+                        <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+                            <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Select Language</Text>
+                                <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+                                    <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView className="max-h-[300px]">
+                                {LANGUAGE_OPTIONS.map((option) => (
+                                    <TouchableOpacity
+                                        key={option.code}
+                                        className={`flex-row items-center p-4 ${isDarkColorScheme ? 'bg-gray-700' : 'bg-gray-50'} m-3 rounded-lg`}
+                                        onPress={() => handleLanguageChange(option.code)}
+                                    >
+                                        <Text className={`text-base ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>{option.name}</Text>
+                                        {editPreferences.language === option.code && (
+                                            <CheckCircle size={20} color={COLORS.primary} className="ml-auto" />
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <View className="p-6">
+                                <Button
+                                    onPress={() => setShowLanguageModal(false)}
+                                    className={`py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                                >
+                                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                                </Button>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
 
-                <SelectionModal
-                    visible={showBackupModal}
-                    title="Backup Frequency"
-                    options={BACKUP_FREQUENCY_OPTIONS.map(freq => ({ value: freq.value, label: freq.label }))}
-                    selectedValue={preferences.backupFrequency}
-                    onSelect={handleBackupFrequencyChange}
-                    onClose={() => setShowBackupModal(false)}
-                />
+                <Modal visible={showCurrencyModal} animationType="fade" transparent={true}>
+                    <View className="flex-1 bg-black/50 justify-center items-center px-4">
+                        <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+                            <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Select Currency</Text>
+                                <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                                    <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView className="max-h-[300px]">
+                                {CURRENCY_OPTIONS.map((option) => (
+                                    <TouchableOpacity
+                                        key={option.symbol}
+                                        className={`flex-row items-center p-4 ${isDarkColorScheme ? 'bg-gray-700' : 'bg-gray-50'} m-3 rounded-lg`}
+                                        onPress={() => handleCurrencyChange(option.symbol)}
+                                    >
+                                        <Text className={`text-base ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>{option.name}</Text>
+                                        {editPreferences.currencySymbol === option.symbol && (
+                                            <CheckCircle size={20} color={COLORS.primary} className="ml-auto" />
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <View className="p-6">
+                                <Button
+                                    onPress={() => setShowCurrencyModal(false)}
+                                    className={`py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                                >
+                                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                                </Button>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+
+                <Modal visible={showBackupModal} animationType="fade" transparent={true}>
+                    <View className="flex-1 bg-black/50 justify-center items-center px-4">
+                        <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+                            <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Backup Frequency</Text>
+                                <TouchableOpacity onPress={() => setShowBackupModal(false)}>
+                                    <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView className="max-h-[300px]">
+                                {BACKUP_FREQUENCY_OPTIONS.map((option) => (
+                                    <TouchableOpacity
+                                        key={option.value}
+                                        className={`flex-row items-center p-4 ${isDarkColorScheme ? 'bg-gray-700' : 'bg-gray-50'} m-3 rounded-lg`}
+                                        onPress={() => handleBackupFrequencyChange(option.value)}
+                                    >
+                                        <Text className={`text-base ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>{option.label}</Text>
+                                        {editPreferences.backupFrequency === option.value && (
+                                            <CheckCircle size={20} color={COLORS.primary} className="ml-auto" />
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <View className="p-6">
+                                <Button
+                                    onPress={() => setShowBackupModal(false)}
+                                    className={`py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                                >
+                                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                                </Button>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
             </View>
         </LinearGradient>
     );

@@ -6,9 +6,9 @@ import {
     Alert,
     TextInput,
     ActivityIndicator,
-    Animated,
     Keyboard,
     useColorScheme as rnColorScheme,
+    Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
@@ -25,7 +25,9 @@ import {
     Save,
     Building2,
     CreditCard,
-    ArrowLeft
+    ArrowLeft,
+    Edit3,
+    X
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -45,7 +47,7 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
     gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
     border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
     yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
-  });
+});
 
 interface StoreSettings {
     storeName: string;
@@ -58,8 +60,8 @@ interface StoreSettings {
 
 export default function StoreSettingsScreen() {
     const { userId } = useAuthStore();
-    const { isDarkColorScheme } = useColorScheme(); // Your custom hook
-    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const { isDarkColorScheme } = useColorScheme();
+    const currentRNColorScheme = rnColorScheme();
     const COLORS = getColors(currentRNColorScheme || 'light');
 
     const router = useRouter();
@@ -74,23 +76,11 @@ export default function StoreSettingsScreen() {
         taxRate: 0,
     });
 
-    const [originalData, setOriginalData] = useState<StoreSettings>({ ...formData });
+    const [editFormData, setEditFormData] = useState<StoreSettings>({ ...formData });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-    const [focusedField, setFocusedField] = useState<string | null>(null);
+    const [isModalVisible, setIsModalVisible] = useState(false);
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-    const saveButtonScale = useRef(new Animated.Value(1)).current;
-
-    // Refs for TextInputs
-    const inputRefs = useRef<Record<keyof StoreSettings, React.RefObject<TextInput>>>({
-        storeName: React.createRef(),
-        storeAddress: React.createRef(),
-        storePhone: React.createRef(),
-        storeEmail: React.createRef(),
-        currencySymbol: React.createRef(),
-        taxRate: React.createRef(),
-    }).current;
 
     const fetchStoreSettings = useCallback(async () => {
         if (!userId) return;
@@ -112,7 +102,7 @@ export default function StoreSettingsScreen() {
             };
 
             setFormData(defaultSettings);
-            setOriginalData(defaultSettings);
+            setEditFormData(defaultSettings);
         } catch (error) {
             console.error('Failed to fetch store settings:', error);
             Alert.alert('Error', 'Failed to load store settings.');
@@ -125,22 +115,22 @@ export default function StoreSettingsScreen() {
         fetchStoreSettings();
     }, [fetchStoreSettings]);
 
-    const validateForm = () => {
+    const validateForm = (data: StoreSettings) => {
         const errors: Record<string, string> = {};
 
-        if (!formData.storeName.trim()) {
+        if (!data.storeName.trim()) {
             errors.storeName = 'Store name is required';
         }
 
-        if (formData.storeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.storeEmail)) {
+        if (data.storeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.storeEmail)) {
             errors.storeEmail = 'Please enter a valid email';
         }
 
-        if (formData.storePhone && !/^[\+]?[\d\s\-\(\)]{6,}$/.test(formData.storePhone)) {
+        if (data.storePhone && !/^[\+]?[\d\s\-\(\)]{6,}$/.test(data.storePhone)) {
             errors.storePhone = 'Please enter a valid phone number';
         }
 
-        if (formData.taxRate < 0 || formData.taxRate > 100) {
+        if (data.taxRate < 0 || data.taxRate > 100) {
             errors.taxRate = 'Tax rate must be between 0-100%';
         }
 
@@ -148,10 +138,8 @@ export default function StoreSettingsScreen() {
         return Object.keys(errors).length === 0;
     };
 
-    // Debounced input change handler
-    const handleInputChange = useCallback((field: keyof StoreSettings, value: string | number) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
-
+    const handleInputChange = (field: keyof StoreSettings, value: string | number) => {
+        setEditFormData(prev => ({ ...prev, [field]: value }));
         if (validationErrors[field]) {
             setValidationErrors(prev => {
                 const newErrors = { ...prev };
@@ -159,67 +147,17 @@ export default function StoreSettingsScreen() {
                 return newErrors;
             });
         }
-    }, [validationErrors]);
-
-    const handleButtonPress = async () => {
-        if (isEditing) {
-            if (!validateForm()) return;
-            if (!userId) {
-                Alert.alert('Error', 'User not identified.');
-                return;
-            }
-
-            setIsSaving(true);
-            try {
-                const now = new Date().toISOString();
-                const existingSettings = await db.getFirstAsync(
-                    'SELECT id FROM Settings WHERE userId = ? AND id = ?',
-                    [userId, userId]
-                );
-
-                if (existingSettings) {
-                    await db.runAsync(
-                        'UPDATE Settings SET storeName = ?, storeAddress = ?, storePhone = ?, storeEmail = ?, currencySymbol = ?, taxRate = ?, updatedAt = ? WHERE userId = ? AND id = ?',
-                        [formData.storeName, formData.storeAddress, formData.storePhone, formData.storeEmail, formData.currencySymbol, formData.taxRate, now, userId, userId]
-                    );
-                } else {
-                    await db.runAsync(
-                        `INSERT INTO Settings (
-                            id, userId, storeName, storeAddress, storePhone, storeEmail,
-                            currencySymbol, taxRate, defaultDiscountRate, darkMode, language,
-                            receiptFooter, backupFrequency, updatedAt
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            userId, userId, formData.storeName, formData.storeAddress,
-                            formData.storePhone, formData.storeEmail, formData.currencySymbol,
-                            formData.taxRate, 0, null, 'en', '', 'WEEKLY', now
-                        ]
-                    );
-                }
-
-                setOriginalData(formData);
-                setValidationErrors({});
-                setFocusedField(null);
-                setIsEditing(false);
-
-                Animated.sequence([
-                    Animated.timing(saveButtonScale, { toValue: 1.1, duration: 200, useNativeDriver: true }),
-                    Animated.timing(saveButtonScale, { toValue: 1, duration: 200, useNativeDriver: true }),
-                ]).start();
-
-                Alert.alert('Success', 'Store settings saved successfully!');
-            } catch (error) {
-                console.error('Failed to save store settings:', error);
-                Alert.alert('Error', 'Failed to save store settings.');
-            } finally {
-                setIsSaving(false);
-            }
-        } else {
-            setIsEditing(true);
-        }
     };
 
-    const handleCancelEdit = () => {
+    const handleOpenModal = () => {
+        setEditFormData({ ...formData });
+        setValidationErrors({});
+        setIsModalVisible(true);
+    };
+
+    const handleCloseModal = () => {
+        const hasChanges = JSON.stringify(editFormData) !== JSON.stringify(formData);
+
         if (hasChanges) {
             Alert.alert(
                 'Unsaved Changes',
@@ -230,242 +168,274 @@ export default function StoreSettingsScreen() {
                         text: 'Discard',
                         style: 'destructive',
                         onPress: () => {
-                            setFormData(originalData);
+                            setEditFormData({ ...formData });
                             setValidationErrors({});
-                            setFocusedField(null);
-                            setIsEditing(false);
+                            setIsModalVisible(false);
                             Keyboard.dismiss();
                         },
                     },
                 ]
             );
         } else {
-            setIsEditing(false);
+            setIsModalVisible(false);
             Keyboard.dismiss();
         }
     };
 
-    const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalData);
+    const handleSave = async () => {
+        if (!validateForm(editFormData)) return;
+        if (!userId) {
+            Alert.alert('Error', 'User not identified.');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const now = new Date().toISOString();
+            const existingSettings = await db.getFirstAsync(
+                'SELECT id FROM Settings WHERE userId = ? AND id = ?',
+                [userId, userId]
+            );
+
+            if (existingSettings) {
+                await db.runAsync(
+                    'UPDATE Settings SET storeName = ?, storeAddress = ?, storePhone = ?, storeEmail = ?, currencySymbol = ?, taxRate = ?, updatedAt = ? WHERE userId = ? AND id = ?',
+                    [editFormData.storeName, editFormData.storeAddress, editFormData.storePhone, editFormData.storeEmail, editFormData.currencySymbol, editFormData.taxRate, now, userId, userId]
+                );
+            } else {
+                await db.runAsync(
+                    `INSERT INTO Settings (
+                        id, userId, storeName, storeAddress, storePhone, storeEmail,
+                        currencySymbol, taxRate, defaultDiscountRate, darkMode, language,
+                        receiptFooter, backupFrequency, updatedAt
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        userId, userId, editFormData.storeName, editFormData.storeAddress,
+                        editFormData.storePhone, editFormData.storeEmail, editFormData.currencySymbol,
+                        editFormData.taxRate, 0, null, 'en', '', 'WEEKLY', now
+                    ]
+                );
+            }
+
+            setFormData({ ...editFormData });
+            setValidationErrors({});
+            setIsModalVisible(false);
+
+            Alert.alert('Success', 'Store settings saved successfully!');
+        } catch (error) {
+            console.error('Failed to save store settings:', error);
+            Alert.alert('Error', 'Failed to save store settings.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     if (isLoading) {
         return (
             <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-                <View className={`flex-1 bg-transparent`}>
-                    <View className="flex-row items-center px-5 py-4 bg-background border-b border-border">
-                        <TouchableOpacity onPress={() => router.back()}>
-                            <ArrowLeft size={24} color={isDarkColorScheme ? '#0A84FF' : '#007AFF'} />
-                        </TouchableOpacity>
-                        <Text className="text-lg font-semibold ml-4 text-foreground">Store Settings</Text>
-                    </View>
-                    <View className="flex-1 justify-center items-center">
-                        <ActivityIndicator size="large" color={isDarkColorScheme ? '#3B82F6' : '#2563EB'} />
-                        <Text className={`mt-4 text-lg font-medium ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-600'}`}>
-                            Loading your store settings...
-                        </Text>
-                    </View>
+                <View className="flex-1 justify-center items-center">
+                    <Text className={`mt-4 text-lg font-medium ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-600'}`}>
+                        Loading your store settings...
+                    </Text>
                 </View>
             </LinearGradient>
         );
     }
 
-    const InputField = ({
-        icon: Icon,
-        label,
-        value,
-        field,
-        placeholder,
-        keyboardType = 'default',
-        multiline = false,
-        autoCapitalize = 'sentences',
-        iconBg = 'bg-blue-100',
-        iconColor = '#2563EB'
-    }: {
+    // Simple Display Field Component
+    const DisplayField = ({ icon: Icon, label, value, placeholder, iconColor }: {
         icon: any;
         label: string;
         value: string | number;
-        field: keyof StoreSettings;
         placeholder: string;
-        keyboardType?: any;
-        multiline?: boolean;
-        autoCapitalize?: any;
-        iconBg?: string;
-        iconColor?: string;
-    }) => {
-        const isFocused = focusedField === field;
-        const hasError = validationErrors[field];
-        const inputRef = inputRefs[field];
-
-        const handleFocus = () => {
-            setFocusedField(field);
-            inputRef.current?.focus();
-        };
-
-        const handleBlur = () => {
-            setFocusedField(null);
-        };
-
-        return (
-            <View className="mb-6">
-                <TouchableOpacity
-                    onPress={isEditing ? handleFocus : undefined}
-                    activeOpacity={1}
-                    disabled={!isEditing}
-                >
-                    <View className={`
-                        ${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'}
-                        rounded-2xl p-4 shadow-sm
-                        ${isFocused && isEditing ? `border-2 ${isDarkColorScheme ? 'border-blue-500' : 'border-blue-400'} shadow-lg` : `border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}
-                        ${hasError ? `border-2 ${isDarkColorScheme ? 'border-red-500' : 'border-red-400'}` : ''}
-                    `}>
-                        <View className="flex-row items-center">
-                            <View className={`w-10 h-10 rounded-xl ${isDarkColorScheme ? 'bg-blue-900/30' : iconBg} justify-center items-center mr-4`}>
-                                <Icon size={20} color={isDarkColorScheme ? '#60A5FA' : iconColor} />
-                            </View>
-                            <View className="flex-1">
-                                <Text className={`text-sm font-medium mb-1 ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>{label}</Text>
-                                {isEditing ? (
-                                    <TextInput
-                                        ref={inputRef}
-                                        className={`text-base ${isDarkColorScheme ? 'text-white' : 'text-gray-900'} font-medium`}
-                                        value={typeof value === 'number' ? value.toString() : value}
-                                        onChangeText={(text) => {
-                                            const processedValue = field === 'taxRate'
-                                                ? (parseFloat(text.replace(/[^0-9.]/g, '')) || 0)
-                                                : text;
-                                            handleInputChange(field, processedValue);
-                                        }}
-                                        placeholder={placeholder}
-                                        placeholderTextColor={isDarkColorScheme ? '#6B7280' : '#9CA3AF'}
-                                        keyboardType={keyboardType}
-                                        multiline={multiline}
-                                        autoCapitalize={autoCapitalize}
-                                        onFocus={handleFocus}
-                                        onBlur={handleBlur}
-                                        editable={isEditing}
-                                        selectTextOnFocus={true}
-                                        returnKeyType="next"
-                                        onSubmitEditing={() => {
-                                            const fields: (keyof StoreSettings)[] = [
-                                                'storeName',
-                                                'storeAddress',
-                                                'storePhone',
-                                                'storeEmail',
-                                                'currencySymbol',
-                                                'taxRate'
-                                            ];
-                                            const currentIndex = fields.indexOf(field);
-                                            const nextField = fields[currentIndex + 1];
-                                            if (nextField) {
-                                                inputRefs[nextField].current?.focus();
-                                            } else {
-                                                Keyboard.dismiss();
-                                            }
-                                        }}
-                                    />
-                                ) : (
-                                    <Text className={`text-base ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'} font-medium`}>
-                                        {typeof value === 'number' ? value.toString() : (value || placeholder)}
-                                    </Text>
-                                )}
-                            </View>
-                            {hasChanges && formData[field] !== originalData[field] && (
-                                <View className="w-2 h-2 bg-blue-500 rounded-full ml-2" />
-                            )}
-                        </View>
-                    </View>
-                </TouchableOpacity>
-                {hasError && (
-                    <Text className="text-red-500 text-sm mt-2 ml-4 font-medium">
-                        {hasError}
+        iconColor: string;
+    }) => (
+        <View className={`${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} rounded-xl p-4 mb-3 border ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'}`}>
+            <View className="flex-row items-center">
+                <Icon size={20} color={iconColor} />
+                <View className="ml-3 flex-1">
+                    <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>{label}</Text>
+                    <Text className={`text-base font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                        {typeof value === 'number' ? value.toString() : (value || placeholder)}
                     </Text>
-                )}
+                </View>
             </View>
-        );
-    };
+        </View>
+    );
+
+    const hasChanges = JSON.stringify(editFormData) !== JSON.stringify(formData);
 
     return (
         <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
-            <View className={`flex-1 bg-transparent`}>
-                <View className="flex-row items-center px-5 py-4 bg-card border-b border-border">
-                    <TouchableOpacity onPress={() => router.back()}>
-                        <ArrowLeft size={24} color={isDarkColorScheme ? '#0A84FF' : '#007AFF'} />
-                    </TouchableOpacity>
-                    <Text className="text-lg font-semibold ml-4 text-foreground">Store Settings</Text>
-                </View>
-                <ScrollView
-                    className="flex-1"
-                    contentContainerStyle={{ paddingBottom: 120 }}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    <View className="px-6 pt-8 pb-4">
-                        <View className="flex-row items-center mb-6">
-                            <View className={`w-12 h-12 rounded-2xl ${isDarkColorScheme ? 'bg-purple-900/30' : 'bg-purple-100'} justify-center items-center mr-4`}>
-                                <Building2 size={24} color={isDarkColorScheme ? '#A78BFA' : '#7C3AED'} />
-                            </View>
-                            <View>
-                                <Text className={`text-lg font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Store Information</Text>
-                                <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>Basic details about your store</Text>
-                            </View>
-                        </View>
-
-                        <InputField icon={Store} label="Store Name" value={formData.storeName} field="storeName" placeholder="Enter your store name" iconBg="bg-indigo-100" iconColor="#4F46E5" />
-                        <InputField icon={MapPin} label="Address" value={formData.storeAddress} field="storeAddress" placeholder="Enter store address" multiline iconBg="bg-green-100" iconColor="#059669" />
-                        <InputField icon={Phone} label="Phone Number" value={formData.storePhone} field="storePhone" placeholder="Enter phone number" keyboardType="phone-pad" iconBg="bg-orange-100" iconColor="#EA580C" />
-                        <InputField icon={Mail} label="Email Address" value={formData.storeEmail} field="storeEmail" placeholder="Enter email address" keyboardType="email-address" autoCapitalize="none" iconBg="bg-red-100" iconColor="#DC2626" />
+            <View className="flex-1 bg-transparent">
+                {/* Main Content - Readonly View */}
+                <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }}>
+                    {/* Store Information */}
+                    <View className="mb-6">
+                        <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Store Information</Text>
+                        <DisplayField icon={Store} label="Store Name" value={formData.storeName} placeholder="No store name set" iconColor="#4F46E5" />
+                        <DisplayField icon={MapPin} label="Address" value={formData.storeAddress} placeholder="No address set" iconColor="#059669" />
+                        <DisplayField icon={Phone} label="Phone Number" value={formData.storePhone} placeholder="No phone number set" iconColor="#EA580C" />
+                        <DisplayField icon={Mail} label="Email Address" value={formData.storeEmail} placeholder="No email set" iconColor="#DC2626" />
                     </View>
 
-                    <View className="px-6 pb-8">
-                        <View className="flex-row items-center mb-6">
-                            <View className={`w-12 h-12 rounded-2xl ${isDarkColorScheme ? 'bg-emerald-900/30' : 'bg-emerald-100'} justify-center items-center mr-4`}>
-                                <CreditCard size={24} color={isDarkColorScheme ? '#6EE7B7' : '#059669'} />
-                            </View>
-                            <View>
-                                <Text className={`text-lg font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Financial Settings</Text>
-                                <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>Currency and tax configuration</Text>
-                            </View>
-                        </View>
+                    {/* Financial Settings */}
+                    <View className="mb-6">
+                        <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Financial Settings</Text>
+                        <DisplayField icon={DollarSign} label="Currency Symbol" value={formData.currencySymbol} placeholder="₹" iconColor="#D97706" />
+                        <DisplayField icon={Percent} label="Tax Rate (%)" value={formData.taxRate} placeholder="0" iconColor="#0891B2" />
+                    </View>
 
-                        <InputField icon={DollarSign} label="Currency Symbol" value={formData.currencySymbol} field="currencySymbol" placeholder="₹" iconBg="bg-yellow-100" iconColor="#D97706" />
-                        <InputField icon={Percent} label="Tax Rate (%)" value={formData.taxRate} field="taxRate" placeholder="0" keyboardType="numeric" iconBg="bg-cyan-100" iconColor="#0891B2" />
+                    {/* Edit Button */}
+                    <View className="mb-6">
+                        {/* style={{ color: COLORS.white }} className="text-base font-medium" */}
+                        <Button
+                            onPress={handleOpenModal}
+                            className="flex-row justify-center items-center py-4 rounded-xl"
+                            style={{ backgroundColor: COLORS.primary }}
+                        >
+                            <Edit3 size={20} color="white" />
+                            <Text className="ml-2 font-semibold text-white">Edit Settings</Text>
+                        </Button>
                     </View>
                 </ScrollView>
 
-                <View className={`absolute bottom-0 left-0 right-0 ${isDarkColorScheme ? 'bg-gray-900' : 'bg-white'} border-t ${isDarkColorScheme ? 'border-gray-800' : 'border-gray-200'} px-6 py-4 flex-row justify-between`}>
-                    <Animated.View style={{ transform: [{ scale: saveButtonScale }], flex: 1, marginRight: isEditing ? 8 : 0 }}>
-                        <Button
-                            onPress={handleButtonPress}
-                            disabled={isSaving || (isEditing && !hasChanges)}
-                            className={`flex-row justify-center items-center py-4 rounded-2xl ${
-                                isSaving || (isEditing && !hasChanges)
-                                    ? (isDarkColorScheme ? 'bg-gray-700' : 'bg-gray-300')
-                                    : isEditing
-                                    ? (isDarkColorScheme ? 'bg-blue-600' : 'bg-blue-500')
-                                    : (isDarkColorScheme ? 'bg-green-600' : 'bg-green-500')
-                            }`}
-                        >
-                            {isSaving ? (
-                                <ActivityIndicator size="small" color="white" />
-                            ) : (
-                                <>
-                                    <Save size={20} color="white" />
-                                    <Text className={`ml-2 font-semibold ${isSaving || (isEditing && !hasChanges) ? (isDarkColorScheme ? 'text-gray-500' : 'text-gray-400') : 'text-white'}`}>
-                                        {isEditing ? 'Save Changes' : 'Edit Settings'}
-                                    </Text>
-                                </>
-                            )}
-                        </Button>
-                    </Animated.View>
-                    {isEditing && (
-                        <Button
-                            onPress={handleCancelEdit}
-                            className={`flex-row justify-center items-center py-4 rounded-2xl ${isDarkColorScheme ? 'bg-red-600' : 'bg-red-500'}`}
-                            style={{ flex: 1 }}
-                        >
-                            <Text className="font-semibold text-white">Cancel</Text>
-                        </Button>
-                    )}
-                </View>
+                {/* Simple Modal */}
+                <Modal visible={isModalVisible} animationType="slide" transparent={true}>
+                    <View className="flex-1 bg-black/50 justify-center items-center px-4">
+                        <View className={`w-[85%] h-[80%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+                            {/* Modal Header */}
+                            <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Edit Store Settings</Text>
+                                <TouchableOpacity onPress={handleCloseModal}>
+                                    <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Modal Content */}
+                            <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
+                                <View className="py-4">
+                                    {/* Store Name */}
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Store Name *</Text>
+                                        <TextInput
+                                            className={`${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                            value={editFormData.storeName}
+                                            onChangeText={(text) => handleInputChange('storeName', text)}
+                                            placeholder="Enter your store name"
+                                            placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                        />
+                                        {validationErrors.storeName && (
+                                            <Text className="text-red-500 text-sm mt-1">{validationErrors.storeName}</Text>
+                                        )}
+                                    </View>
+
+                                    {/* Store Address */}
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Address</Text>
+                                        <TextInput
+                                            className={`${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                            value={editFormData.storeAddress}
+                                            onChangeText={(text) => handleInputChange('storeAddress', text)}
+                                            placeholder="Enter store address"
+                                            placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                            multiline
+                                            numberOfLines={2}
+                                        />
+                                    </View>
+
+                                    {/* Phone Number */}
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Phone Number</Text>
+                                        <TextInput
+                                            className={`${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                            value={editFormData.storePhone}
+                                            onChangeText={(text) => handleInputChange('storePhone', text)}
+                                            placeholder="Enter phone number"
+                                            placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                            keyboardType="phone-pad"
+                                        />
+                                        {validationErrors.storePhone && (
+                                            <Text className="text-red-500 text-sm mt-1">{validationErrors.storePhone}</Text>
+                                        )}
+                                    </View>
+
+                                    {/* Email */}
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Email Address</Text>
+                                        <TextInput
+                                            className={`${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                            value={editFormData.storeEmail}
+                                            onChangeText={(text) => handleInputChange('storeEmail', text)}
+                                            placeholder="Enter email address"
+                                            placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                        />
+                                        {validationErrors.storeEmail && (
+                                            <Text className="text-red-500 text-sm mt-1">{validationErrors.storeEmail}</Text>
+                                        )}
+                                    </View>
+
+                                    {/* Currency Symbol */}
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Currency Symbol</Text>
+                                        <TextInput
+                                            className={`${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                            value={editFormData.currencySymbol}
+                                            onChangeText={(text) => handleInputChange('currencySymbol', text)}
+                                            placeholder="₹"
+                                            placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                        />
+                                    </View>
+
+                                    {/* Tax Rate */}
+                                    <View className="mb-4">
+                                        <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Tax Rate (%)</Text>
+                                        <TextInput
+                                            className={`${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                                            value={editFormData.taxRate.toString()}
+                                            onChangeText={(text) => {
+                                                const rate = parseFloat(text.replace(/[^0-9.]/g, '')) || 0;
+                                                handleInputChange('taxRate', rate);
+                                            }}
+                                            placeholder="0"
+                                            placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                                            keyboardType="numeric"
+                                        />
+                                        {validationErrors.taxRate && (
+                                            <Text className="text-red-500 text-sm mt-1">{validationErrors.taxRate}</Text>
+                                        )}
+                                    </View>
+                                </View>
+                            </ScrollView>
+
+                            {/* Modal Footer */}
+                            <View className={`flex-row gap-3 p-6 border-t ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <Button
+                                    onPress={handleCloseModal}
+                                    className={`flex-1 py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                                >
+                                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+                                </Button>
+                                <Button
+                                    onPress={handleSave}
+                                    disabled={isSaving || !hasChanges}
+                                    className={`flex-1 py-3 rounded-xl flex-row justify-center items-center ${isSaving || !hasChanges
+                                        ? (isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-300')
+                                        : (isDarkColorScheme ? 'bg-blue-600' : 'bg-blue-500')
+                                        }`}
+                                >
+                                    {isSaving ? (
+                                        <ActivityIndicator size="small" color="white" />
+                                    ) : (
+                                        <Text className="font-semibold text-white text-center">Save Changes</Text>
+                                    )}
+                                </Button>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
             </View>
         </LinearGradient>
     );
