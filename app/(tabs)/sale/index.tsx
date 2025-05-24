@@ -1,9 +1,8 @@
-// app/(tabs)/sales/index.tsx
 import React from 'react';
 import { View, ScrollView, TouchableOpacity, ImageBackground, useColorScheme as rnColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
-import { ShoppingCart, History as HistoryIcon, ChevronRight } from 'lucide-react-native'; // Renamed History to HistoryIcon
+import { ShoppingCart, History as HistoryIcon, ChevronRight } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -22,7 +21,7 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
     gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
     border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
     yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
-  });
+});
 
 interface HubItemProps {
     title: string;
@@ -42,10 +41,11 @@ const HubItemCard: React.FC<HubItemProps> = ({ title, description, icon, onPress
             <TouchableOpacity onPress={onPress} activeOpacity={0.8} className="mb-4">
                 <ImageBackground
                     source={{ uri: imageUri }}
-                    className="rounded-xl overflow-hidden h-36 justify-end"
+                    className="rounded-xl overflow-hidden h-36"
                     resizeMode="cover"
                 >
-                    <View className="p-4 bg-black/50">
+                    {/* Full mask covering the entire image */}
+                    <View className="flex-1 p-4 bg-black/40">
                         <View className="flex-row items-center mb-1">
                             <View className={`p-2 rounded-full mr-3 ${iconBgColor || defaultIconBgColor}`}>
                                 {icon}
@@ -81,19 +81,18 @@ const HubItemCard: React.FC<HubItemProps> = ({ title, description, icon, onPress
     );
 };
 
-
 export default function SalesHubScreen() {
     const router = useRouter();
-    const { isDarkColorScheme } = useColorScheme(); // Your custom hook
-    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const { isDarkColorScheme } = useColorScheme();
+    const currentRNColorScheme = rnColorScheme();
     const COLORS = getColors(currentRNColorScheme || 'light');
 
-    const primaryColor = isDarkColorScheme ? '#A78BFA' : '#7C3AED'; // Example primary color
-    const secondaryColor = isDarkColorScheme ? '#60A5FA' : '#3B82F6'; // Example secondary color
+    const primaryColor = isDarkColorScheme ? '#A78BFA' : '#7C3AED';
+    const secondaryColor = isDarkColorScheme ? '#60A5FA' : '#3B82F6';
 
     const accentColors = {
-        pos: isDarkColorScheme ? 'rgba(167, 139, 250, 0.2)' : 'rgba(124, 58, 237, 0.1)', // purple-ish
-        receipts: isDarkColorScheme ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)', // blue-ish
+        pos: isDarkColorScheme ? 'rgba(167, 139, 250, 0.2)' : 'rgba(124, 58, 237, 0.1)',
+        receipts: isDarkColorScheme ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)',
     };
 
     const hubItems: HubItemProps[] = [
@@ -102,7 +101,7 @@ export default function SalesHubScreen() {
             description: 'Create new sales, add items to cart, and process payments.',
             icon: <ShoppingCart size={24} color={primaryColor} />,
             onPress: () => router.push('/(tabs)/sale/sales-management'),
-            imageUri: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?q=80&w=2070&auto=format&fit=crop', // POS image
+            imageUri: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?q=80&w=2070&auto=format&fit=crop',
             iconBgColor: accentColors.pos,
         },
         {
@@ -110,7 +109,7 @@ export default function SalesHubScreen() {
             description: 'View, share, or reprint past sales receipts.',
             icon: <HistoryIcon size={24} color={secondaryColor} />,
             onPress: () => router.push('/(tabs)/sale/receipts'),
-            imageUri: 'https://images.unsplash.com/photo-1583344079424-c3aa06cabd6f?q=80&w=1974&auto=format&fit=crop', // Receipts/history image
+            imageUri: 'https://images.pexels.com/photos/12935051/pexels-photo-12935051.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
             iconBgColor: accentColors.receipts,
         },
     ];

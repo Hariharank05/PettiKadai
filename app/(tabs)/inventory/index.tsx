@@ -1,12 +1,8 @@
-// app/(tabs)/inventory/index.tsx
-// (This is your InventoryHubScreen content from the previous inventory.tsx)
 import React from 'react';
 import { View, ScrollView, TouchableOpacity, ImageBackground, useColorScheme as rnColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
-// Card components are not used here if HubItemCard handles all visuals
-// import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { ShoppingBag, Tag, Users, BarChart4, ChevronRight } from 'lucide-react-native';
+import { ShoppingBag, Tag, Users, ChevronRight } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -25,7 +21,7 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
     gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
     border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
     yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
-  });
+});
 
 interface HubItemProps {
     title: string;
@@ -38,17 +34,18 @@ interface HubItemProps {
 
 const HubItemCard: React.FC<HubItemProps> = ({ title, description, icon, onPress, imageUri, iconBgColor }) => {
     const { isDarkColorScheme } = useColorScheme();
-    const defaultIconBgColor = isDarkColorScheme ? 'bg-primary/20' : 'bg-primary/10'; // Ensure primary is defined in your Tailwind config
+    const defaultIconBgColor = isDarkColorScheme ? 'bg-primary/20' : 'bg-primary/10';
 
     if (imageUri) {
         return (
             <TouchableOpacity onPress={onPress} activeOpacity={0.8} className="mb-4">
                 <ImageBackground
                     source={{ uri: imageUri }}
-                    className="rounded-xl overflow-hidden h-36 justify-end"
+                    className="rounded-xl overflow-hidden h-36"
                     resizeMode="cover"
                 >
-                    <View className="p-4 bg-black/50">
+                    {/* Full mask covering the entire image */}
+                    <View className="flex-1 p-4 bg-black/40">
                         <View className="flex-row items-center mb-1">
                             <View className={`p-2 rounded-full mr-3 ${iconBgColor || defaultIconBgColor}`}>
                                 {icon}
@@ -63,9 +60,7 @@ const HubItemCard: React.FC<HubItemProps> = ({ title, description, icon, onPress
     }
 
     // Fallback to simpler card if no imageUri
-    // This needs your Card component from '~/components/ui/card'
-    // If you don't have it, this part will error or you need to adjust
-    const { Card, CardContent } = require('~/components/ui/card'); // Assuming Card is available
+    const { Card, CardContent } = require('~/components/ui/card');
 
     return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
@@ -87,11 +82,10 @@ const HubItemCard: React.FC<HubItemProps> = ({ title, description, icon, onPress
     );
 };
 
-
 export default function InventoryHubScreen() {
     const router = useRouter();
-    const { isDarkColorScheme } = useColorScheme(); // This is your custom hook
-    const currentRNColorScheme = rnColorScheme(); // This is from react-native
+    const { isDarkColorScheme } = useColorScheme();
+    const currentRNColorScheme = rnColorScheme();
     const COLORS = getColors(currentRNColorScheme || 'light');
 
     const primaryColor = isDarkColorScheme ? '#A78BFA' : '#7C3AED';
@@ -107,15 +101,15 @@ export default function InventoryHubScreen() {
             title: 'Manage Products',
             description: 'View, add, edit, or delete products in your inventory.',
             icon: <ShoppingBag size={24} color={primaryColor} />,
-            onPress: () => router.push('/(tabs)/inventory/products'), // Adjusted path
-            imageUri: 'https://images.unsplash.com/photo-1587293852726-70cdb16d5862?q=80&w=1974&auto=format&fit=crop',
+            onPress: () => router.push('/(tabs)/inventory/products'),
+            imageUri: 'https://images.pexels.com/photos/6169641/pexels-photo-6169641.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
             iconBgColor: accentColors.products,
         },
         {
             title: 'Product Categories',
             description: 'Organize your products by creating and managing categories.',
             icon: <Tag size={24} color="#3B82F6" />,
-            onPress: () => router.push('/(tabs)/inventory/category'), // Adjusted path
+            onPress: () => router.push('/(tabs)/inventory/category'),
             imageUri: 'https://images.unsplash.com/photo-1556909172-6ab63f18fd12?q=80&w=2070&auto=format&fit=crop',
             iconBgColor: accentColors.categories,
         },
@@ -123,8 +117,8 @@ export default function InventoryHubScreen() {
             title: 'Customer List',
             description: 'Access and manage your customer information and history.',
             icon: <Users size={24} color="#EAB308" />,
-            onPress: () => router.push('/(tabs)/inventory/customers'), // Adjusted path
-            imageUri: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=2070&auto=format&fit=crop',
+            onPress: () => router.push('/(tabs)/inventory/customers'),
+            imageUri: 'https://images.pexels.com/photos/6214370/pexels-photo-6214370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
             iconBgColor: accentColors.customers,
         },
     ];
