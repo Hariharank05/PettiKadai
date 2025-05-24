@@ -10,6 +10,7 @@ import {
     Platform,
     Image,
     Modal,
+    useColorScheme as rnColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
@@ -32,6 +33,24 @@ import {
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { ChangePasswordModal } from '~/components/screens/settings-components/ChangePasswordModal';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+    primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+    secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+    accent: '#f9c00c',
+    danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+    lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+    lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+    lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+    lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+    white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+    dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+    gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+    border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+    yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+  });
 
 interface FormState {
     storeName: string;
@@ -95,7 +114,10 @@ const ListItem: React.FC<CustomListItemProps> = ({
 
 export default function SettingsScreen() {
     const { userName, userId, logout, isLoading: authIsLoading, updateAuthStoreUserName, changeUserPassword } = useAuthStore();
-    const { setColorScheme, isDarkColorScheme } = useColorScheme();
+    const { setColorScheme, isDarkColorScheme } = useColorScheme(); // Your custom hook
+    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const COLORS = getColors(currentRNColorScheme || 'light');
+
     const router = useRouter();
     const db = getDatabase();
     const isFocused = useIsFocused();
@@ -329,7 +351,7 @@ export default function SettingsScreen() {
     };
 
     const styles = StyleSheet.create({
-        container: { flex: 1, backgroundColor: isDarkColorScheme ? 'black' : '#F0F2F5' },
+        container: { flex: 1, backgroundColor: 'transparent' }, // Made transparent
         profileSection: {
             flexDirection: 'row',
             alignItems: 'center',
@@ -429,162 +451,166 @@ export default function SettingsScreen() {
 
     if (dataLoading && !initialDbFetchComplete) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={iconColor} />
-                <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading...</Text>
-            </View>
+            <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={iconColor} />
+                    <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading...</Text>
+                </View>
+            </LinearGradient>
         );
     }
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-            <TouchableOpacity style={styles.profileSection} onPress={() => router.push('/(tabs)/setting/profile')}>
-                <View style={styles.profileAvatar}>
-                    {userProfileImage ? (
-                        <Image source={{ uri: userProfileImage }} style={styles.profileAvatarImage} />
-                    ) : (
-                        <UserCircle size={36} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
-                    )}
+        <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+            <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+                <TouchableOpacity style={styles.profileSection} onPress={() => router.push('/(tabs)/setting/profile')}>
+                    <View style={styles.profileAvatar}>
+                        {userProfileImage ? (
+                            <Image source={{ uri: userProfileImage }} style={styles.profileAvatarImage} />
+                        ) : (
+                            <UserCircle size={36} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                        )}
+                    </View>
+                    <View style={styles.profileTextContainer}>
+                        <Text style={styles.profileName}>{userName || 'Store Owner'}</Text>
+                        <Text style={styles.profileSubtitle}>Show profile</Text>
+                    </View>
+                    <ChevronRight size={22} color={isDarkColorScheme ? '#5A5A5E' : '#C7C7CC'} />
+                </TouchableOpacity>
+
+                <Text style={styles.settingsSectionTitle}>General</Text>
+                <View style={styles.settingsGroup}>
+                    <ListItem
+                        icon={<UserCircle color={iconColor} />}
+                        label="Personal Information"
+                        onPress={() => router.push('/(tabs)/setting/profile')}
+                        isFirst
+                    />
+                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                    <ListItem
+                        icon={<Building color={iconColor} />}
+                        label="Store Settings"
+                        onPress={() => router.push('/(tabs)/setting/store-settings')}
+                    />
+                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                    <ListItem
+                        icon={<FileText color={iconColor} />}
+                        label="Application Preferences"
+                        onPress={() => router.push('/(tabs)/setting/app-preferences')}
+                        isLast
+                    />
                 </View>
-                <View style={styles.profileTextContainer}>
-                    <Text style={styles.profileName}>{userName || 'Store Owner'}</Text>
-                    <Text style={styles.profileSubtitle}>Show profile</Text>
+
+                <Text style={styles.settingsSectionTitle}>Appearance & Security</Text>
+                <View style={styles.settingsGroup}>
+                    <ListItem
+                        icon={isDarkColorScheme ? <Moon color={iconColor} /> : <Sun color={iconColor} />}
+                        label="Dark Mode"
+                        showChevron={false}
+                        customRightContent={
+                            <RNSwitch
+                                value={isDarkColorScheme}
+                                onValueChange={handleToggleDarkModeSwitch}
+                                trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
+                                thumbColor={"#FFFFFF"}
+                                ios_backgroundColor="#3e3e3e"
+                            />
+                        }
+                        isFirst
+                    />
+                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                    <ListItem
+                        icon={<Lock color={iconColor} />}
+                        label="Change Password"
+                        onPress={() => setIsChangePasswordModalVisible(true)}
+                        showChevron={false}
+                        isLast
+                    />
                 </View>
-                <ChevronRight size={22} color={isDarkColorScheme ? '#5A5A5E' : '#C7C7CC'} />
-            </TouchableOpacity>
 
-            <Text style={styles.settingsSectionTitle}>General</Text>
-            <View style={styles.settingsGroup}>
-                <ListItem
-                    icon={<UserCircle color={iconColor} />}
-                    label="Personal Information"
-                    onPress={() => router.push('/(tabs)/setting/profile')}
-                    isFirst
-                />
-                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                <ListItem
-                    icon={<Building color={iconColor} />}
-                    label="Store Settings"
-                    onPress={() => router.push('/(tabs)/setting/store-settings')}
-                />
-                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                <ListItem
-                    icon={<FileText color={iconColor} />}
-                    label="Application Preferences"
-                    onPress={() => router.push('/(tabs)/setting/app-preferences')}
-                    isLast
-                />
-            </View>
+                <Text style={styles.settingsSectionTitle}>Data & Information</Text>
+                <View style={styles.settingsGroup}>
+                    <ListItem
+                        icon={<DatabaseZap color={destructiveIconColor} />}
+                        label="Reset My Data"
+                        onPress={handleAttemptResetData}
+                        showChevron={false}
+                        isFirst
+                    />
+                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                    <ListItem
+                        icon={<Info color={iconColor} />}
+                        label="About Petti Kadai"
+                        onPress={() => Alert.alert('Petti Kadai v1.0.2', 'Simple Inventory for Small Shops')}
+                        showChevron={false}
+                        isLast
+                    />
+                </View>
 
-            <Text style={styles.settingsSectionTitle}>Appearance & Security</Text>
-            <View style={styles.settingsGroup}>
-                <ListItem
-                    icon={isDarkColorScheme ? <Moon color={iconColor} /> : <Sun color={iconColor} />}
-                    label="Dark Mode"
-                    showChevron={false}
-                    customRightContent={
-                        <RNSwitch
-                            value={isDarkColorScheme}
-                            onValueChange={handleToggleDarkModeSwitch}
-                            trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
-                            thumbColor={"#FFFFFF"}
-                            ios_backgroundColor="#3e3e3e"
-                        />
-                    }
-                    isFirst
-                />
-                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                <ListItem
-                    icon={<Lock color={iconColor} />}
-                    label="Change Password"
-                    onPress={() => setIsChangePasswordModalVisible(true)}
-                    showChevron={false}
-                    isLast
-                />
-            </View>
+                <View style={[styles.settingsGroup, { marginTop: 30 }]}>
+                    <ListItem
+                        icon={<LogOut color={destructiveIconColor} />}
+                        label="Logout"
+                        onPress={handleAttemptLogout}
+                        showChevron={false}
+                        isFirst
+                        isLast
+                    />
+                </View>
 
-            <Text style={styles.settingsSectionTitle}>Data & Information</Text>
-            <View style={styles.settingsGroup}>
-                <ListItem
-                    icon={<DatabaseZap color={destructiveIconColor} />}
-                    label="Reset My Data"
-                    onPress={handleAttemptResetData}
-                    showChevron={false}
-                    isFirst
-                />
-                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                <ListItem
-                    icon={<Info color={iconColor} />}
-                    label="About Petti Kadai"
-                    onPress={() => Alert.alert('Petti Kadai v1.0.2', 'Simple Inventory for Small Shops')}
-                    showChevron={false}
-                    isLast
-                />
-            </View>
-
-            <View style={[styles.settingsGroup, { marginTop: 30 }]}>
-                <ListItem
-                    icon={<LogOut color={destructiveIconColor} />}
-                    label="Logout"
-                    onPress={handleAttemptLogout}
-                    showChevron={false}
-                    isFirst
-                    isLast
-                />
-            </View>
-
-            <Modal
-                visible={showLogoutDialog}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowLogoutDialog(false)}
-            >
-                <View style={styles.dialogOverlay}>
-                    <View style={styles.dialogViewContent}>
-                        <Text style={styles.dialogTitleText}>Confirm Logout</Text>
-                        <Text style={styles.dialogMessageText}>Are you sure you want to log out?</Text>
-                        <View style={styles.dialogActions}>
-                            <TouchableOpacity style={styles.dialogButton} onPress={() => setShowLogoutDialog(false)}>
-                                <Text style={styles.dialogCancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmLogout}>
-                                <Text style={styles.dialogConfirmButtonText}>Logout</Text>
-                            </TouchableOpacity>
+                <Modal
+                    visible={showLogoutDialog}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowLogoutDialog(false)}
+                >
+                    <View style={styles.dialogOverlay}>
+                        <View style={styles.dialogViewContent}>
+                            <Text style={styles.dialogTitleText}>Confirm Logout</Text>
+                            <Text style={styles.dialogMessageText}>Are you sure you want to log out?</Text>
+                            <View style={styles.dialogActions}>
+                                <TouchableOpacity style={styles.dialogButton} onPress={() => setShowLogoutDialog(false)}>
+                                    <Text style={styles.dialogCancelButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmLogout}>
+                                    <Text style={styles.dialogConfirmButtonText}>Logout</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </Modal>
 
-            <Modal
-                visible={showResetDialog}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowResetDialog(false)}
-            >
-                <View style={styles.dialogOverlay}>
-                    <View style={styles.dialogViewContent}>
-                        <Text style={styles.dialogTitleText}>Reset All Your Data?</Text>
-                        <Text style={styles.dialogMessageText}>
-                            This will permanently delete all your application data associated with your account ({userName || 'current user'}). This action cannot be undone.
-                        </Text>
-                        <View style={styles.dialogActions}>
-                            <TouchableOpacity style={styles.dialogButton} onPress={() => setShowResetDialog(false)}>
-                                <Text style={styles.dialogCancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmResetData}>
-                                <Text style={styles.dialogConfirmButtonText}>Yes, Reset Data</Text>
-                            </TouchableOpacity>
+                <Modal
+                    visible={showResetDialog}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowResetDialog(false)}
+                >
+                    <View style={styles.dialogOverlay}>
+                        <View style={styles.dialogViewContent}>
+                            <Text style={styles.dialogTitleText}>Reset All Your Data?</Text>
+                            <Text style={styles.dialogMessageText}>
+                                This will permanently delete all your application data associated with your account ({userName || 'current user'}). This action cannot be undone.
+                            </Text>
+                            <View style={styles.dialogActions}>
+                                <TouchableOpacity style={styles.dialogButton} onPress={() => setShowResetDialog(false)}>
+                                    <Text style={styles.dialogCancelButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.dialogButton, styles.dialogDestructiveButton]} onPress={handleConfirmResetData}>
+                                    <Text style={styles.dialogConfirmButtonText}>Yes, Reset Data</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </Modal>
 
-            <ChangePasswordModal
-                visible={isChangePasswordModalVisible}
-                onClose={() => setIsChangePasswordModalVisible(false)}
-                onSubmit={handleChangePasswordSubmit}
-                isLoading={changePasswordLoading || authIsLoading}
-            />
-        </ScrollView>
+                <ChangePasswordModal
+                    visible={isChangePasswordModalVisible}
+                    onClose={() => setIsChangePasswordModalVisible(false)}
+                    onSubmit={handleChangePasswordSubmit}
+                    isLoading={changePasswordLoading || authIsLoading}
+                />
+            </ScrollView>
+        </LinearGradient>
     );
 }

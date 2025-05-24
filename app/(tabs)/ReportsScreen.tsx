@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Platform, Dimensions, useColorScheme as rnColorScheme } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Text } from '~/components/ui/text';
@@ -13,6 +13,25 @@ import { generatePDFReport } from '~/lib/utils/pdfUtils';
 import { getCategoryName, getProductName } from '~/lib/db/reportQueries';
 import { PieChart, BarChart } from 'react-native-chart-kit';
 import { useProductStore } from '~/lib/stores/productStore';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+  primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+  secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+  accent: '#f9c00c',
+  danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+  lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+  lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+  lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+  lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+  white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+  dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+  gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+  border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+  yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+});
+
 
 // Utility to generate random colors for PieChart
 const generateColor = () => {
@@ -43,6 +62,9 @@ export default function ReportsScreen() {
   const currencySymbol = '₹';
   const [isExporting, setIsExporting] = useState(false);
   const screenWidth = Dimensions.get('window').width;
+
+  const currentRNColorScheme = rnColorScheme();
+  const COLORS = getColors(currentRNColorScheme || 'light');
 
   // Map products to InventoryDataItem format
   const validatedInventoryData = useMemo(() => {
@@ -80,10 +102,10 @@ export default function ReportsScreen() {
       name: item.name.length > 10 ? item.name.substring(0, 10) + '...' : item.name,
       value: item.quantity,
       color: generateColor(),
-      legendFontColor: '#1F2937',
+      legendFontColor: COLORS.dark, // Use color from palette
       legendFontSize: 8,
     }));
-  }, [validatedInventoryData]);
+  }, [validatedInventoryData, COLORS.dark]);
 
   useEffect(() => {
     console.log('[Screen] Filters changed, fetching data:', filters);
@@ -229,247 +251,254 @@ export default function ReportsScreen() {
     <TouchableOpacity
       onPress={() => handlePDFExport(data, reportType, fileNamePrefix)}
       disabled={disabled || isExporting || data.length === 0}
-      className={`bg-[#3B82F6] p-2 rounded-md flex-row items-center ${disabled || isExporting || data.length === 0 ? 'opacity-50' : ''}`}
+      style={{ backgroundColor: COLORS.primary }} // Use COLORS
+      className={`p-2 rounded-md flex-row items-center ${disabled || isExporting || data.length === 0 ? 'opacity-50' : ''}`}
     >
-      <Download size={16} color="#FFFFFF" className="mr-2" />
-      <Text className="text-[#FFFFFF] text-sm">{isExporting && !disabled ? 'Exporting...' : 'Export PDF'}</Text>
+      <Download size={16} color={COLORS.white} className="mr-2" />
+      <Text style={{ color: COLORS.white }} className="text-sm">{isExporting && !disabled ? 'Exporting...' : 'Export PDF'}</Text>
     </TouchableOpacity>
   );
 
   // Loading state
   if (isLoading && validatedSalesData.length === 0 && metrics.length === 0 && validatedInventoryData.length === 0 && productPerformance.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center bg-[#F9FAFB]">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="mt-4 text-[#6B7280]">Loading initial report data...</Text>
-      </View>
+      <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+        <View className="flex-1 justify-center items-center bg-transparent">
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text className="mt-4 text-muted-foreground">Loading initial report data...</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-[#F9FAFB]" contentContainerStyle={{ paddingBottom: 20 }}>
-      <View className="p-4">
-        {/* Header */}
-        <View className="flex-row items-center mt-4 mb-2">
-          <View>
-            <Text className="text-2xl font-bold text-[#1F2937] mt-4 p-2">Reports Dashboard</Text>
-            <Text className="text-lg text-[#6B7280] p-2 mt-0">Analyze and export your store's performance.</Text>
+    <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+      <ScrollView className="flex-1 bg-transparent" contentContainerStyle={{ paddingBottom: 20 }}>
+        <View className="p-4">
+          {/* Header */}
+          <View className="flex-row items-center mt-4 mb-2">
+            <View>
+              <Text style={{color: COLORS.dark }} className="text-2xl font-bold mt-4 p-2">Reports Dashboard</Text>
+              <Text style={{color: COLORS.gray }} className="text-lg p-2 mt-0">Analyze and export your store's performance.</Text>
+            </View>
           </View>
-        </View>
 
-        {/* Filters */}
-        <Card className="mb-6 bg-[#FFFFFF] border border-[#E5E7EB]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-[#1F2937]">Filters</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <ReportFilters />
-          </CardContent>
-        </Card>
-
-        {/* Key Metrics */}
-        {isLoading && metrics.length === 0 && (
-          <View className="items-center py-4">
-            <ActivityIndicator color="#3B82F6" />
-          </View>
-        )}
-        <Card className="mb-6 bg-[#FFFFFF] border border-[#E5E7EB]">
-          <CardHeader className="pb-2 flex-row justify-between items-center">
-            <CardTitle className="text-lg text-[#1F2937]">Key Metrics</CardTitle>
-            <PDFExportButton data={metrics} reportType="METRICS" fileNamePrefix="Key_Metrics" disabled={metrics.length === 0} />
-          </CardHeader>
-          <CardContent className="pt-0">
-            {metrics.length > 0 ? (
-              metrics.map((metric) => (
-                <View key={metric.id} className="flex-row items-center py-3 border-b border-[#E5E7EB] last:border-b-0">
-                  <View className="h-10 w-10 rounded-full bg-[#3B82F6]/10 justify-center items-center mr-3">
-                    <BarChart4 size={20} color="#3B82F6" />
-                  </View>
-                  <View>
-                    <Text className="text-base text-[#1F2937]">{metric.metricName}</Text>
-                    <Text className="text-sm text-[#6B7280]">
-                      {currencySymbol}
-                      {metric.metricValue.toFixed(2)} (as of {format(new Date(metric.calculationDate), 'MMM d, yyyy')})
-                    </Text>
-                  </View>
-                </View>
-              ))
-            ) : !isLoading ? (
-              <Text className="text-[#6B7280] py-4 text-center">No metrics available for the selected criteria.</Text>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        {/* Sales Visualization */}
-        {(filters.reportType === 'SALES' || filters.reportType === 'ALL') && (
-          <Card className="mb-6 bg-[#FFFFFF] border border-[#E5E7EB]">
-            <CardHeader className="pb-2 flex-row justify-between items-center">
-              <CardTitle className="text-lg text-[#1F2937]">Sales Trends</CardTitle>
-              <PDFExportButton
-                data={validatedSalesData}
-                reportType="SALES"
-                fileNamePrefix="Sales_Report"
-                disabled={validatedSalesData.length === 0}
-              />
-            </CardHeader>
-            <CardContent className="pt-2">
-              {isLoading && validatedSalesData.length === 0 && (
-                <View className="items-center py-4">
-                  <ActivityIndicator color="#3B82F6" />
-                </View>
-              )}
-              {validatedSalesData.length > 0 ? (
-                <BarChart
-                  data={{
-                    labels: validatedSalesData.map((item, index) =>
-                      item.date ? format(new Date(item.date), 'MM/dd') : `Item ${index + 1}`
-                    ),
-                    datasets: [{ data: validatedSalesData.map((item) => item.subtotal / 1000) }],
-                  }}
-                  width={screenWidth - 32}
-                  height={250}
-                  yAxisLabel={currencySymbol}
-                  yAxisSuffix="k"
-                  yAxisInterval={1}
-                  fromZero={true}
-                  chartConfig={{
-                    backgroundColor: '#FFFFFF',
-                    decimalPlaces: 0,
-                    color: () => '#3B82F6',
-                    labelColor: () => '#1F2937',
-                    style: { borderRadius: 16 },
-                    propsForLabels: { fontSize: 10, rotation: -45, translateY: 20 },
-                  }}
-                  style={{ marginVertical: 8, borderRadius: 16 }}
-                />
-              ) : !isLoading ? (
-                <Text className="text-[#6B7280] py-4 text-center">No sales data for the selected criteria.</Text>
-              ) : null}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Inventory Visualization */}
-        {(filters.reportType === 'INVENTORY' || filters.reportType === 'ALL') && (
-          <Card className="mb-6 bg-[#FFFFFF] border border-[#E5E7EB]">
-            <CardHeader className="pb-2 flex-row justify-between items-center">
-              <CardTitle className="text-lg text-[#1F2937]">Inventory Levels</CardTitle>
-              <PDFExportButton
-                data={validatedInventoryData}
-                reportType="INVENTORY"
-                fileNamePrefix="Inventory_Report"
-                disabled={validatedInventoryData.length === 0}
-              />
-            </CardHeader>
-            <CardContent className="pt-2">
-              {isLoading && validatedInventoryData.length === 0 && (
-                <View className="items-center py-4">
-                  <ActivityIndicator color="#3B82F6" />
-                </View>
-              )}
-              {inventoryPieData.length > 0 ? (
-                <PieChart
-                  data={inventoryPieData}
-                  width={screenWidth - 32}
-                  height={250}
-                  chartConfig={{
-                    color: () => '#3B82F6',
-                    labelColor: () => '#1F2937',
-                  }}
-                  accessor="value"
-                  backgroundColor="transparent"
-                  paddingLeft="15"
-                  center={[10, 0]}
-                  absolute
-                  style={{ marginVertical: 8 }}
-                />
-              ) : !isLoading ? (
-                <Text className="text-[#6B7280] py-4 text-center">No inventory data for the selected criteria.</Text>
-              ) : null}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Product Performance */}
-        {(filters.reportType === 'PRODUCT_PERFORMANCE' || filters.reportType === 'ALL') && (
-          <Card className="mb-6 bg-[#FFFFFF] border border-[#E5E7EB]">
-            <CardHeader className="pb-2 flex-row justify-between items-center">
-              <CardTitle className="text-lg text-[#1F2937]">Product Performance</CardTitle>
-              <PDFExportButton
-                data={productPerformance}
-                reportType="PRODUCT_PERFORMANCE"
-                fileNamePrefix="Product_Performance"
-                disabled={productPerformance.length === 0}
-              />
+          {/* Filters */}
+          <Card className="mb-6 bg-card border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg text-foreground">Filters</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              {isLoading && productPerformance.length === 0 && (
-                <View className="items-center py-4">
-                  <ActivityIndicator color="#3B82F6" />
-                </View>
-              )}
-              {productPerformance.length > 0 ? (
-                productPerformance.map((perf) => (
-                  <View
-                    key={perf.id}
-                    className="flex-row justify-between items-center py-3 border-b border-[#E5E7EB] last:border-b-0"
-                  >
-                    <View className="flex-1 pr-2">
-                      <Text className="text-base text-[#1F2937]">{perf.productName}</Text>
-                      <Text className="text-xs text-[#6B7280]">{perf.period}</Text>
-                      <Text className="text-xs text-[#6B7280]">
-                        Units: {perf.unitsSold} • Revenue: {currencySymbol}
-                        {perf.revenue.toFixed(2)}
+              <ReportFilters />
+            </CardContent>
+          </Card>
+
+          {/* Key Metrics */}
+          {isLoading && metrics.length === 0 && (
+            <View className="items-center py-4">
+              <ActivityIndicator color={COLORS.primary} />
+            </View>
+          )}
+          <Card className="mb-6 bg-card border-border">
+            <CardHeader className="pb-2 flex-row justify-between items-center">
+              <CardTitle className="text-lg text-foreground">Key Metrics</CardTitle>
+              <PDFExportButton data={metrics} reportType="METRICS" fileNamePrefix="Key_Metrics" disabled={metrics.length === 0} />
+            </CardHeader>
+            <CardContent className="pt-0">
+              {metrics.length > 0 ? (
+                metrics.map((metric) => (
+                  <View key={metric.id} className="flex-row items-center py-3 border-b border-border last:border-b-0">
+                    <View className="h-10 w-10 rounded-full bg-primary/10 justify-center items-center mr-3">
+                      <BarChart4 size={20} color={COLORS.primary} />
+                    </View>
+                    <View>
+                      <Text className="text-base text-foreground">{metric.metricName}</Text>
+                      <Text className="text-sm text-muted-foreground">
+                        {currencySymbol}
+                        {metric.metricValue.toFixed(2)} (as of {format(new Date(metric.calculationDate), 'MMM d, yyyy')})
                       </Text>
                     </View>
-                    <Text className="text-[#1F2937] font-medium text-right">{perf.margin.toFixed(2)}% Margin</Text>
                   </View>
                 ))
               ) : !isLoading ? (
-                <Text className="text-[#6B7280] py-4 text-center">No product performance data for the selected criteria.</Text>
+                <Text className="text-muted-foreground py-4 text-center">No metrics available for the selected criteria.</Text>
               ) : null}
             </CardContent>
           </Card>
-        )}
 
-        {/* Generated Reports Log */}
-        <Card className="mb-6 bg-[#FFFFFF] border border-[#E5E7EB]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg text-[#1F2937]">Generated Reports Log</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-2">
-            {isLoading &&
-              reports.length === 0 &&
-              !validatedSalesData.length &&
-              !validatedInventoryData.length &&
-              !productPerformance.length && (
-                <View className="items-center py-4">
-                  <ActivityIndicator color="#3B82F6" />
-                </View>
-              )}
-            {reports.length > 0 ? (
-              reports.map((report) => {
-                let dataForThisReport: any[] = [];
-                if (report.reportType === 'SALES') dataForThisReport = validatedSalesData;
-                else if (report.reportType === 'INVENTORY') dataForThisReport = validatedInventoryData;
-                else if (report.reportType === 'PRODUCT_PERFORMANCE') dataForThisReport = productPerformance;
-                else if (report.reportType === 'METRICS') dataForThisReport = metrics;
-
-                return (
-                  <ReportCard
-                    key={report.id}
-                    report={report}
-                    onExportPress={() => handlePDFExport(dataForThisReport, report.reportType, report.name)}
-                    onDeletePress={() => handleDeleteReport(report.id, report.name)}
+          {/* Sales Visualization */}
+          {(filters.reportType === 'SALES' || filters.reportType === 'ALL') && (
+            <Card className="mb-6 bg-card border-border">
+              <CardHeader className="pb-2 flex-row justify-between items-center">
+                <CardTitle className="text-lg text-foreground">Sales Trends</CardTitle>
+                <PDFExportButton
+                  data={validatedSalesData}
+                  reportType="SALES"
+                  fileNamePrefix="Sales_Report"
+                  disabled={validatedSalesData.length === 0}
+                />
+              </CardHeader>
+              <CardContent className="pt-2">
+                {isLoading && validatedSalesData.length === 0 && (
+                  <View className="items-center py-4">
+                    <ActivityIndicator color={COLORS.primary} />
+                  </View>
+                )}
+                {validatedSalesData.length > 0 ? (
+                  <BarChart
+                    data={{
+                      labels: validatedSalesData.map((item, index) =>
+                        item.date ? format(new Date(item.date), 'MM/dd') : `Item ${index + 1}`
+                      ),
+                      datasets: [{ data: validatedSalesData.map((item) => item.subtotal / 1000) }],
+                    }}
+                    width={screenWidth - 48} // Adjusted for padding
+                    height={250}
+                    yAxisLabel={currencySymbol}
+                    yAxisSuffix="k"
+                    yAxisInterval={1}
+                    fromZero={true}
+                    chartConfig={{
+                      backgroundColor: COLORS.white,
+                      backgroundGradientFrom: COLORS.white,
+                      backgroundGradientTo: COLORS.white,
+                      decimalPlaces: 0,
+                      color: (opacity = 1) => `rgba(${parseInt(COLORS.primary.slice(1,3),16)}, ${parseInt(COLORS.primary.slice(3,5),16)}, ${parseInt(COLORS.primary.slice(5,7),16)}, ${opacity})`,
+                      labelColor: (opacity = 1) => `rgba(${parseInt(COLORS.dark.slice(1,3),16)}, ${parseInt(COLORS.dark.slice(3,5),16)}, ${parseInt(COLORS.dark.slice(5,7),16)}, ${opacity})`,
+                      style: { borderRadius: 16 },
+                      propsForLabels: { fontSize: 10, rotation: -45, translateY: 20 },
+                    }}
+                    style={{ marginVertical: 8, borderRadius: 16 }}
                   />
-                );
-              })
-            ) : !isLoading ? (
-              <Text className="text-[#6B7280] py-4 text-center">No previously generated reports found.</Text>
-            ) : null}
-          </CardContent>
-        </Card>
-      </View>
-    </ScrollView>
+                ) : !isLoading ? (
+                  <Text className="text-muted-foreground py-4 text-center">No sales data for the selected criteria.</Text>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Inventory Visualization */}
+          {(filters.reportType === 'INVENTORY' || filters.reportType === 'ALL') && (
+            <Card className="mb-6 bg-card border-border">
+              <CardHeader className="pb-2 flex-row justify-between items-center">
+                <CardTitle className="text-lg text-foreground">Inventory Levels</CardTitle>
+                <PDFExportButton
+                  data={validatedInventoryData}
+                  reportType="INVENTORY"
+                  fileNamePrefix="Inventory_Report"
+                  disabled={validatedInventoryData.length === 0}
+                />
+              </CardHeader>
+              <CardContent className="pt-2">
+                {isLoading && validatedInventoryData.length === 0 && (
+                  <View className="items-center py-4">
+                    <ActivityIndicator color={COLORS.primary} />
+                  </View>
+                )}
+                {inventoryPieData.length > 0 ? (
+                  <PieChart
+                    data={inventoryPieData}
+                    width={screenWidth - 48} // Adjusted for padding
+                    height={250}
+                    chartConfig={{
+                      color: (opacity = 1) => `rgba(${parseInt(COLORS.primary.slice(1,3),16)}, ${parseInt(COLORS.primary.slice(3,5),16)}, ${parseInt(COLORS.primary.slice(5,7),16)}, ${opacity})`,
+                      labelColor: (opacity = 1) => `rgba(${parseInt(COLORS.dark.slice(1,3),16)}, ${parseInt(COLORS.dark.slice(3,5),16)}, ${parseInt(COLORS.dark.slice(5,7),16)}, ${opacity})`,
+                    }}
+                    accessor="value"
+                    backgroundColor="transparent"
+                    paddingLeft="15"
+                    center={[10, 0]}
+                    absolute
+                    style={{ marginVertical: 8 }}
+                  />
+                ) : !isLoading ? (
+                  <Text className="text-muted-foreground py-4 text-center">No inventory data for the selected criteria.</Text>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Product Performance */}
+          {(filters.reportType === 'PRODUCT_PERFORMANCE' || filters.reportType === 'ALL') && (
+            <Card className="mb-6 bg-card border-border">
+              <CardHeader className="pb-2 flex-row justify-between items-center">
+                <CardTitle className="text-lg text-foreground">Product Performance</CardTitle>
+                <PDFExportButton
+                  data={productPerformance}
+                  reportType="PRODUCT_PERFORMANCE"
+                  fileNamePrefix="Product_Performance"
+                  disabled={productPerformance.length === 0}
+                />
+              </CardHeader>
+              <CardContent className="pt-0">
+                {isLoading && productPerformance.length === 0 && (
+                  <View className="items-center py-4">
+                    <ActivityIndicator color={COLORS.primary} />
+                  </View>
+                )}
+                {productPerformance.length > 0 ? (
+                  productPerformance.map((perf) => (
+                    <View
+                      key={perf.id}
+                      className="flex-row justify-between items-center py-3 border-b border-border last:border-b-0"
+                    >
+                      <View className="flex-1 pr-2">
+                        <Text className="text-base text-foreground">{perf.productName}</Text>
+                        <Text className="text-xs text-muted-foreground">{perf.period}</Text>
+                        <Text className="text-xs text-muted-foreground">
+                          Units: {perf.unitsSold} • Revenue: {currencySymbol}
+                          {perf.revenue.toFixed(2)}
+                        </Text>
+                      </View>
+                      <Text className="text-foreground font-medium text-right">{perf.margin.toFixed(2)}% Margin</Text>
+                    </View>
+                  ))
+                ) : !isLoading ? (
+                  <Text className="text-muted-foreground py-4 text-center">No product performance data for the selected criteria.</Text>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Generated Reports Log */}
+          <Card className="mb-6 bg-card border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg text-foreground">Generated Reports Log</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2">
+              {isLoading &&
+                reports.length === 0 &&
+                !validatedSalesData.length &&
+                !validatedInventoryData.length &&
+                !productPerformance.length && (
+                  <View className="items-center py-4">
+                    <ActivityIndicator color={COLORS.primary} />
+                  </View>
+                )}
+              {reports.length > 0 ? (
+                reports.map((report) => {
+                  let dataForThisReport: any[] = [];
+                  if (report.reportType === 'SALES') dataForThisReport = validatedSalesData;
+                  else if (report.reportType === 'INVENTORY') dataForThisReport = validatedInventoryData;
+                  else if (report.reportType === 'PRODUCT_PERFORMANCE') dataForThisReport = productPerformance;
+                  else if (report.reportType === 'METRICS') dataForThisReport = metrics;
+
+                  return (
+                    <ReportCard
+                      key={report.id}
+                      report={report}
+                      onExportPress={() => handlePDFExport(dataForThisReport, report.reportType, report.name)}
+                      onDeletePress={() => handleDeleteReport(report.id, report.name)}
+                    />
+                  );
+                })
+              ) : !isLoading ? (
+                <Text className="text-muted-foreground py-4 text-center">No previously generated reports found.</Text>
+              ) : null}
+            </CardContent>
+          </Card>
+        </View>
+      </ScrollView>
+    </LinearGradient>
   );
 }

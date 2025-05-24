@@ -1,10 +1,28 @@
 // app/(tabs)/sales/index.tsx
 import React from 'react';
-import { View, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ImageBackground, useColorScheme as rnColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
 import { ShoppingCart, History as HistoryIcon, ChevronRight } from 'lucide-react-native'; // Renamed History to HistoryIcon
 import { useColorScheme } from '~/lib/useColorScheme';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+    primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+    secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+    accent: '#f9c00c',
+    danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+    lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+    lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+    lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+    lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+    white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+    dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+    gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+    border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+    yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+  });
 
 interface HubItemProps {
     title: string;
@@ -66,7 +84,10 @@ const HubItemCard: React.FC<HubItemProps> = ({ title, description, icon, onPress
 
 export default function SalesHubScreen() {
     const router = useRouter();
-    const { isDarkColorScheme } = useColorScheme();
+    const { isDarkColorScheme } = useColorScheme(); // Your custom hook
+    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const COLORS = getColors(currentRNColorScheme || 'light');
+
     const primaryColor = isDarkColorScheme ? '#A78BFA' : '#7C3AED'; // Example primary color
     const secondaryColor = isDarkColorScheme ? '#60A5FA' : '#3B82F6'; // Example secondary color
 
@@ -95,29 +116,34 @@ export default function SalesHubScreen() {
     ];
 
     return (
-        <ScrollView className="flex-1 bg-background">
-            <View className="p-4 pt-6">
-                <View className="mb-6">
-                    <Text className="text-3xl font-bold text-foreground">Sales Hub</Text>
-                    <Text className="text-base text-muted-foreground mt-1">
-                        Manage your sales operations and view transaction history.
-                    </Text>
-                </View>
+        <LinearGradient
+            colors={[COLORS.white, COLORS.yellow]}
+            style={{ flex: 1 }}
+        >
+            <ScrollView className="flex-1 bg-transparent">
+                <View className="p-4 pt-6">
+                    <View className="mb-6">
+                        <Text className="text-3xl font-bold text-foreground">Sales Hub</Text>
+                        <Text className="text-base text-muted-foreground mt-1">
+                            Manage your sales operations and view transaction history.
+                        </Text>
+                    </View>
 
-                <View>
-                    {hubItems.map((item, index) => (
-                        <HubItemCard
-                            key={index}
-                            title={item.title}
-                            description={item.description}
-                            icon={item.icon}
-                            onPress={item.onPress}
-                            imageUri={item.imageUri}
-                            iconBgColor={item.iconBgColor}
-                        />
-                    ))}
+                    <View>
+                        {hubItems.map((item, index) => (
+                            <HubItemCard
+                                key={index}
+                                title={item.title}
+                                description={item.description}
+                                icon={item.icon}
+                                onPress={item.onPress}
+                                imageUri={item.imageUri}
+                                iconBgColor={item.iconBgColor}
+                            />
+                        ))}
+                    </View>
                 </View>
-            </View>
-        </ScrollView>
+            </ScrollView>
+        </LinearGradient>
     );
 }

@@ -1,13 +1,31 @@
 // app/(tabs)/inventory/index.tsx
 // (This is your InventoryHubScreen content from the previous inventory.tsx)
 import React from 'react';
-import { View, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ImageBackground, useColorScheme as rnColorScheme } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
 // Card components are not used here if HubItemCard handles all visuals
 // import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ShoppingBag, Tag, Users, BarChart4, ChevronRight } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+    primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+    secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+    accent: '#f9c00c',
+    danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+    lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+    lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+    lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+    lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+    white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+    dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+    gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+    border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+    yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+  });
 
 interface HubItemProps {
     title: string;
@@ -72,7 +90,10 @@ const HubItemCard: React.FC<HubItemProps> = ({ title, description, icon, onPress
 
 export default function InventoryHubScreen() {
     const router = useRouter();
-    const { isDarkColorScheme } = useColorScheme();
+    const { isDarkColorScheme } = useColorScheme(); // This is your custom hook
+    const currentRNColorScheme = rnColorScheme(); // This is from react-native
+    const COLORS = getColors(currentRNColorScheme || 'light');
+
     const primaryColor = isDarkColorScheme ? '#A78BFA' : '#7C3AED';
     const accentColors = {
         products: isDarkColorScheme ? 'rgba(167, 139, 250, 0.2)' : 'rgba(124, 58, 237, 0.1)',
@@ -109,35 +130,40 @@ export default function InventoryHubScreen() {
     ];
 
     return (
-        <ScrollView className="flex-1 bg-background">
-            <View className="p-4 pt-6">
-                <View className="mb-6">
-                    <Text className="text-3xl font-bold text-foreground">Inventory Hub</Text>
-                    <Text className="text-base text-muted-foreground mt-1">
-                        Manage all aspects of your store's inventory from one place.
-                    </Text>
-                </View>
+        <LinearGradient
+            colors={[COLORS.white, COLORS.yellow]}
+            style={{ flex: 1 }}
+        >
+            <ScrollView className="flex-1 bg-transparent">
+                <View className="p-4 pt-6">
+                    <View className="mb-6">
+                        <Text className="text-3xl font-bold text-foreground">Inventory Hub</Text>
+                        <Text className="text-base text-muted-foreground mt-1">
+                            Manage all aspects of your store's inventory from one place.
+                        </Text>
+                    </View>
 
-                <View>
-                    {hubItems.map((item, index) => (
-                        <HubItemCard
-                            key={index}
-                            title={item.title}
-                            description={item.description}
-                            icon={item.icon}
-                            onPress={item.onPress}
-                            imageUri={item.imageUri}
-                            iconBgColor={item.iconBgColor}
-                        />
-                    ))}
-                </View>
+                    <View>
+                        {hubItems.map((item, index) => (
+                            <HubItemCard
+                                key={index}
+                                title={item.title}
+                                description={item.description}
+                                icon={item.icon}
+                                onPress={item.onPress}
+                                imageUri={item.imageUri}
+                                iconBgColor={item.iconBgColor}
+                            />
+                        ))}
+                    </View>
 
-                <View className="mt-8 mb-4 items-center">
-                    <Text className="text-sm text-muted-foreground">
-                        More inventory features coming soon!
-                    </Text>
+                    <View className="mt-8 mb-4 items-center">
+                        <Text className="text-sm text-muted-foreground">
+                            More inventory features coming soon!
+                        </Text>
+                    </View>
                 </View>
-            </View>
-        </ScrollView>
+            </ScrollView>
+        </LinearGradient>
     );
 }

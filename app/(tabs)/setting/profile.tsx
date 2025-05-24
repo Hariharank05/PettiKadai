@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Platform, Image, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Platform, Image, ActivityIndicator, Alert, Modal, useColorScheme as rnColorScheme } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Separator } from '~/components/ui/separator';
 import { Input } from '~/components/ui/input';
@@ -13,6 +13,24 @@ import { useColorScheme } from '~/lib/useColorScheme';
 import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChangePasswordModal } from '~/components/screens/settings-components/ChangePasswordModal';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+    primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+    secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+    accent: '#f9c00c',
+    danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+    lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+    lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+    lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+    lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+    white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+    dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+    gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+    border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+    yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+});
 
 type RootStackParamList = {
   Profile: undefined;
@@ -56,7 +74,10 @@ const ListItem: React.FC<{
 
 export default function ProfileScreen({ navigation }: Props) {
   const { userName, userId, changeUserPassword } = useAuthStore();
-  const { isDarkColorScheme } = useColorScheme();
+  const { isDarkColorScheme } = useColorScheme(); // Your custom hook for UI components
+  const currentRNColorScheme = rnColorScheme(); // From react-native for gradient colors
+  const COLORS = getColors(currentRNColorScheme || 'light');
+
   const isFocused = useIsFocused();
   const [isLoading, setIsLoading] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -314,7 +335,7 @@ export default function ProfileScreen({ navigation }: Props) {
   };
 
   const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDarkColorScheme ? 'black' : '#F0F2F5' },
+    container: { flex: 1, backgroundColor: 'transparent' }, // Made transparent
     profileSection: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -421,253 +442,257 @@ export default function ProfileScreen({ navigation }: Props) {
 
   if (isLoading && !profileImage && !formData.email) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={iconColor} />
-        <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading Profile...</Text>
-      </View>
+      <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color={iconColor} />
+          <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>Loading Profile...</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <>
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.profileSection}>
-          <TouchableOpacity onPress={handleProfileImagePress} className="relative w-20 h-20">
-            <View className="w-full h-full rounded-full overflow-hidden justify-center items-center bg-gray-200 dark:bg-gray-800">
-              {isLoading && !profileImage ? (
-                <ActivityIndicator size="small" color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
-              ) : profileImage ? (
-                <Image
-                  source={{ uri: profileImage }}
-                  className="w-full h-full"
-                  resizeMode="cover"
-                />
-              ) : (
-                <UserCircle size={80} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
-              )}
+    <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+      <>
+        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+          <View style={styles.profileSection}>
+            <TouchableOpacity onPress={handleProfileImagePress} className="relative w-20 h-20">
+              <View className="w-full h-full rounded-full overflow-hidden justify-center items-center bg-gray-200 dark:bg-gray-800">
+                {isLoading && !profileImage ? (
+                  <ActivityIndicator size="small" color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                ) : profileImage ? (
+                  <Image
+                    source={{ uri: profileImage }}
+                    className="w-full h-full"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <UserCircle size={80} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                )}
+              </View>
+              <View className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-gray-500/70 justify-center items-center border-2"
+                style={{ borderColor: isDarkColorScheme ? '#000000' : '#FFFFFF' }}>
+                <EditIcon size={12} color="white" />
+              </View>
+            </TouchableOpacity>
+            <View className='text-right mr-2 mt-4' style={[styles.profileTextContainer, { paddingLeft: 8 }]}>
+              <Text style={styles.profileName}>{formData.name}</Text>
+              <Text style={styles.profileSubtitle}>Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}</Text>
             </View>
-            <View className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-gray-500/70 justify-center items-center border-2"
-              style={{ borderColor: isDarkColorScheme ? '#000000' : '#FFFFFF' }}>
-              <EditIcon size={12} color="white" />
-            </View>
-          </TouchableOpacity>
-          <View className='text-right mr-2 mt-4' style={[styles.profileTextContainer, { paddingLeft: 8 }]}>
-            <Text style={styles.profileName}>{formData.name}</Text>
-            <Text style={styles.profileSubtitle}>Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}</Text>
           </View>
-        </View>
 
-        <Text style={styles.settingsSectionTitle}>Personal Information</Text>
-        <View style={styles.settingsGroup}>
-          {!isEditingProfile ? (
-            <>
-              <ListItem
-                icon={<UserCircle color={iconColor} />}
-                label="Full Name"
-                customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.name}</Text>}
-                showChevron={false}
-                isFirst
-              />
-              <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-              <ListItem
-                icon={<Mail color={iconColor} />}
-                label="Email"
-                customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.email || 'Not provided'}</Text>}
-                showChevron={false}
-              />
-              <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-              <ListItem
-                icon={<Phone color={iconColor} />}
-                label="Phone"
-                customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.phone || 'Not provided'}</Text>}
-                showChevron={false}
-                isLast
-              />
-              <View style={[styles.inputContainer, { paddingTop: 10, paddingBottom: 10 }]}>
-                <Button
-                  variant="outline"
-                  onPress={() => setIsEditingProfile(true)}
-                  disabled={isLoading}
-                  style={[styles.buttonComponent, { marginTop: 0 }]}
-                >
-                  <Text>Edit Profile</Text>
-                </Button>
-              </View>
-            </>
-          ) : (
-            <>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Full Name</Text>
-                <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
-                  <View style={styles.iconContainer}>
-                    <UserCircle size={18} className="text-muted-foreground" />
-                  </View>
-                  <Input
-                    value={formData.name}
-                    onChangeText={(text) => setFormData({ ...formData, name: text })}
-                    placeholder="Your Full Name"
-                    editable={!isLoading}
-                    className="flex-1 h-[42px] border-0 bg-transparent"
-                  />
-                </View>
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Email</Text>
-                <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
-                  <View style={styles.iconContainer}>
-                    <Mail size={18} className="text-muted-foreground" />
-                  </View>
-                  <Input
-                    value={formData.email || ''}
-                    onChangeText={(text) => setFormData({ ...formData, email: text })}
-                    placeholder="Your Email"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    editable={!isLoading}
-                    className="flex-1 h-[42px] border-0 bg-transparent"
-                  />
-                </View>
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Phone</Text>
-                <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
-                  <View style={styles.iconContainer}>
-                    <Phone size={18} className="text-muted-foreground" />
-                  </View>
-                  <Input
-                    value={formData.phone || ''}
-                    onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                    placeholder="Your Phone Number"
-                    keyboardType="phone-pad"
-                    editable={!isLoading}
-                    className="flex-1 h-[42px] border-0 bg-transparent"
-                  />
-                </View>
-              </View>
-              <View style={[styles.inputContainer, { paddingBottom: 10 }]}>
-                <View className="flex-row gap-3 mt-2">
+          <Text style={styles.settingsSectionTitle}>Personal Information</Text>
+          <View style={styles.settingsGroup}>
+            {!isEditingProfile ? (
+              <>
+                <ListItem
+                  icon={<UserCircle color={iconColor} />}
+                  label="Full Name"
+                  customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.name}</Text>}
+                  showChevron={false}
+                  isFirst
+                />
+                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                <ListItem
+                  icon={<Mail color={iconColor} />}
+                  label="Email"
+                  customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.email || 'Not provided'}</Text>}
+                  showChevron={false}
+                />
+                <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                <ListItem
+                  icon={<Phone color={iconColor} />}
+                  label="Phone"
+                  customRightContent={<Text className="text-muted-foreground max-w-[60%]" numberOfLines={1} ellipsizeMode="tail">{formData.phone || 'Not provided'}</Text>}
+                  showChevron={false}
+                  isLast
+                />
+                <View style={[styles.inputContainer, { paddingTop: 10, paddingBottom: 10 }]}>
                   <Button
                     variant="outline"
-                    onPress={() => {
-                      setIsEditingProfile(false);
-                      fetchUserData();
-                    }}
+                    onPress={() => setIsEditingProfile(true)}
                     disabled={isLoading}
-                    style={[styles.buttonComponent, { flex: 1, marginTop: 0 }]}
+                    style={[styles.buttonComponent, { marginTop: 0 }]}
                   >
-                    <Text>Cancel</Text>
-                  </Button>
-                  <Button
-                    onPress={handleUpdateProfile}
-                    disabled={isLoading}
-                    style={[styles.buttonComponent, { flex: 1, marginTop: 0 }]}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color={isDarkColorScheme ? 'black' : 'white'} />
-                    ) : (
-                      <Text className="text-primary-foreground">Save Changes</Text>
-                    )}
+                    <Text>Edit Profile</Text>
                   </Button>
                 </View>
-              </View>
-            </>
-          )}
-        </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Full Name</Text>
+                  <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
+                    <View style={styles.iconContainer}>
+                      <UserCircle size={18} className="text-muted-foreground" />
+                    </View>
+                    <Input
+                      value={formData.name}
+                      onChangeText={(text) => setFormData({ ...formData, name: text })}
+                      placeholder="Your Full Name"
+                      editable={!isLoading}
+                      className="flex-1 h-[42px] border-0 bg-transparent"
+                    />
+                  </View>
+                </View>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Email</Text>
+                  <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
+                    <View style={styles.iconContainer}>
+                      <Mail size={18} className="text-muted-foreground" />
+                    </View>
+                    <Input
+                      value={formData.email || ''}
+                      onChangeText={(text) => setFormData({ ...formData, email: text })}
+                      placeholder="Your Email"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={!isLoading}
+                      className="flex-1 h-[42px] border-0 bg-transparent"
+                    />
+                  </View>
+                </View>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Phone</Text>
+                  <View className="flex-row items-center border border-input rounded-md pl-2 bg-background">
+                    <View style={styles.iconContainer}>
+                      <Phone size={18} className="text-muted-foreground" />
+                    </View>
+                    <Input
+                      value={formData.phone || ''}
+                      onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                      placeholder="Your Phone Number"
+                      keyboardType="phone-pad"
+                      editable={!isLoading}
+                      className="flex-1 h-[42px] border-0 bg-transparent"
+                    />
+                  </View>
+                </View>
+                <View style={[styles.inputContainer, { paddingBottom: 10 }]}>
+                  <View className="flex-row gap-3 mt-2">
+                    <Button
+                      variant="outline"
+                      onPress={() => {
+                        setIsEditingProfile(false);
+                        fetchUserData();
+                      }}
+                      disabled={isLoading}
+                      style={[styles.buttonComponent, { flex: 1, marginTop: 0 }]}
+                    >
+                      <Text>Cancel</Text>
+                    </Button>
+                    <Button
+                      onPress={handleUpdateProfile}
+                      disabled={isLoading}
+                      style={[styles.buttonComponent, { flex: 1, marginTop: 0 }]}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color={isDarkColorScheme ? 'black' : 'white'} />
+                      ) : (
+                        <Text className="text-primary-foreground">Save Changes</Text>
+                      )}
+                    </Button>
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
 
-        <Text style={styles.settingsSectionTitle}>Security</Text>
-        <View style={styles.settingsGroup}>
-          <ListItem
-            icon={<Key color={iconColor} />}
-            label="Change Password"
-            onPress={() => setIsChangePasswordModalVisible(true)}
-            showChevron={false}
-            isFirst
-          />
-          <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-          <ListItem
-            icon={<Shield color={iconColor} />}
-            label="Security Question"
-            onPress={() => Alert.alert('Security Question', 'This feature will be available in a future update.')}
-          />
-          <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-          <ListItem
-            icon={<RefreshCcw color={iconColor} />}
-            label="Account Recovery"
-            onPress={() => Alert.alert('Account Recovery', 'This feature will be available in a future update.')}
-            isLast
-          />
-        </View>
+          <Text style={styles.settingsSectionTitle}>Security</Text>
+          <View style={styles.settingsGroup}>
+            <ListItem
+              icon={<Key color={iconColor} />}
+              label="Change Password"
+              onPress={() => setIsChangePasswordModalVisible(true)}
+              showChevron={false}
+              isFirst
+            />
+            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+            <ListItem
+              icon={<Shield color={iconColor} />}
+              label="Security Question"
+              onPress={() => Alert.alert('Security Question', 'This feature will be available in a future update.')}
+            />
+            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+            <ListItem
+              icon={<RefreshCcw color={iconColor} />}
+              label="Account Recovery"
+              onPress={() => Alert.alert('Account Recovery', 'This feature will be available in a future update.')}
+              isLast
+            />
+          </View>
 
-        <Text style={styles.settingsSectionTitle}>App Information</Text>
-        <View style={styles.settingsGroup}>
-          <ListItem
-            icon={<Info color={iconColor} />}
-            label="Version"
-            customRightContent={<Text className="text-muted-foreground">1.0.0</Text>}
-            showChevron={false}
-            isFirst
-          />
-          <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-          <ListItem
-            icon={<Info color={iconColor} />}
-            label="Build"
-            customRightContent={
-              <Text className="text-muted-foreground">{`${new Date().getFullYear()}.${new Date().getMonth() + 1}.${new Date().getDate()}`}</Text>
-            }
-            showChevron={false}
-          />
-          <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-          <ListItem
-            icon={<Info color={iconColor} />}
-            label="About Petti Kadai"
-            onPress={() => Alert.alert('About', 'Petti Kadai is a simple inventory management app for small stores.')}
-            isLast
-            showChevron={false}
-          />
-        </View>
-      </ScrollView>
+          <Text style={styles.settingsSectionTitle}>App Information</Text>
+          <View style={styles.settingsGroup}>
+            <ListItem
+              icon={<Info color={iconColor} />}
+              label="Version"
+              customRightContent={<Text className="text-muted-foreground">1.0.0</Text>}
+              showChevron={false}
+              isFirst
+            />
+            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+            <ListItem
+              icon={<Info color={iconColor} />}
+              label="Build"
+              customRightContent={
+                <Text className="text-muted-foreground">{`${new Date().getFullYear()}.${new Date().getMonth() + 1}.${new Date().getDate()}`}</Text>
+              }
+              showChevron={false}
+            />
+            <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+            <ListItem
+              icon={<Info color={iconColor} />}
+              label="About Petti Kadai"
+              onPress={() => Alert.alert('About', 'Petti Kadai is a simple inventory management app for small stores.')}
+              isLast
+              showChevron={false}
+            />
+          </View>
+        </ScrollView>
 
-      <Modal
-        visible={showImageActionModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowImageActionModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Profile Picture</Text>
-            <TouchableOpacity
-              style={[styles.modalActionRow, { backgroundColor: isDarkColorScheme ? '#2A2A2C' : '#F5F5F5' }]}
-              onPress={pickImage}
-            >
-              <GalleryIcon size={20} color={iconColor} />
-              <Text style={[styles.modalActionText, { color: isDarkColorScheme ? '#FFFFFF' : '#000000' }]}>Select Image</Text>
-            </TouchableOpacity>
-            {profileImage && (
+        <Modal
+          visible={showImageActionModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowImageActionModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Profile Picture</Text>
               <TouchableOpacity
                 style={[styles.modalActionRow, { backgroundColor: isDarkColorScheme ? '#2A2A2C' : '#F5F5F5' }]}
-                onPress={deleteImage}
+                onPress={pickImage}
               >
-                <Trash2 size={20} color={destructiveColor} />
-                <Text style={[styles.modalActionText, { color: destructiveColor }]}>Delete Image</Text>
+                <GalleryIcon size={20} color={iconColor} />
+                <Text style={[styles.modalActionText, { color: isDarkColorScheme ? '#FFFFFF' : '#000000' }]}>Select Image</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.modalCancelButton}
-              onPress={() => setShowImageActionModal(false)}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
+              {profileImage && (
+                <TouchableOpacity
+                  style={[styles.modalActionRow, { backgroundColor: isDarkColorScheme ? '#2A2A2C' : '#F5F5F5' }]}
+                  onPress={deleteImage}
+                >
+                  <Trash2 size={20} color={destructiveColor} />
+                  <Text style={[styles.modalActionText, { color: destructiveColor }]}>Delete Image</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowImageActionModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      <ChangePasswordModal
-        visible={isChangePasswordModalVisible}
-        onClose={() => setIsChangePasswordModalVisible(false)}
-        onSubmit={handleChangePasswordSubmit}
-        isLoading={changePasswordLoading}
-      />
-    </>
+        <ChangePasswordModal
+          visible={isChangePasswordModalVisible}
+          onClose={() => setIsChangePasswordModalVisible(false)}
+          onSubmit={handleChangePasswordSubmit}
+          isLoading={changePasswordLoading}
+        />
+      </>
+    </LinearGradient>
   );
 }

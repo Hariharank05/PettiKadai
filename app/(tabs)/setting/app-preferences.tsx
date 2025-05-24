@@ -8,7 +8,8 @@ import {
     ActivityIndicator,
     StyleSheet,
     Platform,
-    TextInput
+    TextInput,
+    useColorScheme as rnColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '~/components/ui/text';
@@ -28,6 +29,24 @@ import {
     CheckCircle
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+    primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+    secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+    accent: '#f9c00c',
+    danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+    lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+    lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+    lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+    lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+    white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+    dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+    gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+    border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+    yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+  });
 
 interface AppPreferencesState {
     language: string;
@@ -236,7 +255,10 @@ const SelectionModal: React.FC<{
 
 export default function AppPreferencesScreen() {
     const { userId } = useAuthStore();
-    const { isDarkColorScheme } = useColorScheme();
+    const { isDarkColorScheme } = useColorScheme(); // Your custom hook
+    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const COLORS = getColors(currentRNColorScheme || 'light');
+
     const router = useRouter();
     const db = getDatabase();
 
@@ -405,7 +427,7 @@ export default function AppPreferencesScreen() {
     const styles = StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDarkColorScheme ? 'black' : '#F0F2F5'
+            backgroundColor: 'transparent' // Made transparent
         },
         header: {
             flexDirection: 'row',
@@ -456,12 +478,14 @@ export default function AppPreferencesScreen() {
 
     if (isLoading) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={iconColor} />
-                <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>
-                    Loading preferences...
-                </Text>
-            </View>
+            <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={iconColor} />
+                    <Text className="mt-2" style={{ color: isDarkColorScheme ? '#aaa' : '#555' }}>
+                        Loading preferences...
+                    </Text>
+                </View>
+            </LinearGradient>
         );
     }
 
@@ -470,152 +494,154 @@ export default function AppPreferencesScreen() {
     const selectedBackupFreq = BACKUP_FREQUENCY_OPTIONS.find(freq => freq.value === preferences.backupFrequency);
 
     return (
-        <View style={styles.container}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-                <Text style={styles.sectionTitle}>Localization</Text>
-                <View style={styles.settingsGroup}>
-                    <ListItem
-                        icon={<Globe color={iconColor} />}
-                        label="Language"
-                        subtitle={selectedLanguage?.name || 'English'}
-                        onPress={() => setShowLanguageModal(true)}
-                        isFirst
-                    />
-                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                    <ListItem
-                        icon={<DollarSign color={iconColor} />}
-                        label="Currency"
-                        subtitle={selectedCurrency?.name || 'Indian Rupee (₹)'}
-                        onPress={() => setShowCurrencyModal(true)}
-                        isLast
-                    />
-                </View>
+        <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+            <View style={styles.container}>
+                <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+                    <Text style={styles.sectionTitle}>Localization</Text>
+                    <View style={styles.settingsGroup}>
+                        <ListItem
+                            icon={<Globe color={iconColor} />}
+                            label="Language"
+                            subtitle={selectedLanguage?.name || 'English'}
+                            onPress={() => setShowLanguageModal(true)}
+                            isFirst
+                        />
+                        <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                        <ListItem
+                            icon={<DollarSign color={iconColor} />}
+                            label="Currency"
+                            subtitle={selectedCurrency?.name || 'Indian Rupee (₹)'}
+                            onPress={() => setShowCurrencyModal(true)}
+                            isLast
+                        />
+                    </View>
 
-                <Text style={styles.sectionTitle}>Business Settings</Text>
-                <View style={styles.settingsGroup}>
-                    <InputItem
-                        icon={<Percent color={iconColor} />}
-                        label="Default Tax Rate"
-                        value={preferences.taxRate}
-                        onChangeText={handleTaxRateChange}
-                        placeholder="0"
-                        keyboardType="decimal-pad"
-                        suffix="%"
-                        isFirst
-                    />
-                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                    <InputItem
-                        icon={<Percent color={iconColor} />}
-                        label="Default Discount Rate"
-                        value={preferences.defaultDiscountRate}
-                        onChangeText={handleDiscountRateChange}
-                        placeholder="0"
-                        keyboardType="decimal-pad"
-                        suffix="%"
-                        isLast
-                    />
-                </View>
+                    <Text style={styles.sectionTitle}>Business Settings</Text>
+                    <View style={styles.settingsGroup}>
+                        <InputItem
+                            icon={<Percent color={iconColor} />}
+                            label="Default Tax Rate"
+                            value={preferences.taxRate}
+                            onChangeText={handleTaxRateChange}
+                            placeholder="0"
+                            keyboardType="decimal-pad"
+                            suffix="%"
+                            isFirst
+                        />
+                        <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                        <InputItem
+                            icon={<Percent color={iconColor} />}
+                            label="Default Discount Rate"
+                            value={preferences.defaultDiscountRate}
+                            onChangeText={handleDiscountRateChange}
+                            placeholder="0"
+                            keyboardType="decimal-pad"
+                            suffix="%"
+                            isLast
+                        />
+                    </View>
 
-                <Text style={styles.sectionTitle}>Receipt Settings</Text>
-                <View style={styles.settingsGroup}>
-                    <InputItem
-                        icon={<Receipt color={iconColor} />}
-                        label="Receipt Footer Text"
-                        value={preferences.receiptFooter}
-                        onChangeText={handleReceiptFooterChange}
-                        placeholder="Thank you for your business!"
-                        isFirst
-                        isLast
-                    />
-                </View>
+                    <Text style={styles.sectionTitle}>Receipt Settings</Text>
+                    <View style={styles.settingsGroup}>
+                        <InputItem
+                            icon={<Receipt color={iconColor} />}
+                            label="Receipt Footer Text"
+                            value={preferences.receiptFooter}
+                            onChangeText={handleReceiptFooterChange}
+                            placeholder="Thank you for your business!"
+                            isFirst
+                            isLast
+                        />
+                    </View>
 
-                <Text style={styles.sectionTitle}>Data & Backup</Text>
-                <View style={styles.settingsGroup}>
-                    <ListItem
-                        icon={<Archive color={iconColor} />}
-                        label="Auto Backup Frequency"
-                        subtitle={selectedBackupFreq?.label || 'Weekly'}
-                        onPress={() => setShowBackupModal(true)}
-                        isFirst
-                    />
-                    <Separator className="bg-separator" style={{ marginLeft: 60 }} />
-                    <ListItem
-                        icon={<Smartphone color={iconColor} />}
-                        label="Enable Auto Backup"
-                        showChevron={false}
-                        customRightContent={
-                            <RNSwitch
-                                value={preferences.autoBackup}
-                                onValueChange={handleToggleAutoBackup}
-                                trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
-                                thumbColor="#FFFFFF"
-                                ios_backgroundColor="#3e3e3e"
-                            />
-                        }
-                        isLast
-                    />
-                </View>
+                    <Text style={styles.sectionTitle}>Data & Backup</Text>
+                    <View style={styles.settingsGroup}>
+                        <ListItem
+                            icon={<Archive color={iconColor} />}
+                            label="Auto Backup Frequency"
+                            subtitle={selectedBackupFreq?.label || 'Weekly'}
+                            onPress={() => setShowBackupModal(true)}
+                            isFirst
+                        />
+                        <Separator className="bg-separator" style={{ marginLeft: 60 }} />
+                        <ListItem
+                            icon={<Smartphone color={iconColor} />}
+                            label="Enable Auto Backup"
+                            showChevron={false}
+                            customRightContent={
+                                <RNSwitch
+                                    value={preferences.autoBackup}
+                                    onValueChange={handleToggleAutoBackup}
+                                    trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
+                                    thumbColor="#FFFFFF"
+                                    ios_backgroundColor="#3e3e3e"
+                                />
+                            }
+                            isLast
+                        />
+                    </View>
 
-                <Text style={styles.sectionTitle}>Notifications</Text>
-                <View style={styles.settingsGroup}>
-                    <ListItem
-                        icon={<Bell color={iconColor} />}
-                        label="Enable Notifications"
-                        subtitle="Get notified about low stock and important updates"
-                        showChevron={false}
-                        customRightContent={
-                            <RNSwitch
-                                value={preferences.enableNotifications}
-                                onValueChange={handleToggleNotifications}
-                                trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
-                                thumbColor="#FFFFFF"
-                                ios_backgroundColor="#3e3e3e"
-                            />
-                        }
-                        isFirst
-                        isLast
-                    />
-                </View>
+                    <Text style={styles.sectionTitle}>Notifications</Text>
+                    <View style={styles.settingsGroup}>
+                        <ListItem
+                            icon={<Bell color={iconColor} />}
+                            label="Enable Notifications"
+                            subtitle="Get notified about low stock and important updates"
+                            showChevron={false}
+                            customRightContent={
+                                <RNSwitch
+                                    value={preferences.enableNotifications}
+                                    onValueChange={handleToggleNotifications}
+                                    trackColor={{ false: "#767577", true: isDarkColorScheme ? "#0060C0" : "#007AFF" }}
+                                    thumbColor="#FFFFFF"
+                                    ios_backgroundColor="#3e3e3e"
+                                />
+                            }
+                            isFirst
+                            isLast
+                        />
+                    </View>
 
-                <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleSaveAll}
-                    disabled={isSaving}
-                >
-                    {isSaving ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                        <Text style={styles.saveButtonText}>Save All Preferences</Text>
-                    )}
-                </TouchableOpacity>
-            </ScrollView>
+                    <TouchableOpacity
+                        style={styles.saveButton}
+                        onPress={handleSaveAll}
+                        disabled={isSaving}
+                    >
+                        {isSaving ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                            <Text style={styles.saveButtonText}>Save All Preferences</Text>
+                        )}
+                    </TouchableOpacity>
+                </ScrollView>
 
-            <SelectionModal
-                visible={showLanguageModal}
-                title="Select Language"
-                options={LANGUAGE_OPTIONS.map(lang => ({ value: lang.code, label: lang.name, name: lang.name }))}
-                selectedValue={preferences.language}
-                onSelect={handleLanguageChange}
-                onClose={() => setShowLanguageModal(false)}
-            />
+                <SelectionModal
+                    visible={showLanguageModal}
+                    title="Select Language"
+                    options={LANGUAGE_OPTIONS.map(lang => ({ value: lang.code, label: lang.name, name: lang.name }))}
+                    selectedValue={preferences.language}
+                    onSelect={handleLanguageChange}
+                    onClose={() => setShowLanguageModal(false)}
+                />
 
-            <SelectionModal
-                visible={showCurrencyModal}
-                title="Select Currency"
-                options={CURRENCY_OPTIONS.map(curr => ({ value: curr.symbol, label: curr.name, name: curr.name }))}
-                selectedValue={preferences.currencySymbol}
-                onSelect={handleCurrencyChange}
-                onClose={() => setShowCurrencyModal(false)}
-            />
+                <SelectionModal
+                    visible={showCurrencyModal}
+                    title="Select Currency"
+                    options={CURRENCY_OPTIONS.map(curr => ({ value: curr.symbol, label: curr.name, name: curr.name }))}
+                    selectedValue={preferences.currencySymbol}
+                    onSelect={handleCurrencyChange}
+                    onClose={() => setShowCurrencyModal(false)}
+                />
 
-            <SelectionModal
-                visible={showBackupModal}
-                title="Backup Frequency"
-                options={BACKUP_FREQUENCY_OPTIONS.map(freq => ({ value: freq.value, label: freq.label }))}
-                selectedValue={preferences.backupFrequency}
-                onSelect={handleBackupFrequencyChange}
-                onClose={() => setShowBackupModal(false)}
-            />
-        </View>
+                <SelectionModal
+                    visible={showBackupModal}
+                    title="Backup Frequency"
+                    options={BACKUP_FREQUENCY_OPTIONS.map(freq => ({ value: freq.value, label: freq.label }))}
+                    selectedValue={preferences.backupFrequency}
+                    onSelect={handleBackupFrequencyChange}
+                    onClose={() => setShowBackupModal(false)}
+                />
+            </View>
+        </LinearGradient>
     );
 }

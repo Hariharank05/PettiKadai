@@ -1,6 +1,6 @@
 // app/(tabs)/receipts.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, FlatList, TouchableOpacity, ActivityIndicator, Alert, useColorScheme as rnColorScheme } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router'; // Added useLocalSearchParams
 import { getDatabase } from '~/lib/db/database';
 import * as Sharing from 'expo-sharing';
@@ -11,6 +11,24 @@ import { Search, FileText, Share2, Eye, UserCircle } from 'lucide-react-native';
 import { format, parseISO } from 'date-fns';
 import { useColorScheme } from '~/lib/useColorScheme'; 
 import { previewExistingReceipt } from '~/lib/utils/receiptUtils';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+  primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+  secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+  accent: '#f9c00c',
+  danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+  lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+  lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+  lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+  lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+  white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+  dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+  gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+  border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+  yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+});
 
 interface ReceiptHistoryItem {
     id: string;
@@ -30,7 +48,10 @@ const db = getDatabase();
 export default function ReceiptsScreen() {
     const router = useRouter();
     const { highlightSaleId } = useLocalSearchParams<{ highlightSaleId?: string }>(); // Get highlightSaleId
-    const { isDarkColorScheme } = useColorScheme(); 
+    const { isDarkColorScheme } = useColorScheme(); // Your custom hook
+    const currentRNColorScheme = rnColorScheme(); // From react-native
+    const COLORS = getColors(currentRNColorScheme || 'light');
+    
     const [receipts, setReceipts] = useState<ReceiptHistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -41,7 +62,7 @@ export default function ReceiptsScreen() {
     const iconColorDisabled = isDarkColorScheme ? '#4B5563' : '#9CA3AF'; 
     const iconColorSearch = isDarkColorScheme ? '#9CA3AF' : '#6B7280';
     const iconColorFileText = isDarkColorScheme ? '#6B7280' : '#9CA3AF';
-    const activityIndicatorColor = isDarkColorScheme ? '#FFFFFF' : '#3B82F6';
+    const activityIndicatorColor = isDarkColorScheme ? '#FFFFFF' : COLORS.primary;
 
 
     const fetchReceipts = useCallback(async (currentSearchQuery: string = searchQuery) => {
@@ -221,53 +242,57 @@ export default function ReceiptsScreen() {
 
     if (isLoading && !refreshing && receipts.length === 0) {
         return (
-            <View className="flex-1 justify-center items-center bg-background">
-                <ActivityIndicator size="large" color={activityIndicatorColor} />
-                <Text className="mt-2 text-muted-foreground native:text-gray-500">Loading Receipts...</Text>
-            </View>
+            <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+                <View className="flex-1 justify-center items-center bg-transparent">
+                    <ActivityIndicator size="large" color={activityIndicatorColor} />
+                    <Text className="mt-2 text-muted-foreground native:text-gray-500">Loading Receipts...</Text>
+                </View>
+            </LinearGradient>
         );
     }
 
     return (
-        <View className="flex-1 bg-background p-4">
-            <Text className="text-2xl font-bold text-foreground mb-4 native:text-black">Receipts History</Text>
-            <View className="mb-4 flex-row items-center bg-card border border-border rounded-lg px-3">
-                <Search size={20} color={iconColorSearch} />
-                <Input
-                    placeholder="Search by Receipt No, Amount, Customer..."
-                    className="flex-1 h-12 border-0 bg-transparent ml-2 text-base text-foreground"
-                    placeholderTextColor={isDarkColorScheme ? '#6B7280' : '#9CA3AF'}
-                    value={searchQuery}
-                    onChangeText={(text) => setSearchQuery(text)}
-                />
-            </View>
-
-            {receipts.length === 0 && !isLoading ? (
-                <View className="flex-1 justify-center items-center">
-                    <FileText size={48} color={iconColorFileText} className="opacity-50" />
-                    <Text className="mt-4 text-lg text-muted-foreground native:text-gray-500">No Receipts Found</Text>
-                    {searchQuery ? (
-                        <Text className="text-sm text-muted-foreground native:text-gray-500">Try a different search term.</Text>
-                    ) : (
-                        <Text className="text-sm text-muted-foreground native:text-gray-500">Complete a sale to see receipts here.</Text>
-                    )}
+        <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+            <View className="flex-1 p-4 bg-transparent">
+                <Text className="text-2xl font-bold text-foreground mb-4 native:text-black">Receipts History</Text>
+                <View className="mb-4 flex-row items-center bg-card border border-border rounded-lg px-3">
+                    <Search size={20} color={iconColorSearch} />
+                    <Input
+                        placeholder="Search by Receipt No, Amount, Customer..."
+                        className="flex-1 h-12 border-0 bg-transparent ml-2 text-base text-foreground"
+                        placeholderTextColor={isDarkColorScheme ? '#6B7280' : '#9CA3AF'}
+                        value={searchQuery}
+                        onChangeText={(text) => setSearchQuery(text)}
+                    />
                 </View>
-            ) : (
-                <FlatList
-                    ref={flatListRef}
-                    data={receipts}
-                    renderItem={renderReceiptItem}
-                    keyExtractor={(item) => item.id}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 20 }}
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    getItemLayout={(data, index) => (
-                        // Estimate item height for performance, adjust if necessary
-                        { length: 120, offset: 120 * index, index } 
-                    )}
-                />
-            )}
-        </View>
+
+                {receipts.length === 0 && !isLoading ? (
+                    <View className="flex-1 justify-center items-center">
+                        <FileText size={48} color={iconColorFileText} className="opacity-50" />
+                        <Text className="mt-4 text-lg text-muted-foreground native:text-gray-500">No Receipts Found</Text>
+                        {searchQuery ? (
+                            <Text className="text-sm text-muted-foreground native:text-gray-500">Try a different search term.</Text>
+                        ) : (
+                            <Text className="text-sm text-muted-foreground native:text-gray-500">Complete a sale to see receipts here.</Text>
+                        )}
+                    </View>
+                ) : (
+                    <FlatList
+                        ref={flatListRef}
+                        data={receipts}
+                        renderItem={renderReceiptItem}
+                        keyExtractor={(item) => item.id}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 20 }}
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        getItemLayout={(data, index) => (
+                            // Estimate item height for performance, adjust if necessary
+                            { length: 120, offset: 120 * index, index } 
+                        )}
+                    />
+                )}
+            </View>
+        </LinearGradient>
     );
 }

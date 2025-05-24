@@ -1,6 +1,5 @@
-
 import React, { useEffect, useState, useCallback, useMemo, useReducer } from 'react';
-import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList, Alert } from 'react-native';
+import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList, Alert, useColorScheme as rnColorScheme } from 'react-native';
 import { Product, ProductInput } from '~/lib/models/product';
 import { useProductStore } from '~/lib/stores/productStore';
 import { useCategoryStore } from '~/lib/stores/categoryStore'; // Import category store
@@ -18,6 +17,24 @@ import { Button as ShadcnButton } from '~/components/ui/button';
 import { Filter, Pencil, Trash2, X, ListFilter, ChevronDown, ChevronUp, Package } from 'lucide-react-native';
 import { useRefresh } from '~/components/RefreshProvider';
 import throttle from 'lodash/throttle';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Define the color palette based on theme
+export const getColors = (colorScheme: 'light' | 'dark') => ({
+  primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+  secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
+  accent: '#f9c00c',
+  danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
+  lightPurple: colorScheme === 'dark' ? '#4b2e83' : '#e9d5ff',
+  lightBlue: colorScheme === 'dark' ? '#164e63' : '#d0f0ff',
+  lightYellow: colorScheme === 'dark' ? '#854d0e' : '#fff3d0',
+  lightRed: colorScheme === 'dark' ? '#7f1d1d' : '#ffe5e0',
+  white: colorScheme === 'dark' ? '#1f2937' : '#ffffff',
+  dark: colorScheme === 'dark' ? '#e5e7eb' : '#1a1a1a',
+  gray: colorScheme === 'dark' ? '#9ca3af' : '#666',
+  border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
+  yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
+});
 
 // Form state type
 interface FormState {
@@ -731,6 +748,8 @@ const ProductManagementScreen = () => {
     addCategory: addStoreCategory, // Renamed to avoid conflict
   } = useCategoryStore();
 
+  const currentRNColorScheme = rnColorScheme();
+  const COLORS = getColors(currentRNColorScheme || 'light');
 
   const { refreshForm: appRefreshForm } = useRefresh(); // Assuming this is setup elsewhere
   const [formState, dispatch] = useReducer(formReducer, initialFormState);
@@ -1155,241 +1174,246 @@ const ProductManagementScreen = () => {
   );
 
   return (
-    <View className="p-4 flex-1 bg-gray-100 dark:bg-gray-900">
-      <View className="flex-row justify-between items-center mb-4">
-        <Text className="text-2xl font-bold text-[#7200da] dark:text-[#00b9f1]">Products</Text>
-        <View className="flex-row items-center gap-x-2">
-          <ShadcnButton
-            variant="ghost"
-            size="icon"
-            onPress={() => setFilterDialogOpen(true)}
-            disabled={isLoading}
-            className="p-2"
-          >
-            {selectedCategoryFilter ? (
-              <ListFilter size={24} color="#3B82F6" />
-            ) : (
-              <Filter size={24} color="#3B82F6" />
-            )}
-          </ShadcnButton>
-          <ShadcnButton
-            onPress={() => {
-              resetDialogState();
-              setFormMode('add');
-              setIsNewCategory(true); // Default to new category for new product
-              setIsNewProduct(true);  // Default to new product
-              setDialogOpen(true);
-            }}
-            disabled={isLoading}
-            className="bg-[#00b9f1] dark:bg-[#00b9f1] px-4 py-2.5 rounded-lg"
-          >
-            <Text className="text-white font-semibold">Add Product</Text>
-          </ShadcnButton>
-        </View>
-      </View>
-
-      {storeError && !dialogOpen && (
-        <Text className="text-red-500 dark:text-red-400 text-center mb-4">{storeError}</Text>
-      )}
-
-      {selectedCategoryFilter && (
-        <View className="mb-3 flex-row justify-start items-center bg-blue-100 dark:bg-blue-900/50 p-2 rounded-md">
-          <Text className="text-sm text-blue-700 dark:text-blue-300 mr-2">Filtered by: {selectedCategoryFilter}</Text>
-          <ShadcnButton
-            variant="ghost"
-            size="sm"
-            onPress={() => setSelectedCategoryFilter(null)}
-            disabled={isLoading}
-            className="p-1 flex-row items-center"
-          >
-            <Text className="text-red-600 dark:text-red-500 text-xs mr-1">Clear</Text>
-            <X size={16} color="#EF4444" />
-          </ShadcnButton>
-        </View>
-      )}
-
-      <FlatList
-        data={filteredProductsDisplay}
-        keyExtractor={(item: Product) => item.id}
-        renderItem={renderMainProductItem}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#00b9f1', '#7200da']}
-            tintColor={Platform.OS === "ios" ? "#00b9f1" : undefined}
-          />
-        }
-        ListEmptyComponent={
-          <View className="flex-1 justify-center items-center mt-10">
-            <Text className="text-gray-500 dark:text-gray-400 text-lg">
-              {isLoading ? 'Loading products...' : 'No products found.'}
-            </Text>
-            {!isLoading && rawProducts.length === 0 && (
-              <Text className="text-gray-400 dark:text-gray-500 mt-2">Try adding a new product!</Text>
-            )}
-            {!isLoading && rawProducts.length > 0 && selectedCategoryFilter && filteredProductsDisplay.length === 0 && (
-              <Text className="text-gray-400 dark:text-gray-500 mt-2">No products in category "{selectedCategoryFilter}".</Text>
-            )}
-          </View>
-        }
-      />
-
-      {/* Filter Dialog */}
-      <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-        <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto">
-          <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700 w-80">
-            <DialogTitle>
-              <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Filter by Category</Text>
-            </DialogTitle>
-          </DialogHeader>
-          <View className="p-5">
-            <TouchableOpacity
-              onPress={() => setIsFilterAccordionOpen(!isFilterAccordionOpen)}
-              className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
-              disabled={isLoading}
-            >
-              <Text className="text-base text-gray-900 dark:text-gray-100">
-                {selectedCategoryFilter || 'All Categories'}
-              </Text>
-              {isFilterAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
-            </TouchableOpacity>
-            {isFilterAccordionOpen && (
-              <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
-                <FlatList
-                  data={categoriesForFilter} // Use categories from store for filter
-                  keyExtractor={(item) => item}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setSelectedCategoryFilter(item === 'All Categories' ? null : item);
-                        setIsFilterAccordionOpen(false);
-                      }}
-                      className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
-                    >
-                      <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
-                    </TouchableOpacity>
-                  )}
-                  ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No categories found.</Text>}
-                  style={{ maxHeight: 150 }}
-                  nestedScrollEnabled
-                />
-              </View>
-            )}
-          </View>
-          <DialogFooter className="p-5 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
+    <LinearGradient
+        colors={[COLORS.white, COLORS.yellow]}
+        style={{ flex: 1 }}
+    >
+        <View className="p-4 flex-1 bg-transparent">
+        <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-2xl font-bold text-[#7200da] dark:text-[#00b9f1]">Products</Text>
+            <View className="flex-row items-center gap-x-2">
             <ShadcnButton
-              variant="outline"
-              onPress={() => {
-                setSelectedCategoryFilter(null);
-                setFilterDialogOpen(false);
-              }}
-              className="h-11 px-5 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                variant="ghost"
+                size="icon"
+                onPress={() => setFilterDialogOpen(true)}
+                disabled={isLoading}
+                className="p-2"
             >
-              <Text className="text-gray-900 dark:text-gray-100">Clear</Text>
+                {selectedCategoryFilter ? (
+                <ListFilter size={24} color="#3B82F6" />
+                ) : (
+                <Filter size={24} color="#3B82F6" />
+                )}
             </ShadcnButton>
             <ShadcnButton
-              onPress={() => setFilterDialogOpen(false)}
-              className="h-11 px-5 bg-[#00b9f1] dark:bg-[#00b9f1]"
+                onPress={() => {
+                resetDialogState();
+                setFormMode('add');
+                setIsNewCategory(true); // Default to new category for new product
+                setIsNewProduct(true);  // Default to new product
+                setDialogOpen(true);
+                }}
+                disabled={isLoading}
+                className="bg-[#00b9f1] dark:bg-[#00b9f1] px-4 py-2.5 rounded-lg"
             >
-              <Text className="text-white">Apply</Text>
+                <Text className="text-white font-semibold">Add Product</Text>
             </ShadcnButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </View>
+        </View>
 
-      {/* Add/Edit Product Dialog */}
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open) {
-            // Delay reset to allow animations to finish, reducing flicker
-            setTimeout(() => {
-              resetDialogState();
-            }, Platform.OS === 'web' ? 10 : 150); // Shorter delay for web
-          }
-        }}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0} // Adjust as needed
-          style={{ flex: 1 }}
-        >
-          <DialogContent
-            className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
-            style={{ maxHeight: '95%' }} // Ensure content doesn't overflow screen
-          >
-            <ProductFormDialogContent
-              formState={formState}
-              dispatch={dispatch}
-              isNewCategory={isNewCategory}
-              setIsNewCategory={setIsNewCategory}
-              isNewProduct={isNewProduct}
-              setIsNewProduct={setIsNewProduct}
-              isLoading={isLoading}
-              formError={formError}
-              pickImage={pickImage}
-              profit={profit}
-              isFormValid={isFormValid}
-              formMode={formMode}
-              handleSubmit={handleProductSubmit} // Combined submit handler
-              setDialogOpen={setDialogOpen}
-              resetDialogState={resetDialogState}
-              isCategoryAccordionOpen={isCategoryAccordionOpen}
-              setIsCategoryAccordionOpen={setIsCategoryAccordionOpen}
-              categorySearch={categorySearch}
-              setCategorySearch={setCategorySearch}
-              filteredCategoriesFromStore={filteredCategoriesForFormAccordion} // Use store categories
-              onSelectCategory={handleSelectCategoryFromAccordion}
-              onAddNewCategory={handleAddNewCategoryMode} // For "Add New Category..." button
-              isProductAccordionOpen={isProductAccordionOpen}
-              setIsProductAccordionOpen={setIsProductAccordionOpen}
-              productSearch={productSearch}
-              setProductSearch={setProductSearch}
-              filteredProductNames={filteredProductNamesForAccordion}
-              onSelectProduct={handleSelectProductFromAccordion}
-              onAddNewProduct={handleAddNewProductMode} // For "Add New Product..." button
+        {storeError && !dialogOpen && (
+            <Text className="text-red-500 dark:text-red-400 text-center mb-4">{storeError}</Text>
+        )}
+
+        {selectedCategoryFilter && (
+            <View className="mb-3 flex-row justify-start items-center bg-blue-100 dark:bg-blue-900/50 p-2 rounded-md">
+            <Text className="text-sm text-blue-700 dark:text-blue-300 mr-2">Filtered by: {selectedCategoryFilter}</Text>
+            <ShadcnButton
+                variant="ghost"
+                size="sm"
+                onPress={() => setSelectedCategoryFilter(null)}
+                disabled={isLoading}
+                className="p-1 flex-row items-center"
+            >
+                <Text className="text-red-600 dark:text-red-500 text-xs mr-1">Clear</Text>
+                <X size={16} color="#EF4444" />
+            </ShadcnButton>
+            </View>
+        )}
+
+        <FlatList
+            data={filteredProductsDisplay}
+            keyExtractor={(item: Product) => item.id}
+            renderItem={renderMainProductItem}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            refreshControl={
+            <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#00b9f1', '#7200da']}
+                tintColor={Platform.OS === "ios" ? "#00b9f1" : undefined}
             />
-          </DialogContent>
-        </KeyboardAvoidingView>
-      </Dialog>
+            }
+            ListEmptyComponent={
+            <View className="flex-1 justify-center items-center mt-10">
+                <Text className="text-gray-500 dark:text-gray-400 text-lg">
+                {isLoading ? 'Loading products...' : 'No products found.'}
+                </Text>
+                {!isLoading && rawProducts.length === 0 && (
+                <Text className="text-gray-400 dark:text-gray-500 mt-2">Try adding a new product!</Text>
+                )}
+                {!isLoading && rawProducts.length > 0 && selectedCategoryFilter && filteredProductsDisplay.length === 0 && (
+                <Text className="text-gray-400 dark:text-gray-500 mt-2">No products in category "{selectedCategoryFilter}".</Text>
+                )}
+            </View>
+            }
+        />
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto">
-          <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700">
-            <DialogTitle>
-              <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Confirm Deletion</Text>
-            </DialogTitle>
-          </DialogHeader>
-          <View className="p-5">
-            <Text className="text-gray-700 dark:text-gray-300 text-base">
-              Are you sure you want to delete the product "{selectedProduct?.name}"? This action will mark the product as inactive and cannot be directly undone through the app.
-            </Text>
-          </View>
-          <DialogFooter className="p-5 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
-            <ShadcnButton
-              variant="outline"
-              onPress={() => setDeleteDialogOpen(false)}
-              disabled={isLoading}
-              className="h-11 px-5 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+        {/* Filter Dialog */}
+        <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+            <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto">
+            <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700 w-80">
+                <DialogTitle>
+                <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Filter by Category</Text>
+                </DialogTitle>
+            </DialogHeader>
+            <View className="p-5">
+                <TouchableOpacity
+                onPress={() => setIsFilterAccordionOpen(!isFilterAccordionOpen)}
+                className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
+                disabled={isLoading}
+                >
+                <Text className="text-base text-gray-900 dark:text-gray-100">
+                    {selectedCategoryFilter || 'All Categories'}
+                </Text>
+                {isFilterAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
+                </TouchableOpacity>
+                {isFilterAccordionOpen && (
+                <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
+                    <FlatList
+                    data={categoriesForFilter} // Use categories from store for filter
+                    keyExtractor={(item) => item}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity
+                        onPress={() => {
+                            setSelectedCategoryFilter(item === 'All Categories' ? null : item);
+                            setIsFilterAccordionOpen(false);
+                        }}
+                        className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
+                        >
+                        <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
+                        </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No categories found.</Text>}
+                    style={{ maxHeight: 150 }}
+                    nestedScrollEnabled
+                    />
+                </View>
+                )}
+            </View>
+            <DialogFooter className="p-5 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
+                <ShadcnButton
+                variant="outline"
+                onPress={() => {
+                    setSelectedCategoryFilter(null);
+                    setFilterDialogOpen(false);
+                }}
+                className="h-11 px-5 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                >
+                <Text className="text-gray-900 dark:text-gray-100">Clear</Text>
+                </ShadcnButton>
+                <ShadcnButton
+                onPress={() => setFilterDialogOpen(false)}
+                className="h-11 px-5 bg-[#00b9f1] dark:bg-[#00b9f1]"
+                >
+                <Text className="text-white">Apply</Text>
+                </ShadcnButton>
+            </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        {/* Add/Edit Product Dialog */}
+        <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) {
+                // Delay reset to allow animations to finish, reducing flicker
+                setTimeout(() => {
+                resetDialogState();
+                }, Platform.OS === 'web' ? 10 : 150); // Shorter delay for web
+            }
+            }}
+        >
+            <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0} // Adjust as needed
+            style={{ flex: 1 }}
             >
-              <Text className="text-gray-900 dark:text-gray-100">Cancel</Text>
-            </ShadcnButton>
-            <ShadcnButton
-              onPress={handleDeleteConfirm}
-              disabled={isLoading}
-              className="h-11 px-5 bg-red-600 dark:bg-red-700"
+            <DialogContent
+                className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
+                style={{ maxHeight: '95%' }} // Ensure content doesn't overflow screen
             >
-              <Text className="text-white">Delete</Text>
-            </ShadcnButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </View>
+                <ProductFormDialogContent
+                formState={formState}
+                dispatch={dispatch}
+                isNewCategory={isNewCategory}
+                setIsNewCategory={setIsNewCategory}
+                isNewProduct={isNewProduct}
+                setIsNewProduct={setIsNewProduct}
+                isLoading={isLoading}
+                formError={formError}
+                pickImage={pickImage}
+                profit={profit}
+                isFormValid={isFormValid}
+                formMode={formMode}
+                handleSubmit={handleProductSubmit} // Combined submit handler
+                setDialogOpen={setDialogOpen}
+                resetDialogState={resetDialogState}
+                isCategoryAccordionOpen={isCategoryAccordionOpen}
+                setIsCategoryAccordionOpen={setIsCategoryAccordionOpen}
+                categorySearch={categorySearch}
+                setCategorySearch={setCategorySearch}
+                filteredCategoriesFromStore={filteredCategoriesForFormAccordion} // Use store categories
+                onSelectCategory={handleSelectCategoryFromAccordion}
+                onAddNewCategory={handleAddNewCategoryMode} // For "Add New Category..." button
+                isProductAccordionOpen={isProductAccordionOpen}
+                setIsProductAccordionOpen={setIsProductAccordionOpen}
+                productSearch={productSearch}
+                setProductSearch={setProductSearch}
+                filteredProductNames={filteredProductNamesForAccordion}
+                onSelectProduct={handleSelectProductFromAccordion}
+                onAddNewProduct={handleAddNewProductMode} // For "Add New Product..." button
+                />
+            </DialogContent>
+            </KeyboardAvoidingView>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto">
+            <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700">
+                <DialogTitle>
+                <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Confirm Deletion</Text>
+                </DialogTitle>
+            </DialogHeader>
+            <View className="p-5">
+                <Text className="text-gray-700 dark:text-gray-300 text-base">
+                Are you sure you want to delete the product "{selectedProduct?.name}"? This action will mark the product as inactive and cannot be directly undone through the app.
+                </Text>
+            </View>
+            <DialogFooter className="p-5 flex-row justify-end gap-x-3 border-t border-gray-200 dark:border-gray-700">
+                <ShadcnButton
+                variant="outline"
+                onPress={() => setDeleteDialogOpen(false)}
+                disabled={isLoading}
+                className="h-11 px-5 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                >
+                <Text className="text-gray-900 dark:text-gray-100">Cancel</Text>
+                </ShadcnButton>
+                <ShadcnButton
+                onPress={handleDeleteConfirm}
+                disabled={isLoading}
+                className="h-11 px-5 bg-red-600 dark:bg-red-700"
+                >
+                <Text className="text-white">Delete</Text>
+                </ShadcnButton>
+            </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        </View>
+    </LinearGradient>
   );
 };
 
