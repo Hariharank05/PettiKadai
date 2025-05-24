@@ -45,7 +45,7 @@ interface UserProfileData {
   profileImage?: string | null;
 }
 
-// DisplayField component adapted from StoreSettingsScreen
+// DisplayField component
 const DisplayField = ({ icon: Icon, label, value, placeholder, iconColor }: {
   icon: any;
   label: string;
@@ -66,6 +66,114 @@ const DisplayField = ({ icon: Icon, label, value, placeholder, iconColor }: {
         </View>
       </View>
     </View>
+  );
+};
+
+// New EditProfileModal component
+const EditProfileModal = ({
+  visible,
+  onClose,
+  onSubmit,
+  isLoading,
+  formData,
+  setFormData,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  isLoading: boolean;
+  formData: UserProfileData;
+  setFormData: React.Dispatch<React.SetStateAction<UserProfileData>>;
+}) => {
+  const { isDarkColorScheme } = useColorScheme();
+  const currentRNColorScheme = rnColorScheme();
+  const COLORS = getColors(currentRNColorScheme || 'light');
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 bg-black/50 justify-center items-center px-4">
+        <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+          <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+            <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Edit Profile</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Trash2 size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+            </TouchableOpacity>
+          </View>
+          <View className="p-6">
+            <View className="mb-4">
+              <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Full Name *</Text>
+              <View className="flex-row items-center">
+                <UserCircle size={20} color="#4F46E5" />
+                <Input
+                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                  value={formData.name}
+                  onChangeText={(text) => setFormData({ ...formData, name: text })}
+                  placeholder="Your Full Name"
+                  placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                />
+              </View>
+            </View>
+            <View className="mb-4">
+              <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Email</Text>
+              <View className="flex-row items-center">
+                <Mail size={20} color="#DC2626" />
+                <Input
+                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                  value={formData.email || ''}
+                  onChangeText={(text) => setFormData({ ...formData, email: text })}
+                  placeholder="Your Email"
+                  placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+            <View className="mb-4">
+              <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Phone</Text>
+              <View className="flex-row items-center">
+                <Phone size={20} color="#EA580C" />
+                <Input
+                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
+                  value={formData.phone || ''}
+                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                  placeholder="Your Phone Number"
+                  placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+            <View className="flex-row gap-3 mt-2">
+              {/* Cancel Button */}
+              <TouchableOpacity
+                onPress={onClose}
+                className="flex-1 py-3 rounded-xl bg-gray-200 dark:bg-gray-600"
+              >
+                <Text className="font-semibold text-center text-gray-700 dark:text-gray-300">Cancel</Text>
+              </TouchableOpacity>
+
+              {/* Save Button */}
+              <TouchableOpacity
+                onPress={onSubmit}
+                disabled={isLoading}
+                className={`flex-1 py-3 rounded-xl flex-row justify-center items-center ${isLoading ? 'bg-purple-800' : 'bg-purple-900'}`}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text className="font-semibold text-white text-center">Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
@@ -351,134 +459,77 @@ export default function ProfileScreen({ navigation }: Props) {
           {/* Profile Section */}
           <View className="mb-6">
             <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Profile</Text>
-            <TouchableOpacity onPress={handleProfileImagePress} className="relative w-20 h-20 mb-4">
-              <View className="w-full h-full rounded-full overflow-hidden justify-center items-center bg-gray-200 dark:bg-gray-800">
-                {isLoading && !profileImage ? (
-                  <ActivityIndicator size="small" color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
-                ) : profileImage ? (
-                  <Image
-                    source={{ uri: profileImage }}
-                    className="w-full h-full"
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <UserCircle size={80} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
-                )}
+
+            <View className="flex-row items-center">
+              {/* Profile Image */}
+              <TouchableOpacity onPress={handleProfileImagePress} className="relative w-20 h-20 mr-4">
+                <View className="w-full h-full rounded-full overflow-hidden justify-center items-center bg-gray-200 dark:bg-gray-800">
+                  {isLoading && !profileImage ? (
+                    <ActivityIndicator size="small" color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                  ) : profileImage ? (
+                    <Image
+                      source={{ uri: profileImage }}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <UserCircle size={80} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                  )}
+                </View>
+
+                {/* Edit Icon */}
+                <View
+                  className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-white justify-center items-center border-2"
+                  style={{ borderColor: isDarkColorScheme ? '#000000' : '#FFFFFF' }}
+                >
+                  <EditIcon size={12} color="purple" />
+                </View>
+              </TouchableOpacity>
+
+              {/* Name and Account Info */}
+              <View className="flex-1">
+                <Text className={`text-xl font-semibold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                  {formData.name}
+                </Text>
+                <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}
+                </Text>
               </View>
-              <View className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-gray-500/70 justify-center items-center border-2"
-                style={{ borderColor: isDarkColorScheme ? '#000000' : '#FFFFFF' }}>
-                <EditIcon size={12} color="white" />
-              </View>
-            </TouchableOpacity>
-            <Text className={`text-xl font-semibold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>{formData.name}</Text>
-            <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>
-              Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}
-            </Text>
+            </View>
           </View>
 
           {/* Personal Information */}
           <View className="mb-6">
             <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Personal Information</Text>
-            {!isEditingProfile ? (
-              <>
-                <DisplayField
-                  icon={UserCircle}
-                  label="Full Name"
-                  value={formData.name}
-                  placeholder="Not provided"
-                  iconColor="#4F46E5"
-                />
-                <DisplayField
-                  icon={Mail}
-                  label="Email"
-                  value={formData.email || ''}
-                  placeholder="Not provided"
-                  iconColor="#DC2626"
-                />
-                <DisplayField
-                  icon={Phone}
-                  label="Phone"
-                  value={formData.phone || ''}
-                  placeholder="Not provided"
-                  iconColor="#EA580C"
-                />
-                <Button
-                  onPress={() => setIsEditingProfile(true)}
-                  className="flex-row justify-center items-center py-4 rounded-xl mt-4"
-                  style={{ backgroundColor: COLORS.primary }}
-                >
-                  <EditIcon size={20} color="white" />
-                  <Text className="ml-2 font-semibold text-white">Edit Profile</Text>
-                </Button>
-              </>
-            ) : (
-              <View className="bg-transparent rounded-2xl p-6">
-                <View className="mb-4">
-                  <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Full Name *</Text>
-                  <View className="flex-row items-center">
-                    <UserCircle size={20} color="#4F46E5" />
-                    <Input
-                      className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
-                      value={formData.name}
-                      onChangeText={(text) => setFormData({ ...formData, name: text })}
-                      placeholder="Your Full Name"
-                      placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
-                    />
-                  </View>
-                </View>
-                <View className="mb-4">
-                  <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Email</Text>
-                  <View className="flex-row items-center">
-                    <Mail size={20} color="#DC2626" />
-                    <Input
-                      className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
-                      value={formData.email || ''}
-                      onChangeText={(text) => setFormData({ ...formData, email: text })}
-                      placeholder="Your Email"
-                      placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
-                  </View>
-                </View>
-                <View className="mb-4">
-                  <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Phone</Text>
-                  <View className="flex-row items-center">
-                    <Phone size={20} color="#EA580C" />
-                    <Input
-                      className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
-                      value={formData.phone || ''}
-                      onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                      placeholder="Your Phone Number"
-                      placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
-                      keyboardType="phone-pad"
-                    />
-                  </View>
-                </View>
-                <View className="flex-row gap-3">
-                  <Button
-                    onPress={() => {
-                      setIsEditingProfile(false);
-                      fetchUserData();
-                    }}
-                    className={`flex-1 py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
-                  >
-                    <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
-                  </Button>
-                  <Button
-                    onPress={handleUpdateProfile}
-                    disabled={isLoading}
-                    className={`flex-1 py-3 rounded-xl flex-row justify-center items-center ${isLoading ? (isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-300') : (isDarkColorScheme ? 'bg-blue-600' : 'bg-blue-500')}`}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color="white" />
-                    ) : (
-                      <Text className="font-semibold text-white text-center">Save Changes</Text>
-                    )}
-                  </Button>
-                </View>
-              </View>
-            )}
+            <DisplayField
+              icon={UserCircle}
+              label="Full Name"
+              value={formData.name}
+              placeholder="Not provided"
+              iconColor="#4F46E5"
+            />
+            <DisplayField
+              icon={Mail}
+              label="Email"
+              value={formData.email || ''}
+              placeholder="Not provided"
+              iconColor="#DC2626"
+            />
+            <DisplayField
+              icon={Phone}
+              label="Phone"
+              value={formData.phone || ''}
+              placeholder="Not provided"
+              iconColor="#EA580C"
+            />
+            <Button
+              onPress={() => setIsEditingProfile(true)}
+              className="flex-row justify-center items-center py-4 rounded-xl mt-4"
+              style={{ backgroundColor: COLORS.primary }}
+            >
+              <EditIcon size={20} color="white" />
+              <Text className="ml-2 font-semibold text-white">Edit Profile</Text>
+            </Button>
           </View>
 
           {/* Security */}
@@ -583,6 +634,18 @@ export default function ProfileScreen({ navigation }: Props) {
             </View>
           </View>
         </Modal>
+
+        <EditProfileModal
+          visible={isEditingProfile}
+          onClose={() => {
+            setIsEditingProfile(false);
+            fetchUserData();
+          }}
+          onSubmit={handleUpdateProfile}
+          isLoading={isLoading}
+          formData={formData}
+          setFormData={setFormData}
+        />
 
         <ChangePasswordModal
           visible={isChangePasswordModalVisible}

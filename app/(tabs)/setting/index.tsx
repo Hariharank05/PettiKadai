@@ -409,7 +409,7 @@ export default function SettingsScreen() {
         <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
             <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                 {/* Profile Section */}
-                <TouchableOpacity style={styles.profileSection} onPress={() => router.push('/(tabs)/setting/profile')}>
+             <View className="mb-4 flex-row items-center mt-2">
                     <View style={styles.profileAvatar}>
                         {userProfileImage ? (
                             <Image source={{ uri: userProfileImage }} style={styles.profileAvatarImage} />
@@ -421,8 +421,8 @@ export default function SettingsScreen() {
                         <Text style={styles.profileName}>{userName || 'Store Owner'}</Text>
                         <Text style={styles.profileSubtitle}>Show profile</Text>
                     </View>
-                    <ChevronRight size={22} color={isDarkColorScheme ? '#5A5A5E' : '#C7C7CC'} />
-                </TouchableOpacity>
+                   
+                </View>
 
                 {/* General Section */}
                 <View className="mb-6">
