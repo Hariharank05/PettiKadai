@@ -40,7 +40,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 // Define the color palette based on theme
 export const getColors = (colorScheme: 'light' | 'dark') => ({
-  primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
+  primary: colorScheme === 'dark' ? '#a855f7' : '#a855f7',
   secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
   accent: '#f9c00c',
   danger: colorScheme === 'dark' ? '#ff4d4d' : '#f9320c',
@@ -716,10 +716,10 @@ export default function SalesScreen() {
                   <Button
                     variant="outline"
                     className="border"
-                    style={{ backgroundColor: `${COLORS.secondary}1A` }}
+                    style={{ backgroundColor: `${COLORS.primary}` }}
                     onPress={() => router.push('/(tabs)/inventory/products')}
                   >
-                    <Text className="font-semibold" style={{ color: COLORS.gray }}>Add Your First Product</Text>
+                    <Text className="font-semibold" style={{ color: COLORS.white }}>Add Your First Product</Text>
                   </Button>
                 </View>
               )}
