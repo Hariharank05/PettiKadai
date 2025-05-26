@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -6,7 +6,6 @@ import {
   Alert,
   Image,
   FlatList,
-  ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -46,6 +45,7 @@ import { Separator } from '~/components/ui/separator';
 import { getColors } from '~/app/(tabs)/sale';
 import { useColorScheme as rnColorScheme } from 'react-native';
 import { useAuthStore } from '~/lib/stores/authStore';
+import debounce from 'lodash/debounce';
 
 interface CartItem {
   id: string;
@@ -65,6 +65,73 @@ const PAYMENT_METHODS = [
   { label: 'Credit ', value: 'CREDIT_KHATA' },
   { label: 'Other', value: 'OTHER' },
 ];
+
+interface DebouncedInputProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  keyboardType?: 'default' | 'phone-pad' | 'email-address';
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  className?: string;
+  placeholderTextColor?: string;
+  style?: any;
+}
+
+const DebouncedInput = React.memo(
+  ({
+    value,
+    onChangeText,
+    placeholder,
+    keyboardType = 'default',
+    autoCapitalize = 'sentences',
+    className = '',
+    placeholderTextColor,
+    style,
+  }: DebouncedInputProps) => {
+    const [localValue, setLocalValue] = useState(value);
+
+    const debouncedUpdate = useMemo(
+      () => debounce(onChangeText, 300),
+      [onChangeText]
+    );
+
+    useEffect(() => {
+      if (localValue !== value) {
+        setLocalValue(value);
+      }
+    }, [value]);
+
+    const handleTextChange = (text: string) => {
+      setLocalValue(text);
+      debouncedUpdate(text);
+    };
+
+    return (
+      <Input
+        value={localValue}
+        onChangeText={handleTextChange}
+        placeholder={placeholder}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        className={`h-11 border border-gray-300 dark:border-gray-600 ${className}`}
+        style={style}
+        placeholderTextColor={placeholderTextColor}
+      />
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.value === nextProps.value &&
+      prevProps.placeholder === nextProps.placeholder &&
+      prevProps.keyboardType === nextProps.keyboardType &&
+      prevProps.autoCapitalize === nextProps.autoCapitalize &&
+      prevProps.className === nextProps.className &&
+      prevProps.placeholderTextColor === nextProps.placeholderTextColor &&
+      prevProps.style === nextProps.style
+    );
+  }
+);
+DebouncedInput.displayName = 'DebouncedInput';
 
 export default function CartDialog() {
   const router = useRouter();
@@ -257,10 +324,10 @@ export default function CartDialog() {
           cartItems: saleCartItems,
           customer: selectedCustomer
             ? {
-                name: selectedCustomer.name,
-                phone: selectedCustomer.phone,
-                email: selectedCustomer.email,
-              }
+              name: selectedCustomer.name,
+              phone: selectedCustomer.phone,
+              email: selectedCustomer.email,
+            }
             : null,
           paymentMethod: selectedPaymentMethod,
         };
@@ -352,7 +419,7 @@ export default function CartDialog() {
                   resizeMode="cover"
                 />
               ) : (
-                <View className="w-12 h-12 rounded-lg-flex- mr-3 items-center justify-center">
+                <View className="w-12 h-12 rounded-lg mr-3 items-center justify-center">
                   <Package size={24} color={COLORS.primary} />
                 </View>
               )}
@@ -405,7 +472,7 @@ export default function CartDialog() {
                   size={18}
                   color={
                     (products.find((p) => p.id === item.id)?.quantity ?? 0) <=
-                    item.quantityInCart
+                      item.quantityInCart
                       ? COLORS.gray
                       : COLORS.yellow
                   }
@@ -445,7 +512,7 @@ export default function CartDialog() {
       )}
       <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
         <DialogContent
-          className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-10/12 max-w-lg mx-auto "
+          className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-10/12 max-w-lg mx-auto"
           style={{ maxHeight: '90%', minHeight: 640 }}
         >
           <DialogHeader className="p-6 pb-1 border-b border-gray-200 dark:border-gray-700">
@@ -518,16 +585,15 @@ export default function CartDialog() {
                 >
                   Items in Cart:
                 </UIText>
-                <View style={{ flex: 1, minHeight: cartItems.length === 0 ? 100 : 80, maxHeight: 400 }}>
-                  <FlatList
-                    data={cartItems}
-                    renderItem={renderCartItem}
-                    keyExtractor={(item) => item.id}
-                    showsVerticalScrollIndicator={true}
-                    contentContainerStyle={{ paddingBottom: 16, flexGrow: 1 }}
-                    key={cartItems.length}
-                  />
-                </View>
+                <FlatList
+                  data={cartItems}
+                  renderItem={renderCartItem}
+                  keyExtractor={(item) => item.id}
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={{ paddingBottom: 16, flexGrow: 1 }}
+                  style={{ flex: 1, maxHeight: 400 }}
+                  key={cartItems.length}
+                />
                 <View style={{ paddingTop: 2, paddingHorizontal: 12 }}>
                   <View className="mb-3">
                     <UIText
@@ -671,12 +737,10 @@ export default function CartDialog() {
                   selectedPaymentMethod}
               </UIText>
             </UIText>
-            <ScrollView
-              style={{ flexGrow: 1, maxHeight: 200 }}
-              showsVerticalScrollIndicator={true}
-            >
-              {cartItems.map((item) => (
-                <View key={item.id} className="flex-row justify-between py-1">
+            <FlatList
+              data={cartItems}
+              renderItem={({ item }) => (
+                <View className="flex-row justify-between py-1">
                   <UIText
                     className="text-sm font-medium"
                     numberOfLines={1}
@@ -693,8 +757,12 @@ export default function CartDialog() {
                     ₹{(item.sellingPrice * item.quantityInCart).toFixed(2)}
                   </UIText>
                 </View>
-              ))}
-            </ScrollView>
+              )}
+              keyExtractor={(item) => item.id}
+              style={{ flexGrow: 1, maxHeight: 200 }}
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={{ paddingBottom: 8 }}
+            />
             <Separator className="my-2" style={{ backgroundColor: COLORS.gray }} />
             <View className="flex-row justify-between py-1">
               <UIText className="text-lg font-bold" style={{ color: COLORS.dark }}>
@@ -805,32 +873,32 @@ export default function CartDialog() {
           <View className="p-4 h-80 w-80">
             {isAddingNewCustomer ? (
               <View>
-                <Input
+                <DebouncedInput
                   placeholder="Customer Name*"
                   value={newCustomerForm.name}
                   onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, name: text }))}
-                  className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
                   style={{ backgroundColor: COLORS.white, color: COLORS.dark }}
                   placeholderTextColor={COLORS.gray}
+                  className="mb-3"
                 />
-                <Input
+                <DebouncedInput
                   placeholder="Phone Number*"
                   value={newCustomerForm.phone}
                   onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, phone: text }))}
                   keyboardType="phone-pad"
-                  className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
                   style={{ backgroundColor: COLORS.white, color: COLORS.dark }}
                   placeholderTextColor={COLORS.gray}
+                  className="mb-3"
                 />
-                <Input
+                <DebouncedInput
                   placeholder="Email (Optional)"
                   value={newCustomerForm.email}
                   onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, email: text }))}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  className="mb-4 h-11 border border-gray-300 dark:border-gray-600"
                   style={{ backgroundColor: COLORS.white, color: COLORS.dark }}
                   placeholderTextColor={COLORS.gray}
+                  className="mb-4"
                 />
                 <View className="flex-row justify-end gap-x-2">
                   <Button variant="ghost" onPress={() => setIsAddingNewCustomer(false)}>
@@ -839,7 +907,7 @@ export default function CartDialog() {
                   <Button
                     onPress={handleAddNewCustomer}
                     disabled={isProcessing}
-                    style={{ backgroundColor: COLORS.secondary }}
+                    style={{ backgroundColor: COLORS.primary}}
                   >
                     {isProcessing ? (
                       <ActivityIndicator color={COLORS.white} size="small" />
@@ -856,7 +924,7 @@ export default function CartDialog() {
                   style={{ backgroundColor: COLORS.white }}
                 >
                   <Search size={18} color={COLORS.gray} />
-                  <Input
+                  <DebouncedInput
                     placeholder="Search by name or phone..."
                     value={customerSearchQuery}
                     onChangeText={setCustomerSearchQuery}
@@ -890,6 +958,8 @@ export default function CartDialog() {
                       <UIText style={{ color: COLORS.gray }}>No customers found.</UIText>
                     </View>
                   }
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={{ paddingBottom: 16, flexGrow: 1 }}
                   style={{ flex: 1 }}
                 />
                 <Button
@@ -898,7 +968,7 @@ export default function CartDialog() {
                   style={{ backgroundColor: COLORS.primary }}
                   onPress={() => setIsAddingNewCustomer(true)}
                 >
-                  <View className="text-center justify-between flex-row items-center">
+                  <View className="flex-row items-center">
                     <UserPlus size={18} color={COLORS.white} className="mr-2" />
                     <UIText style={{ color: COLORS.white }}>Add New Customer</UIText>
                   </View>
