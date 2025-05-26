@@ -1,3 +1,4 @@
+// ReportsScreen.tsx
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Platform, Dimensions, useColorScheme as rnColorScheme } from 'react-native';
 import * as FileSystem from 'expo-file-system';
@@ -5,14 +6,15 @@ import * as Sharing from 'expo-sharing';
 import { Text } from '~/components/ui/text';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { BarChart4, Download, Trash2 } from 'lucide-react-native';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns'; // Ensure subDays is imported
 import { useReportStore } from '~/lib/stores/reportStore';
 import { ReportFilters } from '~/components/reports/ReportFilters';
 import { ReportCard } from '~/components/reports/ReportCard';
 import { generatePDFReport } from '~/lib/utils/pdfUtils';
-import { getCategoryName, getProductName } from '~/lib/db/reportQueries';
+// No longer importing getCategoryName, getProductName from reportQueries
 import { PieChart, BarChart } from 'react-native-chart-kit';
 import { useProductStore } from '~/lib/stores/productStore';
+import { useCategoryStore } from '~/lib/stores/categoryStore'; // Import category store
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Define the color palette based on theme
@@ -59,12 +61,22 @@ export default function ReportsScreen() {
   } = useReportStore();
 
   const { products, fetchProducts } = useProductStore();
+  const { categories: storeCategories, fetchCategories: fetchStoreCategoriesHook } = useCategoryStore(); // For dynamic category names
   const currencySymbol = '₹';
   const [isExporting, setIsExporting] = useState(false);
   const screenWidth = Dimensions.get('window').width;
 
   const currentRNColorScheme = rnColorScheme();
   const COLORS = getColors(currentRNColorScheme || 'light');
+
+  // Dynamic helper functions using stores
+  const getCategoryNameFromStore = useCallback((categoryId: string): string | undefined => {
+    return storeCategories.find(c => c.id === categoryId)?.name;
+  }, [storeCategories]);
+
+  const getProductNameFromStore = useCallback((productId: string): string | undefined => {
+    return products.find(p => p.id === productId)?.name;
+  }, [products]);
 
   // Map products to InventoryDataItem format
   const validatedInventoryData = useMemo(() => {
@@ -80,10 +92,10 @@ export default function ReportsScreen() {
         id: item.id,
         name: item.name,
         quantity: item.quantity,
-        categoryId: item.category || '',
-        categoryName: item.category ? getCategoryName(item.category) ?? item.category : item.category ?? '',
+        categoryId: item.category || '', // Product.category should be categoryId
+        categoryName: item.category ? getCategoryNameFromStore(item.category) ?? item.category : '',
       }));
-  }, [products]);
+  }, [products, getCategoryNameFromStore]);
 
   // Validate salesData
   const validatedSalesData = useMemo(() => {
@@ -112,29 +124,32 @@ export default function ReportsScreen() {
     fetchMetrics();
     fetchProductPerformance();
     fetchSalesData();
+    fetchStoreCategoriesHook(); // Ensure categories are loaded for helpers
     fetchProducts(); // Fetch products for inventory
     fetchReports();
-  }, [filters, fetchMetrics, fetchProductPerformance, fetchSalesData, fetchProducts, fetchReports]);
+  }, [filters, fetchMetrics, fetchProductPerformance, fetchSalesData, fetchProducts, fetchReports, fetchStoreCategoriesHook]);
 
   // Filter summary for PDF export
   const getCurrentFilterSummary = (): Record<string, string | null> => {
     const summary: Record<string, string | null> = {};
-    if (filters.dateRange) {
-      if (/^\d+$/.test(filters.dateRange) && !filters.dateRange.includes(',')) {
-        summary.DateRange = `Last ${filters.dateRange} days`;
-      } else if (filters.dateRange.includes(',')) {
-        const [start, end] = filters.dateRange.split(',');
-        summary.DateRange = `${format(new Date(start), 'MMM d')} - ${format(new Date(end), 'MMM d, yyyy')}`;
-      } else {
-        summary.DateRange = format(new Date(filters.dateRange), 'MMM d, yyyy');
-      }
+    
+    if (filters.fromDate && filters.toDate) {
+      summary.DateRange = `${format(filters.fromDate, 'MMM d, yyyy')} - ${format(filters.toDate, 'MMM d, yyyy')}`;
+    } else if (filters.fromDate) {
+      summary.DateRange = `From ${format(filters.fromDate, 'MMM d, yyyy')}`;
+    } else if (filters.toDate) {
+      summary.DateRange = `Until ${format(filters.toDate, 'MMM d, yyyy')}`;
     } else {
-      summary.DateRange = 'All Time';
+      // If both are null, reflect the initial store state (e.g., last 30 days)
+      const defaultFrom = subDays(new Date(), 29);
+      const defaultTo = new Date();
+      summary.DateRange = `${format(defaultFrom, 'MMM d, yyyy')} - ${format(defaultTo, 'MMM d, yyyy')} (Default)`;
     }
+
     if (filters.paymentType) summary.PaymentType = filters.paymentType;
-    if (filters.productId) summary.Product = getProductName(filters, filters.productId) || filters.productId;
-    if (filters.category) summary.Category = getCategoryName(filters.category) ?? filters.category;
-    else summary.Category = null;
+    if (filters.productId) summary.Product = getProductNameFromStore(filters.productId) || filters.productId;
+    if (filters.category) summary.Category = getCategoryNameFromStore(filters.category) ?? filters.category;
+    else summary.Category = null; // Explicitly set to null if no category filter
     return summary;
   };
 
@@ -214,7 +229,7 @@ export default function ReportsScreen() {
         setIsExporting(false);
       }
     },
-    [isExporting]
+    [isExporting, getCurrentFilterSummary]
   );
 
   // Handle report deletion
@@ -350,7 +365,7 @@ export default function ReportsScreen() {
                       labels: validatedSalesData.map((item, index) =>
                         item.date ? format(new Date(item.date), 'MM/dd') : `Item ${index + 1}`
                       ),
-                      datasets: [{ data: validatedSalesData.map((item) => item.subtotal / 1000) }],
+                      datasets: [{ data: validatedSalesData.map((item) => item.subtotal / 1000) }], // Assuming subtotal is in cents or smallest unit
                     }}
                     width={screenWidth - 48} // Adjusted for padding
                     height={250}
@@ -366,7 +381,7 @@ export default function ReportsScreen() {
                       color: (opacity = 1) => `rgba(${parseInt(COLORS.primary.slice(1,3),16)}, ${parseInt(COLORS.primary.slice(3,5),16)}, ${parseInt(COLORS.primary.slice(5,7),16)}, ${opacity})`,
                       labelColor: (opacity = 1) => `rgba(${parseInt(COLORS.dark.slice(1,3),16)}, ${parseInt(COLORS.dark.slice(3,5),16)}, ${parseInt(COLORS.dark.slice(5,7),16)}, ${opacity})`,
                       style: { borderRadius: 16 },
-                      propsForLabels: { fontSize: 10, rotation: -45, translateY: 20 },
+                      propsForLabels: { fontSize: 10, rotation: -45, translateY: 20, translateX: -5 }, // Adjusted label props
                     }}
                     style={{ marginVertical: 8, borderRadius: 16 }}
                   />

@@ -14,24 +14,28 @@ import {
   type Category,
   getCategories as dbGetCategories,
 } from '~/lib/db/reportQueries'; // Adjust the import path as necessary
+import { useAuthStore } from './authStore'; // Import authStore
+import { format, subDays } from 'date-fns'; // Import for date formatting
 
 export interface ReportFilterState {
-  dateRange: string | null; // e.g., '7', '30', 'YYYY-MM-DD,YYYY-MM-DD'
+  fromDate: Date | null;    // Changed from dateRange
+  toDate: Date | null;      // Changed from dateRange
   paymentType: string | null;
   productId: string | null;
   reportType: 'ALL' | 'SALES' | 'INVENTORY' | 'PRODUCT_PERFORMANCE';
-  category: string | null; // New: e.g., 'electronics', 'clothing' or category ID
+  category: string | null;
 }
 
 interface ReportStoreState {
   reports: ReportListItem[];
   metrics: MetricItem[];
   productPerformance: ProductPerformanceItem[];
-  salesData: SalesDataItem[]; // Added to store for direct access
-  inventoryData: InventoryDataItem[]; // Added to store for direct access
-  categories: Category[]; // For filter dropdown
+  salesData: SalesDataItem[];
+  inventoryData: InventoryDataItem[];
+  categories: Category[];
   filters: ReportFilterState;
   isLoading: boolean;
+  error: string | null;
   fetchReports: () => Promise<void>;
   fetchMetrics: () => Promise<void>;
   fetchProductPerformance: () => Promise<void>;
@@ -39,11 +43,12 @@ interface ReportStoreState {
   fetchInventoryData: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   setFilters: (newFilters: Partial<ReportFilterState>) => void;
-  deleteReport: (reportId: string) => Promise<void>; // For ReportCard delete
+  deleteReport: (reportId: string) => Promise<void>;
 }
 
 const initialFilters: ReportFilterState = {
-  dateRange: '30', // Default to last 30 days
+  fromDate: subDays(new Date(), 29), // Default: 30 days ago (inclusive of today makes it 30 days)
+  toDate: new Date(),                // Default: Today
   paymentType: null,
   productId: null,
   reportType: 'ALL',
@@ -59,122 +64,123 @@ export const useReportStore = create<ReportStoreState>((set, get) => ({
   categories: [],
   filters: initialFilters,
   isLoading: false,
+  error: null,
 
   setFilters: (newFilters) => {
     set((state) => ({
       filters: { ...state.filters, ...newFilters },
-      // Reset data when filters change significantly (optional, but good for consistency)
-      // salesData: [],
-      // inventoryData: [],
-      // productPerformance: [],
-      // metrics: [],
     }));
-    // Trigger fetches after setting filters
-    // get().fetchSalesData();
-    // get().fetchInventoryData();
-    // get().fetchProductPerformance();
-    // get().fetchMetrics();
-    // get().fetchReports(); // If generated reports depend on filters
   },
 
   fetchCategories: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
+    const userId = useAuthStore.getState().userId;
+    if (!userId) {
+      set({ isLoading: false, error: "User not authenticated.", categories: [] }); return;
+    }
     try {
-      const categories = await dbGetCategories();
+      const categories = await dbGetCategories(userId);
       set({ categories, isLoading: false });
     } catch (error) {
       console.error("Error fetching categories:", error);
-      set({ isLoading: false, categories: [] });
+      set({ isLoading: false, categories: [], error: error instanceof Error ? error.message : "Failed to fetch categories" });
     }
   },
 
   fetchReports: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
+    const userId = useAuthStore.getState().userId;
+    if (!userId) {
+      set({ isLoading: false, error: "User not authenticated.", reports: [] }); return;
+    }
     try {
-      // In a real app, filters might influence which "saved" reports are fetched
-      const reports = await dbGetGeneratedReports();
+      const reports = await dbGetGeneratedReports(userId);
       set({ reports, isLoading: false });
     } catch (error) {
       console.error("Error fetching reports:", error);
-      set({ isLoading: false, reports: [] });
+      set({ isLoading: false, reports: [], error: error instanceof Error ? error.message : "Failed to fetch reports" });
     }
   },
 
   fetchMetrics: async () => {
-    set({ isLoading: true });
-    const { dateRange, paymentType, productId, category } = get().filters;
-    const fromDate = dateRange && /^\d+$/.test(dateRange) && !dateRange.includes(',')
-      ? new Date(Date.now() - parseInt(dateRange) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      : dateRange && dateRange.includes(',')
-      ? dateRange.split(',')[0]
-      : dateRange || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // Default to last 30 days if invalid
+    set({ isLoading: true, error: null });
+    const { fromDate: filterFromDate, toDate: filterToDate, paymentType, productId, category } = get().filters;
+    const userId = useAuthStore.getState().userId;
+    if (!userId) {
+      set({ isLoading: false, error: "User not authenticated.", metrics: [] }); return;
+    }
+
+    const finalFromDate = filterFromDate ? format(filterFromDate, 'yyyy-MM-dd') : format(subDays(new Date(), 29), 'yyyy-MM-dd');
+    const finalToDate = filterToDate ? format(filterToDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
     try {
-      const metrics = await dbGetMetricsData(fromDate, paymentType, productId, category);
+      const metrics = await dbGetMetricsData(userId, finalFromDate, finalToDate, paymentType, productId, category);
       set({ metrics, isLoading: false });
     } catch (error) {
       console.error("Error fetching metrics:", error);
-      set({ isLoading: false, metrics: [] });
+      set({ isLoading: false, metrics: [], error: error instanceof Error ? error.message : "Failed to fetch metrics" });
     }
   },
 
   fetchProductPerformance: async () => {
-    set({ isLoading: true });
-    const { productId, category, dateRange } = get().filters;
-     const fromDate = dateRange && /^\d+$/.test(dateRange) && !dateRange.includes(',')
-      ? new Date(Date.now() - parseInt(dateRange) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      : dateRange && dateRange.includes(',')
-      ? dateRange.split(',')[0]
-      : dateRange || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const toDate = dateRange && dateRange.includes(',') ? dateRange.split(',')[1] : new Date().toISOString().split('T')[0];
+    set({ isLoading: true, error: null });
+    const { productId, category, fromDate: filterFromDate, toDate: filterToDate } = get().filters;
+    const userId = useAuthStore.getState().userId;
+    if (!userId) {
+      set({ isLoading: false, error: "User not authenticated.", productPerformance: [] }); return;
+    }
 
+    const finalFromDate = filterFromDate ? format(filterFromDate, 'yyyy-MM-dd') : format(subDays(new Date(), 29), 'yyyy-MM-dd');
+    const finalToDate = filterToDate ? format(filterToDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
     try {
-      const performanceData = await dbGetProductPerformanceData(productId, category, fromDate, toDate);
+      const performanceData = await dbGetProductPerformanceData(userId, productId, category, finalFromDate, finalToDate);
       set({ productPerformance: performanceData, isLoading: false });
     } catch (error) {
       console.error("Error fetching product performance:", error);
-      set({ isLoading: false, productPerformance: [] });
+      set({ isLoading: false, productPerformance: [], error: error instanceof Error ? error.message : "Failed to fetch product performance" });
     }
   },
 
   fetchSalesData: async () => {
-    set({ isLoading: true });
-    const { dateRange, paymentType, productId, category } = get().filters;
-    const fromDate = dateRange && /^\d+$/.test(dateRange) && !dateRange.includes(',')
-      ? new Date(Date.now() - parseInt(dateRange) * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      : dateRange && dateRange.includes(',')
-      ? dateRange.split(',')[0]
-      : dateRange || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const toDate = dateRange && dateRange.includes(',') ? dateRange.split(',')[1] : new Date().toISOString().split('T')[0];
+    set({ isLoading: true, error: null });
+    const { fromDate: filterFromDate, toDate: filterToDate, paymentType, productId, category } = get().filters;
+    const userId = useAuthStore.getState().userId;
+    if (!userId) {
+      set({ isLoading: false, error: "User not authenticated.", salesData: [] }); return;
+    }
 
+    const finalFromDate = filterFromDate ? format(filterFromDate, 'yyyy-MM-dd') : format(subDays(new Date(), 29), 'yyyy-MM-dd');
+    const finalToDate = filterToDate ? format(filterToDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
     try {
-      const data = await dbGetSalesData(fromDate, toDate, paymentType, productId, category);
+      const data = await dbGetSalesData(userId, finalFromDate, finalToDate, paymentType, productId, category);
       set({ salesData: data, isLoading: false });
     } catch (error) {
       console.error("Error fetching sales data:", error);
-      set({ isLoading: false, salesData: [] });
+      set({ isLoading: false, salesData: [], error: error instanceof Error ? error.message : "Failed to fetch sales data" });
     }
   },
 
   fetchInventoryData: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     const { productId, category } = get().filters;
+    const userId = useAuthStore.getState().userId;
+    if (!userId) {
+      set({ isLoading: false, error: "User not authenticated.", inventoryData: [] }); return;
+    }
     try {
-      const data = await dbGetInventoryData(productId, category);
+      const data = await dbGetInventoryData(userId, productId, category);
       set({ inventoryData: data, isLoading: false });
     } catch (error) {
       console.error("Error fetching inventory data:", error);
-      set({ isLoading: false, inventoryData: [] });
+      set({ isLoading: false, inventoryData: [], error: error instanceof Error ? error.message : "Failed to fetch inventory data" });
     }
   },
   deleteReport: async (reportId: string) => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     try {
-      // This would be an API call in a real app
       console.log(`[Store] Deleting report ${reportId}`);
-      // Simulate deletion
       await new Promise(resolve => setTimeout(resolve, 500));
       set(state => ({
         reports: state.reports.filter(r => r.id !== reportId),
@@ -182,12 +188,10 @@ export const useReportStore = create<ReportStoreState>((set, get) => ({
       }));
     } catch (error) {
       console.error(`Error deleting report ${reportId}:`, error);
-      set({ isLoading: false });
-       // Optionally re-fetch reports if deletion failed or to ensure consistency
+      set({ isLoading: false, error: error instanceof Error ? error.message : "Failed to delete report" });
       get().fetchReports();
     }
   },
 }));
 
 export { ReportListItem };
-  
