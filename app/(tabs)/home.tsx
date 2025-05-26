@@ -78,34 +78,80 @@ export default function HomeScreen() {
   const scrollX = useRef(new Animated.Value(0)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null); // For pausing/resuming auto-scroll
   const offerScrollX = useRef(new Animated.Value(0)).current;
   const [offerIndex, setOfferIndex] = useState(0);
   const offerScrollViewRef = useRef<ScrollView>(null);
 
-  // Scale animations for touchables
- // Product image by category
- const getProductImageByCategory = useCallback((product: { imageUri?: string; category?: string }) => {
- if (product.imageUri) {
- return product.imageUri;
- }
- const productCategoryName = product.category?.toLowerCase();
- if (!productCategoryName) return FALLBACK_PRODUCT_IMAGE;
- if (storeCategories.length > 0) {
- const matchedStoreCategory = storeCategories.find(
- (cat) => cat.name.toLowerCase() === productCategoryName && cat.imageUri
- );
- if (matchedStoreCategory && matchedStoreCategory.imageUri) {
- return matchedStoreCategory.imageUri;
- }
- }
- const matchedHardcodedCategory = hardcodedCategories.find(
- (cat) => cat.name.toLowerCase() === productCategoryName
- );
- if (matchedHardcodedCategory) {
- return matchedHardcodedCategory.image;
- }
- return FALLBACK_PRODUCT_IMAGE;
- }, [storeCategories]);
+  // Quick Actions
+  const quickActions: { title: string; image: string; onPress: () => void }[] = [
+    {
+      title: 'New Sale',
+      image: 'https://images.pexels.com/photos/8422724/pexels-photo-8422724.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+      onPress: () => router.push('/(tabs)/sale/sales-management'),
+    },
+    {
+      title: 'Add Product',
+      image: 'https://images.pexels.com/photos/264636/pexels-photo-264636.jpeg',
+      onPress: () => router.push('/(tabs)/inventory/products'),
+    },
+    {
+      title: 'Manage Categories',
+      image: 'https://images.pexels.com/photos/4483775/pexels-photo-4483775.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+      onPress: () => router.push('/(tabs)/inventory/category'),
+    },
+    {
+      title: 'Manage Customers',
+      image: 'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=600',
+      onPress: () => router.push('/(tabs)/inventory/customers'),
+    },
+    {
+      title: 'Reports',
+      image: 'https://images.pexels.com/photos/669610/pexels-photo-669610.jpeg?auto=compress&cs=tinysrgb&w=600',
+      onPress: () => router.push('/(tabs)/ReportsScreen'),
+    },
+  ];
+
+  // Handle scroll end to update currentIndex
+  const handleScrollEnd = useCallback((event: any) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const newIndex = Math.round(offsetX / width);
+    setCurrentIndex(newIndex);
+    if (scrollTimeout.current) clearInterval(scrollTimeout.current); // Clear existing interval
+    // Resume auto-scroll by restarting the interval
+    scrollTimeout.current = setInterval(() => {
+      let nextIndex = currentIndex + 1;
+      if (nextIndex >= quickActions.length) {
+        nextIndex = 0;
+      }
+      scrollViewRef.current?.scrollTo({ x: nextIndex * width, animated: true });
+      setCurrentIndex(nextIndex);
+    }, 3000);
+  }, [currentIndex, quickActions.length]);
+
+  // Product image by category
+  const getProductImageByCategory = useCallback((product: { imageUri?: string; category?: string }) => {
+    if (product.imageUri) {
+      return product.imageUri;
+    }
+    const productCategoryName = product.category?.toLowerCase();
+    if (!productCategoryName) return FALLBACK_PRODUCT_IMAGE;
+    if (storeCategories.length > 0) {
+      const matchedStoreCategory = storeCategories.find(
+        (cat) => cat.name.toLowerCase() === productCategoryName && cat.imageUri
+      );
+      if (matchedStoreCategory && matchedStoreCategory.imageUri) {
+        return matchedStoreCategory.imageUri;
+      }
+    }
+    const matchedHardcodedCategory = hardcodedCategories.find(
+      (cat) => cat.name.toLowerCase() === productCategoryName
+    );
+    if (matchedHardcodedCategory) {
+      return matchedHardcodedCategory.image;
+    }
+    return FALLBACK_PRODUCT_IMAGE;
+  }, [storeCategories]);
 
   const scaleValues = useRef(new Map()).current;
 
@@ -153,38 +199,10 @@ export default function HomeScreen() {
     }
   }, [storeProducts, productStoreLoading]);
 
-  // Quick Actions
-  const quickActions = [
-    {
-      title: 'New Sale',
-     image: 'https://images.pexels.com/photos/8422724/pexels-photo-8422724.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-      onPress: () => router.push('/(tabs)/sale/sales-management'),
-    },
-    {
-      title: 'Add Product',
-     image: 'https://images.pexels.com/photos/264636/pexels-photo-264636.jpeg',
-      onPress: () => router.push('/(tabs)/inventory/products'),
-    },
-    {
-      title: 'Manage Categories',
-      image: 'https://images.pexels.com/photos/4483775/pexels-photo-4483775.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-      onPress: () => router.push('/(tabs)/inventory/category'),
-    },
-    {
-      title: 'Manage Customers',
-      image: 'https://images.pexels.com/photos/3184325/pexels-photo-3184325.jpeg?auto=compress&cs=tinysrgb&w=600',
-      onPress: () => router.push('/(tabs)/inventory/customers'),
-    },
-    {
-      title: 'Reports',
-      image: 'https://images.pexels.com/photos/669610/pexels-photo-669610.jpeg?auto=compress&cs=tinysrgb&w=600',
-      onPress: () => router.push('/(tabs)/ReportsScreen'),
-    },
-  ];
-
   // Auto-scroll for Quick Actions Carousel
   useEffect(() => {
-    const interval = setInterval(() => {
+    if (quickActions.length <= 1) return; // Skip if only one action
+    scrollTimeout.current = setInterval(() => {
       let nextIndex = currentIndex + 1;
       if (nextIndex >= quickActions.length) {
         nextIndex = 0;
@@ -192,8 +210,10 @@ export default function HomeScreen() {
       scrollViewRef.current?.scrollTo({ x: nextIndex * width, animated: true });
       setCurrentIndex(nextIndex);
     }, 3000);
-    return () => clearInterval(interval);
-  }, [currentIndex]);
+    return () => {
+      if (scrollTimeout.current) clearInterval(scrollTimeout.current);
+    };
+  }, [currentIndex, quickActions.length]);
 
   // Auto-scroll for Offer Zone Carousel
   const discountedProducts = storeProducts.filter((product) => product.discount && product.discount > 0);
@@ -210,7 +230,6 @@ export default function HomeScreen() {
     }, 3000);
     return () => clearInterval(interval);
   }, [offerIndex, discountedProducts.length]);
-
 
   // Display categories
   const displayCategories = !categoriesLoading && storeCategories.length > 0
@@ -270,7 +289,7 @@ export default function HomeScreen() {
     >
       <ScrollView className="flex-1">
         <View className="p-5">
-          {/* Quick Actions Carousel - Replaces Hero Carousel */}
+          {/* Quick Actions Carousel */}
           <Card
             style={{ ...cardShadow, borderRadius: 24, height: 200 }}
             className="mb-6 rounded-2xl overflow-hidden"
@@ -280,7 +299,16 @@ export default function HomeScreen() {
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
-              onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
+              snapToInterval={width} // Enforce snapping to card width
+              decelerationRate="fast" // Smooth snapping
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                { useNativeDriver: true }
+              )}
+              onMomentumScrollEnd={handleScrollEnd} // Update index on scroll end
+              onScrollBeginDrag={() => {
+                if (scrollTimeout.current) clearInterval(scrollTimeout.current); // Pause auto-scroll on drag
+              }}
               scrollEventThrottle={16}
               style={{ borderRadius: 24, overflow: 'hidden' }}
             >
@@ -295,7 +323,6 @@ export default function HomeScreen() {
                       colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.2)']}
                       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
                     />
-                    
                     <Text style={{ color: COLORS.white, fontSize: 22, fontWeight: 'bold' }} className="text-center px-5">
                       {action.title.toUpperCase()}
                     </Text>
