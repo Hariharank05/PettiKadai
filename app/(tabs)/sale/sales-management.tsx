@@ -7,24 +7,25 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
-  Alert,
+  // Alert, // We'll replace Alert with toast
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Package, PlusCircle, MinusCircle, Search, UserPlus, Edit3, AlertCircle } from 'lucide-react-native';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
-import { Card } from '~/components/ui/card';
+// import { Card } from '~/components/ui/card'; // Not used directly in renderProductItem
 import { useProductStore } from '~/lib/stores/productStore';
 import { Product } from '~/lib/models/product';
 import { useCustomerStore } from '~/lib/stores/customerStore';
 import { useCartStore } from '~/lib/stores/cartStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '~/components/ui/dialog';
-import { getColors } from '~/app/(tabs)/sale';
+import { getColors } from '~/app/(tabs)/sale'; // Assuming this path is correct
 import { useColorScheme as rnColorScheme } from 'react-native';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid'; // uuidv4 seems unused
 import { useAuthStore } from '~/lib/stores/authStore';
+import GlobalToaster, { Toaster } from '~/components/toaster/Toaster'; 
 
 export default function SalesScreen() {
   const colorSchemeFromHook = rnColorScheme();
@@ -50,15 +51,24 @@ export default function SalesScreen() {
       await Promise.all([fetchProducts(), fetchCustomers()]);
     } catch (error) {
       console.error("Error fetching initial data:", error);
-      Alert.alert("Error", "Failed to load initial data. Please try again.", [{ text: "OK" }]);
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      Toaster.error("Load Error", { description: `Failed to load initial data: ${message}. Please try again.` });
     } finally {
       setIsLoading(false);
     }
   }, [fetchProducts, fetchCustomers]);
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    loadInitialData().finally(() => setRefreshing(false));
+    try {
+      await loadInitialData();
+      Toaster.info("Data Refreshed", { description: "Products and customers updated." });
+    } catch (error) {
+      // Error is handled by loadInitialData's toast
+    }
+    finally {
+      setRefreshing(false)
+    };
   }, [loadInitialData]);
 
   useEffect(() => {
@@ -71,7 +81,9 @@ export default function SalesScreen() {
         const quantityInCart = selectedQuantities[product.id] || 0;
         return {
           ...product,
-          quantity: product.quantity - quantityInCart,
+          // This quantity is for display on the card, representing what's left AFTER cart deductions
+          // The original product.quantity is the true store stock
+          displayableStock: product.quantity - quantityInCart,
         };
       });
       setDisplayProducts(updatedDisplayProducts);
@@ -104,7 +116,7 @@ export default function SalesScreen() {
       if (!originalProduct) return;
       const currentSelectedQty = selectedQuantities[productId] || 0;
       if (currentSelectedQty >= originalProduct.quantity) {
-        Alert.alert(`Maximum stock for ${originalProduct.name} is ${originalProduct.quantity}.`);
+        Toaster.warning("Stock Limit", { description: `Maximum stock for ${originalProduct.name} is ${originalProduct.quantity}.` });
         return;
       }
       const newSelectedQty = currentSelectedQty + 1;
@@ -127,14 +139,15 @@ export default function SalesScreen() {
 
   const handleAddNewCustomer = async () => {
     if (!newCustomerForm.name.trim() || !newCustomerForm.phone.trim()) {
-      Alert.alert("Validation Error", "Customer name and phone are required.");
+      Toaster.warning("Validation Error", { description: "Customer name and phone are required." });
       return;
     }
     if (!currentUserId) {
-      Alert.alert("Error", "User not authenticated to add customer.");
+      Toaster.error("Authentication Error", { description: "User not authenticated to add customer." });
       return;
     }
     setIsProcessing(true);
+    const customerName = newCustomerForm.name; // Store for success message
     try {
       const newCustData = {
         name: newCustomerForm.name,
@@ -143,26 +156,43 @@ export default function SalesScreen() {
         creditLimit: 0,
       };
       const newCustomer = await addCustomer(newCustData);
-      await fetchCustomers();
-      setSelectedCustomer(newCustomer);
-      setNewCustomerForm({ name: '', phone: '', email: '' });
-      setIsAddingNewCustomer(false);
-    } catch (error) {
-      Alert.alert("Error", `Failed to add customer: ${error instanceof Error ? error.message : String(error)}`);
+      await fetchCustomers(); // Re-fetch to ensure the list is up-to-date
+      setSelectedCustomer(newCustomer); // Automatically select the new customer
+      setNewCustomerForm({ name: '', phone: '', email: '' }); // Reset form
+      setIsAddingNewCustomer(false); // Go back to customer selection view
+      setIsCustomerModalOpen(false); // Close the modal
+      Toaster.success("Customer Added", { description: `"${customerName}" has been added and selected.` });
+    } catch (error: any) { // Catch any error
+      let errorTitle = "Add Customer Failed";
+      let errorMessage = "An unexpected error occurred. Please try again.";
+
+      // Check if the error is the specific "Phone number already exists"
+      if (error instanceof Error && error.message === "Phone number already exists.") {
+        errorTitle = "Duplicate Phone Number";
+        errorMessage = "This phone number is already registered. Please use a different one or select the existing customer.";
+      } else if (error instanceof Error) {
+        errorMessage = error.message; // Use the message from other errors
+      } else if (typeof error === 'string') {
+        errorMessage = error; // If the error is just a string
+      }
+      console.error("Add customer error in SalesScreen:", error); // Log the original error for debugging
+      Toaster.error(errorTitle, { description: errorMessage });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const renderProductItem = ({ item }: { item: Product }) => {
-    const originalProduct = products.find((p) => p.id === item.id);
-    const totalOriginalStock = originalProduct ? originalProduct.quantity : 0;
+  const renderProductItem = ({ item }: { item: Product & { displayableStock?: number } }) => {
+    const originalProductFromStore = products.find((p) => p.id === item.id);
+    const totalOriginalStoreStock = originalProductFromStore ? originalProductFromStore.quantity : 0;
     const currentSelectedQtyOnCard = selectedQuantities[item.id] || 0;
+    const stockAvailableForAddingToCart = totalOriginalStoreStock - currentSelectedQtyOnCard;
 
     return (
       <TouchableOpacity
-        disabled={(originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0}
-        className={`w-[48%] m-1 rounded-xl overflow-hidden shadow-sm ${(originalProduct ? originalProduct.quantity <= 0 : true) && (selectedQuantities[item.id] || 0) === 0 ? 'opacity-50' : ''}`}
+        disabled={(totalOriginalStoreStock <= 0) && currentSelectedQtyOnCard === 0}
+        className={`w-[48%] m-1 rounded-xl overflow-hidden shadow-sm 
+                    ${((totalOriginalStoreStock <= 0) && currentSelectedQtyOnCard === 0) ? 'opacity-50' : ''}`}
         style={{ backgroundColor: COLORS.white }}
       >
         <View className="relative">
@@ -221,11 +251,13 @@ export default function SalesScreen() {
                   if (isNaN(num) || num < 0 || text === '') num = 0;
                   if (num > maxStock) {
                     num = maxStock;
-                    Alert.alert("Stock Limit", `Maximum available stock for ${op?.name} is ${maxStock}.`);
+                    Toaster.warning("Stock Limit", { description: `Maximum available stock for ${op?.name} is ${maxStock}.` });
                   }
-                  addToCart(op!, num);
+                  if (op) {
+                     addToCart(op, num);
+                  }
                 }}
-                editable={totalOriginalStock > 0}
+                editable={totalOriginalStoreStock > 0}
                 style={{ backgroundColor: COLORS.white, color: COLORS.primary }}
               />
               <TouchableOpacity
@@ -233,15 +265,15 @@ export default function SalesScreen() {
                   e.stopPropagation();
                   increaseListQuantity(item.id);
                 }}
-                disabled={currentSelectedQtyOnCard >= totalOriginalStock}
+                disabled={currentSelectedQtyOnCard >= totalOriginalStoreStock}
                 className="p-1"
               >
-                <PlusCircle size={16} color={currentSelectedQtyOnCard >= totalOriginalStock ? COLORS.gray : COLORS.dark} />
+                <PlusCircle size={16} color={currentSelectedQtyOnCard >= totalOriginalStoreStock ? COLORS.gray : COLORS.dark} />
               </TouchableOpacity>
             </View>
           </View>
           <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Stock: {totalOriginalStock} {item.unit || 'piece'}
+            Stock: {stockAvailableForAddingToCart} {item.unit || 'piece'}
           </Text>
         </View>
       </TouchableOpacity>
@@ -281,7 +313,7 @@ export default function SalesScreen() {
                   <Button
                     variant="outline"
                     className="border"
-                    style={{ backgroundColor: COLORS.primary }}
+                    style={{ backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 10 }}
                     onPress={() => router.push('/(tabs)/inventory/products')}
                   >
                     <Text className="font-semibold" style={{ color: COLORS.white }}>Add Your First Product</Text>
@@ -315,23 +347,23 @@ export default function SalesScreen() {
         >
           <DialogContent
             className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-xl w-11/12 mx-auto"
-            style={{ maxHeight: '90%', minHeight: 600 }}
+            style={{ maxHeight: '90%', minHeight: 500 }}
           >
             <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
               <View className="flex-row items-center justify-between">
-                <DialogTitle className="text-lg font-bold" style={{ color: COLORS.gray }}>
+                <DialogTitle className="text-lg font-bold" style={{ color: COLORS.dark }}>
                   {isAddingNewCustomer ? 'Add New Customer' : 'Select Customer'}
                 </DialogTitle>
               </View>
             </DialogHeader>
-            <View className="p-4 h-80 w-80">
+            <View className="p-4 flex-1">
               {isAddingNewCustomer ? (
                 <View>
                   <Input
                     placeholder="Customer Name*"
                     value={newCustomerForm.name}
                     onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, name: text }))}
-                    className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
+                    className="mb-3 h-11 border border-gray-300 dark:border-gray-600 rounded-md px-3"
                     style={{ backgroundColor: COLORS.white, color: COLORS.dark }}
                     placeholderTextColor={COLORS.gray}
                   />
@@ -340,7 +372,7 @@ export default function SalesScreen() {
                     value={newCustomerForm.phone}
                     onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, phone: text }))}
                     keyboardType="phone-pad"
-                    className="mb-3 h-11 border border-gray-300 dark:border-gray-600"
+                    className="mb-3 h-11 border border-gray-300 dark:border-gray-600 rounded-md px-3"
                     style={{ backgroundColor: COLORS.white, color: COLORS.dark }}
                     placeholderTextColor={COLORS.gray}
                   />
@@ -350,31 +382,32 @@ export default function SalesScreen() {
                     onChangeText={(text) => setNewCustomerForm((prev) => ({ ...prev, email: text }))}
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    className="mb-4 h-11 border border-gray-300 dark:border-gray-600"
+                    className="mb-4 h-11 border border-gray-300 dark:border-gray-600 rounded-md px-3"
                     style={{ backgroundColor: COLORS.white, color: COLORS.dark }}
                     placeholderTextColor={COLORS.gray}
                   />
-                  <View className="flex-row justify-end gap-x-2">
-                    <Button variant="ghost" onPress={() => setIsAddingNewCustomer(false)}>
+                  <View className="flex-row justify-end gap-x-2 mt-2">
+                    <Button variant="ghost" onPress={() => setIsAddingNewCustomer(false)} className="px-4 py-2">
                       <Text style={{ color: COLORS.gray }}>Cancel</Text>
                     </Button>
                     <Button
                       onPress={handleAddNewCustomer}
                       disabled={isProcessing}
                       style={{ backgroundColor: COLORS.secondary }}
+                      className="px-4 py-2"
                     >
                       {isProcessing ? (
                         <ActivityIndicator color={COLORS.white} size="small" />
                       ) : (
-                        <Text className="text-white">Save Customer</Text>
+                        <Text className="font-semibold" style={{color: COLORS.white}}>Save Customer</Text>
                       )}
                     </Button>
                   </View>
                 </View>
               ) : (
-                <View style={{ flex: 1, minHeight: 500 }}>
+                <View style={{ flex: 1 }}>
                   <View
-                    className="mb-5 flex-row items-center rounded-md px-3 border border-gray-300 dark:border-gray-600"
+                    className="mb-3 flex-row items-center rounded-md px-3 border border-gray-300 dark:border-gray-600"
                     style={{ backgroundColor: COLORS.white }}
                   >
                     <Search size={18} color={COLORS.gray} />
@@ -413,17 +446,16 @@ export default function SalesScreen() {
                       </View>
                     }
                     style={{ flex: 1 }}
+                    contentContainerStyle={{ flexGrow: 1 }}
                   />
                   <Button
                     variant="outline"
-                    className="mt-4 h-10 border border-gray-300 dark:border-gray-600"
+                    className="mt-4 h-11 border border-gray-300 dark:border-gray-600 flex-row items-center justify-center rounded-md"
                     style={{ backgroundColor: COLORS.primary }}
                     onPress={() => setIsAddingNewCustomer(true)}
                   >
-                    <View className="text-center justify-between flex-row items-center">
-                      <UserPlus size={18} color={COLORS.white} className="mr-2" />
-                      <Text style={{ color: COLORS.white }}>Add New Customer</Text>
-                    </View>
+                    <UserPlus size={18} color={COLORS.white} className="mr-2" />
+                    <Text className="font-semibold" style={{ color: COLORS.white }}>Add New Customer</Text>
                   </Button>
                 </View>
               )}

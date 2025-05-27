@@ -31,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { useColorScheme } from '~/lib/useColorScheme';
 import { LinearGradient } from 'expo-linear-gradient';
+import GlobalToaster, { Toaster } from '~/components/toaster/Toaster'; 
 
 // Define the color palette based on theme
 export const getColors = (colorScheme: 'light' | 'dark') => ({
@@ -221,10 +222,10 @@ export default function StoreSettingsScreen() {
             setValidationErrors({});
             setIsModalVisible(false);
 
-            Alert.alert('Success', 'Store settings saved successfully!');
+           Toaster.success('Preferences saved successfully!');
         } catch (error) {
             console.error('Failed to save store settings:', error);
-            Alert.alert('Error', 'Failed to save store settings.');
+            Toaster.error( 'Failed to save store settings.');
         } finally {
             setIsSaving(false);
         }
@@ -423,7 +424,7 @@ export default function StoreSettingsScreen() {
                                     disabled={isSaving || !hasChanges}
                                     className={`flex-1 py-3 rounded-xl flex-row justify-center items-center ${isSaving || !hasChanges
                                         ? (isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-300')
-                                        : (isDarkColorScheme ? 'bg-blue-600' : 'bg-blue-500')
+                                        : (isDarkColorScheme ? 'bg-purple-800' : 'bg-purple-800')
                                         }`}
                                 >
                                     {isSaving ? (

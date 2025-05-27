@@ -1,15 +1,17 @@
 // ~/app/(tabs)/customers.tsx
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, Alert, useColorScheme as rnColorScheme } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, useColorScheme as rnColorScheme, KeyboardTypeOptions } from 'react-native'; // Removed Alert
 import { Text } from '~/components/ui/text';
 import { Card, CardContent } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '~/components/ui/dialog';
-import { Input } from '~/components/ui/input';
-import { Button } from '~/components/ui/button'; // Using Button directly
+import { Input } from '~/components/ui/input'; // Original Input, used by DebouncedInput
+import { Button } from '~/components/ui/button';
 import { UserPlus, Pencil, Trash2, Search, ArrowDownUp, XCircle } from 'lucide-react-native';
 import { useCustomerStore } from '~/lib/stores/customerStore';
 import { Customer } from '~/lib/stores/types';
 import { LinearGradient } from 'expo-linear-gradient';
+import GlobalToaster, { Toaster } from '~/components/toaster/Toaster'; 
+import debounce from 'lodash/debounce'; // Added for DebouncedInput
 
 // Define the color palette based on theme
 export const getColors = (colorScheme: 'light' | 'dark') => ({
@@ -29,6 +31,78 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
 });
 
 type SortOrder = 'asc' | 'desc' | 'none';
+
+// Copied and slightly modified DebouncedInput component
+interface DebouncedInputProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  keyboardType?: KeyboardTypeOptions; // Using react-native's KeyboardTypeOptions for broader compatibility
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  className?: string;
+  placeholderTextColor?: string;
+  style?: any;
+  editable?: boolean; // Added for form input disabling
+}
+
+const DebouncedInput = React.memo(
+  ({
+    value,
+    onChangeText,
+    placeholder,
+    keyboardType = 'default',
+    autoCapitalize = 'sentences',
+    className = '',
+    placeholderTextColor,
+    style,
+    editable, // Destructured
+  }: DebouncedInputProps) => {
+    const [localValue, setLocalValue] = useState(value);
+
+    const debouncedUpdate = useMemo(
+      () => debounce(onChangeText, 300),
+      [onChangeText]
+    );
+
+    useEffect(() => {
+      if (localValue !== value) {
+        setLocalValue(value);
+      }
+    }, [value]);
+
+    const handleTextChange = (text: string) => {
+      setLocalValue(text);
+      debouncedUpdate(text);
+    };
+
+    return (
+      <Input // Using the original Input component from '~/components/ui/input'
+        value={localValue}
+        onChangeText={handleTextChange}
+        placeholder={placeholder}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        className={`h-11 border border-gray-300 dark:border-gray-600 ${className}`} // Base style + appended prop className
+        style={style}
+        placeholderTextColor={placeholderTextColor}
+        editable={editable} // Passed to underlying Input
+      />
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.value === nextProps.value &&
+      prevProps.placeholder === nextProps.placeholder &&
+      prevProps.keyboardType === nextProps.keyboardType &&
+      prevProps.autoCapitalize === nextProps.autoCapitalize &&
+      prevProps.className === nextProps.className &&
+      prevProps.placeholderTextColor === nextProps.placeholderTextColor &&
+      prevProps.style === nextProps.style &&
+      prevProps.editable === nextProps.editable // Added to comparison
+    );
+  }
+);
+DebouncedInput.displayName = 'DebouncedInput';
 
 const CustomerManagementScreen = () => {
   const {
@@ -66,36 +140,44 @@ const CustomerManagementScreen = () => {
   useEffect(() => {
     const loadData = async () => {
       setInitialLoading(true);
-      await fetchCustomers();
-      setInitialLoading(false);
+      try {
+        await fetchCustomers();
+      } catch (e: any) {
+        const message = e.message || "Failed to load customers.";
+        Toaster.error("Load Error", { description: message });
+      } finally {
+        setInitialLoading(false);
+      }
     };
     loadData();
   }, [fetchCustomers]);
 
   useEffect(() => {
-    if (!dialogOpen || storeError) {
-      setFormError(null);
+    if (storeError) {
+        if (dialogOpen || deleteConfirmDialogOpen) {
+            setFormError(storeError);
+        }
+    } else {
+        setFormError(null);
     }
-    if (storeError && dialogOpen) {
-      setFormError(storeError);
-    }
-  }, [dialogOpen, storeError]);
+  }, [storeError, dialogOpen, deleteConfirmDialogOpen]);
+
 
   const isFormValid = useCallback(() => {
+    let msg = '';
     if (form.name.trim() === '') {
-      setFormError('Name is required.');
-      return false;
+      msg = 'Name is required.';
+    } else if (form.phone.trim() === '') {
+      msg = 'Phone number is required.';
+    } else if (form.phone.trim().length < 10) {
+      msg = 'Phone number seems too short. Please enter a valid number.';
+    } else if (form.creditLimit !== '' && (isNaN(parseFloat(form.creditLimit)) || parseFloat(form.creditLimit) < 0)) {
+      msg = 'Credit limit must be a valid non-negative number.';
     }
-    if (form.phone.trim() === '') {
-      setFormError('Phone number is required.');
-      return false;
-    }
-    if (form.phone.trim().length < 10) {
-      setFormError('Phone number seems too short.');
-      return false;
-    }
-    if (form.creditLimit !== '' && (isNaN(parseFloat(form.creditLimit)) || parseFloat(form.creditLimit) < 0)) {
-      setFormError('Credit limit must be a valid non-negative number.');
+
+    if (msg) {
+      setFormError(msg);
+      Toaster.warning("Validation Error", { description: msg });
       return false;
     }
     setFormError(null);
@@ -113,6 +195,7 @@ const CustomerManagementScreen = () => {
 
   const handleAddCustomer = useCallback(async () => {
     if (!isFormValid()) return;
+    const customerName = form.name;
     try {
       await addCustomer({
         name: form.name,
@@ -122,10 +205,13 @@ const CustomerManagementScreen = () => {
         creditLimit: parseFloat(form.creditLimit) || 0,
       });
       resetFormAndCloseDialog();
+      Toaster.success("Customer Added", { description: `"${customerName}" has been added successfully.` });
     } catch (error: any) {
-      // Error is set in store, formError will update via useEffect
+      const message = storeError || error.message || 'Failed to add customer. Please try again.';
+      setFormError(message);
+      Toaster.error("Add Failed", { description: message });
     }
-  }, [form, addCustomer, isFormValid, resetFormAndCloseDialog]);
+  }, [form, addCustomer, isFormValid, resetFormAndCloseDialog, storeError]);
 
   const handleEditClick = useCallback((customer: Customer) => {
     setSelectedCustomer(customer);
@@ -144,6 +230,7 @@ const CustomerManagementScreen = () => {
 
   const handleEditSubmit = useCallback(async () => {
     if (!isFormValid() || !selectedCustomer) return;
+    const customerName = form.name;
     try {
       await updateCustomer(selectedCustomer.id, {
         name: form.name,
@@ -153,25 +240,32 @@ const CustomerManagementScreen = () => {
         creditLimit: parseFloat(form.creditLimit) || 0,
       });
       resetFormAndCloseDialog();
+      Toaster.success("Customer Updated", { description: `"${customerName}" has been updated successfully.` });
     } catch (error: any) {
-      // Error is set in store
+      const message = storeError || error.message || 'Failed to update customer. Please try again.';
+      setFormError(message);
+      Toaster.error("Update Failed", { description: message });
     }
-  }, [form, updateCustomer, selectedCustomer, isFormValid, resetFormAndCloseDialog]);
+  }, [form, updateCustomer, selectedCustomer, isFormValid, resetFormAndCloseDialog, storeError]);
 
   const handleDeleteClick = useCallback((customer: Customer) => {
     setSelectedCustomer(customer);
     clearError();
+    setFormError(null);
     setDeleteConfirmDialogOpen(true);
   }, [clearError]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!selectedCustomer) return;
+    const customerName = selectedCustomer.name;
     try {
       await deleteCustomer(selectedCustomer.id);
       setDeleteConfirmDialogOpen(false);
       setSelectedCustomer(null);
+      Toaster.success("Customer Deleted", { description: `"${customerName}" has been deleted successfully.` });
     } catch (error: any) {
-      Alert.alert("Delete Error", storeError || "Failed to delete customer.");
+      const message = storeError || error.message || "Failed to delete customer.";
+      Toaster.error("Delete Failed", { description: message });
     }
   }, [selectedCustomer, deleteCustomer, storeError]);
 
@@ -240,19 +334,19 @@ const CustomerManagementScreen = () => {
               variant="ghost"
             >
               <UserPlus size={20} color="#3B82F6" className="mr-2" />
-              {/* <Text className="text-primary-foreground">Add</Text> */}
             </Button>
           </View>
 
           <View className="flex-row items-center mb-4 gap-2">
             <View className="flex-1 flex-row items-center bg-muted rounded-lg px-3">
               <Search size={20} className="text-muted-foreground" />
-              <Input
+              <DebouncedInput
                 placeholder="Search Name or Phone..."
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                className="flex-1 h-11 border-0 bg-transparent ml-2 text-base text-foreground"
+                className="flex-1 h-11 border-0 bg-transparent ml-2 text-base text-foreground" // custom styles for search
                 placeholderTextColor="hsl(var(--muted-foreground))"
+                editable={!storeIsLoading} // Search should also be disabled if needed
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity onPress={() => setSearchQuery('')} className="p-1">
@@ -292,7 +386,7 @@ const CustomerManagementScreen = () => {
                 variant="ghost"
               >
                 <UserPlus size={20} color="#3B82F6" className="mr-2" />
-
+                <Text className="text-primary">Add Customer</Text>
               </Button>
             </View>
           )}
@@ -308,7 +402,7 @@ const CustomerManagementScreen = () => {
                     <Text className="text-sm text-blue-600 dark:text-blue-400 mt-1">
                       Credit Limit: ₹{(item.creditLimit || 0).toFixed(2)}
                     </Text>
-                    {item.outstandingBalance > 0 && (
+                    {item.outstandingBalance != null && item.outstandingBalance > 0 && (
                       <Text className="text-sm text-destructive mt-1">
                         Outstanding: ₹{(item.outstandingBalance || 0).toFixed(2)}
                       </Text>
@@ -333,7 +427,7 @@ const CustomerManagementScreen = () => {
           if (!open) resetFormAndCloseDialog();
           else setDialogOpen(open);
         }}>
-          <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
+          <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-md w-96 mx-auto">
             <DialogHeader className="p-4 border-b border-border">
               <DialogTitle className="text-xl font-bold text-foreground">
                 {formMode === 'edit' ? 'Edit Customer' : 'Add New Customer'}
@@ -348,11 +442,11 @@ const CustomerManagementScreen = () => {
                   <Text className="mb-1 text-sm font-medium text-muted-foreground">
                     Name <Text className="text-destructive">*</Text>
                   </Text>
-                  <Input
+                  <DebouncedInput
                     placeholder="Enter customer name"
                     value={form.name}
                     onChangeText={(text) => setForm({ ...form, name: text })}
-                    className="h-12 text-base"
+                    className="h-12 text-base" // This h-12 should override DebouncedInput's h-11
                     editable={!storeIsLoading}
                   />
                 </View>
@@ -360,7 +454,7 @@ const CustomerManagementScreen = () => {
                   <Text className="mb-1 text-sm font-medium text-muted-foreground">
                     Phone <Text className="text-destructive">*</Text>
                   </Text>
-                  <Input
+                  <DebouncedInput
                     placeholder="Enter phone number"
                     keyboardType="phone-pad"
                     value={form.phone}
@@ -371,7 +465,7 @@ const CustomerManagementScreen = () => {
                 </View>
                 <View>
                   <Text className="mb-1 text-sm font-medium text-muted-foreground">Email</Text>
-                  <Input
+                  <DebouncedInput
                     placeholder="Enter email (optional)"
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -383,7 +477,7 @@ const CustomerManagementScreen = () => {
                 </View>
                 <View>
                   <Text className="mb-1 text-sm font-medium text-muted-foreground">Address</Text>
-                  <Input
+                  <DebouncedInput
                     placeholder="Enter address (optional)"
                     value={form.address}
                     onChangeText={(text) => setForm({ ...form, address: text })}
@@ -393,7 +487,7 @@ const CustomerManagementScreen = () => {
                 </View>
                 <View>
                   <Text className="mb-1 text-sm font-medium text-muted-foreground">Credit Limit (₹)</Text>
-                  <Input
+                  <DebouncedInput
                     placeholder="0.00"
                     keyboardType="numeric"
                     value={form.creditLimit}
@@ -413,11 +507,11 @@ const CustomerManagementScreen = () => {
                 <Text>Cancel</Text>
               </Button>
               <Button
-                 className='bg-[#a855f7]'
+                 className='bg-[#a855f7] dark:bg-[#00b9f1]'
                 onPress={formMode === 'edit' ? handleEditSubmit : handleAddCustomer}
-                disabled={storeIsLoading || (dialogOpen && formError !== null && formError !== storeError)} // Disable if form validation error exists
+                disabled={storeIsLoading || (formError !== null && formError !== storeError && (form.name.trim() === '' || form.phone.trim() === '' || form.phone.trim().length < 10))}
               >
-                <Text className="text-primary-foreground">
+                <Text className="text-white dark:text-white">
                   {storeIsLoading ? <ActivityIndicator size="small" color="hsl(var(--primary-foreground))" /> : (formMode === 'edit' ? 'Save Changes' : 'Add Customer')}
                 </Text>
               </Button>
@@ -434,7 +528,7 @@ const CustomerManagementScreen = () => {
             setDeleteConfirmDialogOpen(open);
           }
         }}>
-          <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
+          <DialogContent className="p-6 bg-background rounded-lg shadow-lg max-w-md w-96 mx-auto">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold text-foreground">Confirm Deletion</DialogTitle>
             </DialogHeader>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, Alert, Image, useColorScheme as rnColorScheme } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, FlatList, Image, useColorScheme as rnColorScheme, Platform } from 'react-native'; // Added Platform
 import { Text } from '~/components/ui/text';
 import { Card, CardContent } from '~/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '~/components/ui/dialog';
@@ -10,8 +10,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { Category } from '~/lib/stores/types';
 import { useCategoryStore } from '~/lib/stores/categoryStore';
 import { LinearGradient } from 'expo-linear-gradient';
+import GlobalToaster, { Toaster } from '~/components/toaster/Toaster'; 
 
-// Define the color palette based on theme
+// Define the color palette based on theme (assuming this is correctly defined elsewhere or here)
 export const getColors = (colorScheme: 'light' | 'dark') => ({
   primary: colorScheme === 'dark' ? '#a855f7' : '#7200da',
   secondary: colorScheme === 'dark' ? '#22d3ee' : '#00b9f1',
@@ -27,6 +28,7 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
   border: colorScheme === 'dark' ? '#374151' : '#e5e7eb',
   yellow: colorScheme === 'dark' ? '#f9c00c' : '#f9c00c',
 });
+
 
 type SortOrder = 'asc' | 'desc' | 'none';
 
@@ -48,7 +50,7 @@ const ImageSection = React.memo(
           onPress={pickImage}
           disabled={isLoading}
         >
-          <Text className="text-base text-gray-900 dark:text-gray-100">{imageUri ? 'Change Image' : 'Select Image'}</Text>
+          <Text className="text-base text-gray-900 dark:text-gray-100">{imageUri || selectedImage ? 'Change Image' : 'Select Image'}</Text>
         </Button>
         {selectedImage && (
           <View className="mt-4 items-center">
@@ -101,40 +103,64 @@ const CategoryManagementScreen = () => {
   useEffect(() => {
     const loadData = async () => {
       setInitialLoading(true);
-      await fetchCategories();
-      setInitialLoading(false);
+      try {
+        await fetchCategories();
+      } catch (e: any) {
+        const message = e.message || "Failed to load categories initially.";
+        Toaster.error("Load Error", { description: message });
+      } finally {
+        setInitialLoading(false);
+      }
     };
     loadData();
   }, [fetchCategories]);
 
   useEffect(() => {
-    if (!dialogOpen || storeError) {
-      setFormError(null);
+    if (storeError) {
+        if (dialogOpen || deleteConfirmDialogOpen) {
+            setFormError(storeError); // Display error within the active dialog
+        }
+        // Specific actions (add, edit, delete) will show their own toasts on error.
+        // A general toast for storeError when no dialog is open might be too broad
+        // if fetchCategories on load already has a toast.
+    } else {
+        setFormError(null); // Clear form error if storeError is cleared
     }
-    if (storeError && dialogOpen) {
-      setFormError(storeError);
-    }
-  }, [dialogOpen, storeError]);
+  }, [storeError, dialogOpen, deleteConfirmDialogOpen]);
+
 
   const pickImage = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permissionResult.granted === false) {
+        Toaster.error("Permission Denied", { description: "Permission to access camera roll is required!" });
+        return;
+      }
 
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      console.log('Selected image URI:', uri); // Debug log
-      setSelectedImage(uri);
-      setForm((prev) => ({ ...prev, imageUri: uri }));
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        console.log('Selected image URI:', uri);
+        setSelectedImage(uri);
+        setForm((prev) => ({ ...prev, imageUri: uri }));
+      }
+    } catch (e: any) {
+      console.error("Image picking error: ", e);
+      Toaster.error("Image Error", { description: e.message || "Could not select image. Please try again." });
     }
   }, []);
 
   const isFormValid = useCallback(() => {
     if (form.name.trim() === '') {
-      setFormError('Category name is required.');
+      const msg = 'Category name is required.';
+      setFormError(msg);
+      Toaster.warning("Validation Error", { description: msg });
       return false;
     }
     setFormError(null);
@@ -146,37 +172,41 @@ const CategoryManagementScreen = () => {
     setDialogOpen(false);
     setFormMode('add');
     setSelectedCategory(null);
-    setSelectedImage(null);
+    setSelectedImage(null); // Reset selected image preview
     setFormError(null);
     clearError();
   }, [clearError]);
 
   const handleAddCategory = useCallback(async () => {
     if (!isFormValid()) return;
+    const categoryName = form.name;
     try {
-      console.log('Adding category with data:', { ...form, imageUri: form.imageUri || undefined }); // Debug log
+      console.log('Adding category with data:', { ...form, imageUri: form.imageUri || undefined });
       await addCategory({
         name: form.name,
         description: form.description || undefined,
         imageUri: form.imageUri || undefined,
       });
-      await fetchCategories(); // Force re-fetch to ensure latest data
+      await fetchCategories();
       resetFormAndCloseDialog();
+      Toaster.success("Category Added", { description: `"${categoryName}" has been added successfully.` });
     } catch (error: any) {
       console.error('Add category error:', error);
-      // Error is set in store, formError will update via useEffect
+      const message = error.message || 'Failed to add category. Please try again.';
+      setFormError(message);
+      Toaster.error("Add Failed", { description: message });
     }
   }, [form, addCategory, isFormValid, resetFormAndCloseDialog, fetchCategories]);
 
   const handleEditClick = useCallback((category: Category) => {
-    console.log('Editing category:', category); // Debug log
+    console.log('Editing category:', category);
     setSelectedCategory(category);
     setForm({
       name: category.name,
       description: category.description || '',
       imageUri: category.imageUri || '',
     });
-    setSelectedImage(category.imageUri || null);
+    setSelectedImage(category.imageUri || null); // Set image for preview
     setFormMode('edit');
     clearError();
     setFormError(null);
@@ -185,37 +215,46 @@ const CategoryManagementScreen = () => {
 
   const handleEditSubmit = useCallback(async () => {
     if (!isFormValid() || !selectedCategory) return;
+    const categoryName = form.name;
     try {
-      console.log('Updating category with data:', { ...form, imageUri: form.imageUri || undefined }); // Debug log
+      console.log('Updating category with data:', { ...form, imageUri: form.imageUri || undefined });
       await updateCategory(selectedCategory.id, {
         name: form.name,
         description: form.description || undefined,
         imageUri: form.imageUri || undefined,
       });
-      await fetchCategories(); // Force re-fetch to ensure latest data
+      await fetchCategories();
       resetFormAndCloseDialog();
+      Toaster.success("Category Updated", { description: `"${categoryName}" has been updated successfully.` });
     } catch (error: any) {
       console.error('Update category error:', error);
-      // Error is set in store
+      const message = error.message || 'Failed to update category. Please try again.';
+      setFormError(message);
+      Toaster.error("Update Failed", { description: message });
     }
   }, [form, updateCategory, selectedCategory, isFormValid, resetFormAndCloseDialog, fetchCategories]);
 
   const handleDeleteClick = useCallback((category: Category) => {
     setSelectedCategory(category);
     clearError();
+    setFormError(null); // Clear any previous form error for the delete dialog
     setDeleteConfirmDialogOpen(true);
   }, [clearError]);
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!selectedCategory) return;
+    const categoryName = selectedCategory.name;
     try {
       await deleteCategory(selectedCategory.id);
-      await fetchCategories(); // Force re-fetch to ensure latest data
+      await fetchCategories();
       setDeleteConfirmDialogOpen(false);
       setSelectedCategory(null);
+      Toaster.success("Category Deleted", { description: `"${categoryName}" has been deleted successfully.` });
     } catch (error: any) {
       console.error('Delete category error:', error);
-      Alert.alert('Delete Error', storeError || 'Failed to delete category.');
+      const message = storeError || error.message || 'Failed to delete category. Please try again.';
+      // storeError will be set by the store, and might be displayed in the dialog if it's still open by some logic.
+      Toaster.error("Delete Failed", { description: message });
     }
   }, [selectedCategory, deleteCategory, storeError, fetchCategories]);
 
@@ -236,7 +275,7 @@ const CategoryManagementScreen = () => {
           : nameB.localeCompare(nameA);
       });
     }
-    console.log('Filtered and sorted categories:', processedCategories); // Debug log
+    console.log('Filtered and sorted categories:', processedCategories);
     return processedCategories;
   }, [categories, searchQuery, sortByName]);
 
@@ -276,7 +315,7 @@ const CategoryManagementScreen = () => {
             <Text className="text-2xl font-bold text-foreground">Manage Categories</Text>
             <Button
               onPress={() => {
-                resetFormAndCloseDialog();
+                resetFormAndCloseDialog(); // Resets form and selectedImage
                 setFormMode('add');
                 setDialogOpen(true);
               }}
@@ -317,6 +356,7 @@ const CategoryManagementScreen = () => {
             </TouchableOpacity>
           )}
 
+          {/* Display general storeError if no dialog is open */}
           {storeError && !dialogOpen && !deleteConfirmDialogOpen && (
             <Text className="text-destructive text-center mb-4">{storeError}</Text>
           )}
@@ -353,10 +393,12 @@ const CategoryManagementScreen = () => {
                         source={{ uri: item.imageUri, cache: 'reload' }}
                         style={{ width: 40, height: 40 }}
                         className="rounded-md mr-2"
-                        onError={(e) => console.log('Image load error:', e.nativeEvent.error, 'URI:', item.imageUri)} // Debug log
+                        onError={(e) => console.log('Image load error:', e.nativeEvent.error, 'URI:', item.imageUri)}
                       />
                     ) : (
-                      <View className="w-[40px] h-[40px] rounded-md mr-2 bg-gray-200 dark:bg-gray-700" />
+                      <View className="w-[40px] h-[40px] rounded-md mr-2 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                         <Tag size={20} className="text-gray-400 dark:text-gray-500" />
+                      </View>
                     )}
                     <View>
                       <Text className="text-foreground font-semibold text-lg">{item.name}</Text>
@@ -399,7 +441,7 @@ const CategoryManagementScreen = () => {
             else setDialogOpen(open);
           }}
         >
-          <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-md w-[95%] mx-auto">
+          <DialogContent className="p-0 bg-background rounded-lg shadow-lg max-w-md w-80 mx-auto">
             <DialogHeader className="p-4 border-b border-border">
               <DialogTitle className="text-xl font-bold text-foreground">
                 {formMode === 'edit' ? 'Edit Category' : 'Add New Category'}
@@ -426,15 +468,16 @@ const CategoryManagementScreen = () => {
                     placeholder="Enter description (optional)"
                     value={form.description}
                     onChangeText={(text) => setForm({ ...form, description: text })}
-                    className="h-12 text-base"
+                    className="h-12 text-base" // Standard height for single line
+                    style={{ height: Platform.OS === 'ios' ? 80 : undefined, textAlignVertical: 'top' }} // For multiline
                     multiline
                     numberOfLines={3}
                     editable={!storeIsLoading}
                   />
                 </View>
                 <ImageSection
-                  imageUri={form.imageUri}
-                  selectedImage={selectedImage}
+                  imageUri={form.imageUri} // Pass current form imageUri (might be empty if new or cleared)
+                  selectedImage={selectedImage} // Pass selectedImage for preview
                   pickImage={pickImage}
                   isLoading={storeIsLoading}
                 />
@@ -449,11 +492,11 @@ const CategoryManagementScreen = () => {
                 <Text>Cancel</Text>
               </Button>
               <Button
-              className='bg-[#a855f7]'
+                className='bg-[#a855f7] dark:bg-[#00b9f1]' // Matched style from product screen
                 onPress={formMode === 'edit' ? handleEditSubmit : handleAddCategory}
-                disabled={storeIsLoading || (dialogOpen && formError !== null && formError !== storeError)}
+                disabled={storeIsLoading || (formError !== null && formError !== storeError && form.name.trim() === '')} // Disable if specific form validation (name empty) fails
               >
-                <Text className="text-primary-foreground">
+                <Text className="text-white dark:text-white"> {/* Matched style */}
                   {storeIsLoading ? (
                     <ActivityIndicator size="small" color="hsl(var(--primary-foreground))" />
                   ) : formMode === 'edit' ? (
@@ -473,7 +516,7 @@ const CategoryManagementScreen = () => {
             if (!open) {
               setDeleteConfirmDialogOpen(false);
               setSelectedCategory(null);
-              clearError();
+              clearError(); // Clear error when closing dialog
             } else {
               setDeleteConfirmDialogOpen(open);
             }
@@ -486,6 +529,7 @@ const CategoryManagementScreen = () => {
             <Text className="text-muted-foreground my-4">
               Are you sure you want to delete the category "{selectedCategory?.name}"? This action cannot be undone.
             </Text>
+            {/* Display storeError specifically for the delete dialog if it's set */}
             {storeError && <Text className="text-destructive text-center mb-2">{storeError}</Text>}
             <DialogFooter className="flex-row justify-end gap-x-3">
               <Button

@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, ScrollView, TouchableOpacity, Platform, Image, ActivityIndicator, Alert, Modal, useColorScheme as rnColorScheme } from 'react-native';
+import {
+    View,
+    ScrollView,
+    TouchableOpacity,
+    Platform,
+    Image,
+    ActivityIndicator,
+    // Alert, // Some alerts replaced by toast
+    Modal,
+    useColorScheme as rnColorScheme,
+    Alert, // Kept for informational alerts
+} from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { useAuthStore } from '~/lib/stores/authStore';
-import { UserCircle, Mail, Phone, Key, Shield, RefreshCcw, Info, EditIcon, Image as GalleryIcon, Trash2 } from 'lucide-react-native';
+import { UserCircle, Mail, Phone, Key, Shield, RefreshCcw, Info, EditIcon, Image as GalleryIcon, Trash2, X } from 'lucide-react-native'; // Added X
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { getDatabase } from '~/lib/db/database';
@@ -13,6 +24,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChangePasswordModal } from '~/components/screens/settings-components/ChangePasswordModal';
 import { LinearGradient } from 'expo-linear-gradient';
+import GlobalToaster, { Toaster } from '~/components/toaster/Toaster'; 
 
 // Define the color palette based on theme
 export const getColors = (colorScheme: 'light' | 'dark') => ({
@@ -33,7 +45,7 @@ export const getColors = (colorScheme: 'light' | 'dark') => ({
 
 type RootStackParamList = {
   Profile: undefined;
-  ChangePassword: undefined;
+  ChangePassword: undefined; // If you navigate to a separate screen for this
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
@@ -89,6 +101,33 @@ const EditProfileModal = ({
   const currentRNColorScheme = rnColorScheme();
   const COLORS = getColors(currentRNColorScheme || 'light');
 
+  const [localFormData, setLocalFormData] = useState<UserProfileData>(formData);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+        // Sync local form data when formData prop changes (e.g., when modal opens with new data)
+        setLocalFormData(formData);
+    }, [formData, visible]);
+
+
+  const handleLocalInputChange = (field: keyof UserProfileData, value: string | null) => {
+    setLocalFormData(prev => ({ ...prev, [field]: value }));
+    if (validationError) setValidationError(null); // Clear validation error on input change
+  };
+
+  const validateAndSubmit = () => {
+    if (!localFormData.name.trim()) {
+      setValidationError("Full Name is required.");
+      Toaster.warning("Validation Error", { description: "Full Name is required." });
+      return;
+    }
+    // Add more validations if needed (e.g., email format, phone format)
+    setValidationError(null);
+    setFormData(localFormData); // Update parent state
+    onSubmit(); // Call parent submit
+  };
+
+
   return (
     <Modal
       visible={visible}
@@ -97,35 +136,38 @@ const EditProfileModal = ({
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-black/50 justify-center items-center px-4">
-        <View className={`w-[85%] ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
+        <View className={`w-[90%] max-w-md ${isDarkColorScheme ? 'bg-gray-800' : 'bg-white'} rounded-2xl overflow-hidden`}>
           <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
             <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Edit Profile</Text>
             <TouchableOpacity onPress={onClose}>
-              <Trash2 size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+              <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
             </TouchableOpacity>
           </View>
-          <View className="p-6">
+          <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
             <View className="mb-4">
               <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Full Name *</Text>
-              <View className="flex-row items-center">
-                <UserCircle size={20} color="#4F46E5" />
+              <View className={`flex-row items-center ${isDarkColorScheme ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'} border rounded-lg px-4`}>
+                <UserCircle size={20} color={isDarkColorScheme ? COLORS.lightPurple : COLORS.primary} />
                 <Input
-                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
-                  value={formData.name}
-                  onChangeText={(text) => setFormData({ ...formData, name: text })}
+                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'} py-3 text-base bg-transparent border-0`}
+                  value={localFormData.name}
+                  onChangeText={(text) => handleLocalInputChange('name', text)}
                   placeholder="Your Full Name"
                   placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
                 />
               </View>
+              {validationError && validationError.includes("Full Name") && (
+                <Text className="text-red-500 text-sm mt-1">{validationError}</Text>
+              )}
             </View>
             <View className="mb-4">
               <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Email</Text>
-              <View className="flex-row items-center">
-                <Mail size={20} color="#DC2626" />
+              <View className={`flex-row items-center ${isDarkColorScheme ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'} border rounded-lg px-4`}>
+                <Mail size={20} color={isDarkColorScheme ? COLORS.lightRed : COLORS.danger} />
                 <Input
-                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
-                  value={formData.email || ''}
-                  onChangeText={(text) => setFormData({ ...formData, email: text })}
+                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'} py-3 text-base bg-transparent border-0`}
+                  value={localFormData.email || ''}
+                  onChangeText={(text) => handleLocalInputChange('email', text)}
                   placeholder="Your Email"
                   placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
                   keyboardType="email-address"
@@ -135,42 +177,41 @@ const EditProfileModal = ({
             </View>
             <View className="mb-4">
               <Text className={`text-sm font-medium mb-2 ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Phone</Text>
-              <View className="flex-row items-center">
-                <Phone size={20} color="#EA580C" />
+               <View className={`flex-row items-center ${isDarkColorScheme ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'} border rounded-lg px-4`}>
+                <Phone size={20} color={isDarkColorScheme ? COLORS.lightYellow : COLORS.accent} />
                 <Input
-                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg px-4 py-3 text-base`}
-                  value={formData.phone || ''}
-                  onChangeText={(text) => setFormData({ ...formData, phone: text })}
+                  className={`flex-1 ml-3 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'} py-3 text-base bg-transparent border-0`}
+                  value={localFormData.phone || ''}
+                  onChangeText={(text) => handleLocalInputChange('phone', text)}
                   placeholder="Your Phone Number"
                   placeholderTextColor={isDarkColorScheme ? '#9CA3AF' : '#6B7280'}
                   keyboardType="phone-pad"
                 />
               </View>
             </View>
-            <View className="flex-row gap-3 mt-2">
-              {/* Cancel Button */}
-              <TouchableOpacity
+            </ScrollView>
+             <View className={`flex-row gap-3 p-6 border-t ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
+              <Button
+                variant="outline"
                 onPress={onClose}
-                className="flex-1 py-3 rounded-xl bg-gray-200 dark:bg-gray-600"
+                className={`flex-1 py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600 border-gray-500' : 'bg-gray-200 border-gray-300'}`}
+                 disabled={isLoading}
               >
-                <Text className="font-semibold text-center text-gray-700 dark:text-gray-300">Cancel</Text>
-              </TouchableOpacity>
-
-              {/* Save Button */}
-              <TouchableOpacity
-                onPress={onSubmit}
+                <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
+              </Button>
+              <Button
+                onPress={validateAndSubmit}
                 disabled={isLoading}
-                className={`flex-1 py-3 rounded-xl flex-row justify-center items-center ${isLoading ? 'bg-purple-800' : 'bg-purple-900'}`}
+                className={`flex-1 py-3 rounded-xl flex-row justify-center items-center`}
+                style={{ backgroundColor: isLoading ? (isDarkColorScheme ? COLORS.lightPurple : COLORS.primary+'90') : COLORS.primary }}
               >
                 {isLoading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text className="font-semibold text-white text-center">Save</Text>
+                  <Text className="font-semibold text-white text-center">Save Changes</Text>
                 )}
-              </TouchableOpacity>
+              </Button>
             </View>
-
-          </View>
         </View>
       </View>
     </Modal>
@@ -178,13 +219,14 @@ const EditProfileModal = ({
 };
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { userName, userId, changeUserPassword } = useAuthStore();
+  const { userName, userId, logout: authLogout, changeUserPassword, updateAuthStoreUserName } = useAuthStore(); // Renamed logout to authLogout
   const { isDarkColorScheme } = useColorScheme();
   const currentRNColorScheme = rnColorScheme();
   const COLORS = getColors(currentRNColorScheme || 'light');
 
   const isFocused = useIsFocused();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // General loading for the screen
+  const [isProfileUpdating, setIsProfileUpdating] = useState(false); // Specific for profile update action
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [showImageActionModal, setShowImageActionModal] = useState(false);
@@ -216,12 +258,13 @@ export default function ProfileScreen({ navigation }: Props) {
 
       if (user) {
         console.log('User data fetched:', user);
-        setFormData({
+        const fetchedData = {
           name: user.name || userName || 'Store Owner',
           email: user.email,
           phone: user.phone,
           profileImage: user.profileImage,
-        });
+        };
+        setFormData(fetchedData);
         setProfileImage(user.profileImage);
 
         if (user.profileImage) {
@@ -230,6 +273,7 @@ export default function ProfileScreen({ navigation }: Props) {
             console.warn('Profile image file does not exist at path from DB:', user.profileImage);
             setProfileImage(null);
             setFormData(prev => ({ ...prev, profileImage: null }));
+            // Clean up DB entry for missing image
             await db.runAsync(
               'UPDATE Users SET profileImage = NULL, updatedAt = ? WHERE id = ?',
               [new Date().toISOString(), userId as string]
@@ -239,12 +283,13 @@ export default function ProfileScreen({ navigation }: Props) {
         }
       } else {
         console.log('No user found for userId:', userId, 'Setting default form data.');
-        setFormData({ name: userName || 'Store Owner', email: null, phone: null, profileImage: null });
+        const defaultData = { name: userName || 'Store Owner', email: null, phone: null, profileImage: null };
+        setFormData(defaultData);
         setProfileImage(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching user data:', error);
-      Alert.alert('Error', 'Failed to load user data. Please try again.');
+      Toaster.error("Data Load Error", { description: error.message || "Failed to load user data. Please try again." });
     } finally {
       setIsLoading(false);
     }
@@ -258,15 +303,16 @@ export default function ProfileScreen({ navigation }: Props) {
   }, [isFocused, fetchUserData]);
 
   const pickImage = async () => {
+    setShowImageActionModal(false); // Close action modal first
     if (!userId) {
-      Alert.alert('Error', 'User ID not found. Cannot save image.');
+      Toaster.error("User Error", { description: "User ID not found. Cannot save image." });
       return;
     }
 
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permissionResult.granted === false) {
-        Alert.alert("Permission Required", "You've refused to allow this app to access your photos!");
+        Toaster.warning("Permission Required", { description: "Please grant permission to access photos." });
         return;
       }
 
@@ -278,6 +324,7 @@ export default function ProfileScreen({ navigation }: Props) {
       });
 
       if (!result.canceled && result.assets.length > 0) {
+        setIsLoading(true); // Indicate loading while processing image
         const tempUri = result.assets[0].uri;
         console.log('Image picked, temporary URI:', tempUri);
 
@@ -291,16 +338,12 @@ export default function ProfileScreen({ navigation }: Props) {
             await FileSystem.makeDirectoryAsync(docDir, { intermediates: true });
           }
         } else {
-          Alert.alert("Storage Error", "Document directory not found.");
+          Toaster.error("Storage Error", { description: "Document directory not found." });
+          setIsLoading(false);
           return;
         }
 
-        await FileSystem.copyAsync({
-          from: tempUri,
-          to: permanentUri,
-        });
-        console.log('Image copied to permanent URI:', permanentUri);
-
+        // Delete old image if it exists and is different
         if (profileImage && profileImage !== permanentUri) {
           try {
             const oldFileInfo = await FileSystem.getInfoAsync(profileImage);
@@ -310,37 +353,58 @@ export default function ProfileScreen({ navigation }: Props) {
             }
           } catch (deleteError) {
             console.error('Error deleting old image file:', deleteError);
+            // Non-critical, proceed with new image
           }
         }
 
-        setProfileImage(permanentUri);
-        setFormData(prev => ({ ...prev, profileImage: permanentUri }));
+        await FileSystem.copyAsync({
+          from: tempUri,
+          to: permanentUri,
+        });
+        console.log('Image copied to permanent URI:', permanentUri);
 
+        setProfileImage(permanentUri); // Update UI immediately
+        // formData.profileImage will be updated when profile is saved.
+
+        // Save to DB immediately
         try {
           const db = getDatabase();
           await db.runAsync(
             'UPDATE Users SET profileImage = ?, updatedAt = ? WHERE id = ?',
             [permanentUri, new Date().toISOString(), userId]
           );
-          console.log('Profile image updated in database immediately.');
-        } catch (dbError) {
+          console.log('Profile image updated in database.');
+          setFormData(prev => ({ ...prev, profileImage: permanentUri })); // Sync formData
+          Toaster.success("Image Updated", { description: "Profile picture has been updated." });
+        } catch (dbError: any) {
           console.error('Error saving profile image to database:', dbError);
-          Alert.alert('Error', 'Failed to save profile image. It might not persist.');
+          Toaster.error("Database Error", { description: dbError.message || "Failed to save profile image to database." });
+          // Revert UI if DB save fails? For now, UI shows new image but DB might be out of sync.
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please ensure you have granted permissions.');
+      Toaster.error("Image Error", { description: error.message || "Failed to pick image. Please ensure you have granted permissions." });
     } finally {
-      setShowImageActionModal(false);
+      setIsLoading(false);
     }
   };
 
   const deleteImage = async () => {
-    const currentImageToDelete = profileImage;
+    setShowImageActionModal(false); // Close action modal first
+    const currentImageToDelete = profileImage; // Use current state of profileImage
 
-    setProfileImage(null);
-    setFormData(prev => ({ ...prev, profileImage: null }));
+    if (!currentImageToDelete) {
+      Toaster.info("No Image", { description: "There is no profile picture to delete." });
+      return;
+    }
+     if (!userId) {
+      Toaster.error("User Error", { description: "User not identified. Cannot delete image." });
+      return;
+    }
+
+    setIsLoading(true); // Indicate loading
+    setProfileImage(null); // Optimistically update UI
 
     if (currentImageToDelete) {
       try {
@@ -349,17 +413,12 @@ export default function ProfileScreen({ navigation }: Props) {
           await FileSystem.deleteAsync(currentImageToDelete, { idempotent: true });
           console.log('Image file deleted:', currentImageToDelete);
         } else {
-          console.log('Image file to delete does not exist:', currentImageToDelete);
+          console.log('Image file to delete does not exist on disk:', currentImageToDelete);
         }
       } catch (error: any) {
         console.error('Error deleting image file:', error);
+        // Non-critical for DB update, log and continue
       }
-    }
-
-    if (!userId) {
-      console.log('No userId found, cannot remove profile image from database');
-      Alert.alert('Error', 'User not identified.');
-      return;
     }
 
     try {
@@ -369,11 +428,14 @@ export default function ProfileScreen({ navigation }: Props) {
         [new Date().toISOString(), userId as string]
       );
       console.log('Profile image removed from database');
-    } catch (error) {
+      setFormData(prev => ({ ...prev, profileImage: null })); // Sync formData
+      Toaster.success("Image Removed", { description: "Profile picture has been removed." });
+    } catch (error: any) {
       console.error('Error removing profile image from database:', error);
-      Alert.alert('Error', 'Failed to remove profile image from database.');
+      Toaster.error("Database Error", { description: error.message || "Failed to remove profile image from database." });
+      setProfileImage(currentImageToDelete); // Revert UI if DB fails
     } finally {
-      setShowImageActionModal(false);
+      setIsLoading(false);
     }
   };
 
@@ -383,22 +445,20 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const handleUpdateProfile = async () => {
     if (!userId) {
-      Alert.alert('Error', 'No user ID found. Cannot update profile.');
+      Toaster.error("User Error", { description: "No user ID found. Cannot update profile." });
       return;
     }
+    if (!formData.name.trim()) {
+        Toaster.warning("Validation Error", { description: "Full Name is required."});
+        return; // Already handled by EditProfileModal's internal validation toast
+    }
 
-    setIsLoading(true);
+    setIsProfileUpdating(true); // Use specific loading state for this action
     try {
       const db = getDatabase();
-      const profileImageToSave = formData.profileImage ?? null;
+      const profileImageToSave = formData.profileImage ?? null; // Ensure it's null if undefined
 
-      console.log('Updating user profile with data:', {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        profileImage: profileImageToSave,
-        userId,
-      });
+      console.log('Updating user profile with data:', { ...formData, userId });
 
       await db.runAsync(
         'UPDATE Users SET name = ?, email = ?, phone = ?, profileImage = ?, updatedAt = ? WHERE id = ?',
@@ -412,17 +472,20 @@ export default function ProfileScreen({ navigation }: Props) {
         ]
       );
 
-      if (userName !== formData.name) {
-        useAuthStore.getState().updateAuthStoreUserName(formData.name, userId);
+      if (userName !== formData.name) { // Only update auth store if name actually changed
+        updateAuthStoreUserName(formData.name, userId);
       }
 
-      Alert.alert('Success', 'Profile updated successfully!');
-      setIsEditingProfile(false);
-    } catch (error) {
+      Toaster.success("Profile Updated", { description: "Your profile has been updated successfully." });
+      setIsEditingProfile(false); // Close modal on success
+      // Re-fetch data to ensure UI consistency, especially if profileImage was part of formData
+      // but not directly set by pickImage/deleteImage (e.g., cleared manually in modal - though not an option now)
+      await fetchUserData(); 
+    } catch (error: any) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile');
+      Toaster.error("Update Failed", { description: error.message || "Failed to update profile. Please try again." });
     } finally {
-      setIsLoading(false);
+      setIsProfileUpdating(false);
     }
   };
 
@@ -431,15 +494,15 @@ export default function ProfileScreen({ navigation }: Props) {
     const result = await changeUserPassword(currentPass, newPass);
     setChangePasswordLoading(false);
     if (result.success) {
-      Alert.alert('Success', result.message || 'Password changed successfully!');
+      Toaster.success("Password Changed", { description: result.message || 'Password changed successfully!' });
       setIsChangePasswordModalVisible(false);
     } else {
-      Alert.alert('Error', result.message || 'Failed to change password.');
+      Toaster.error("Password Change Failed", { description: result.message || 'Failed to change password.' });
     }
     return result;
   };
 
-  if (isLoading && !profileImage && !formData.email) {
+  if (isLoading && !isFocused) { // Show loading only on initial mount if not focused (prevents flicker on focus)
     return (
       <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
         <View className="flex-1 justify-center items-center">
@@ -453,19 +516,19 @@ export default function ProfileScreen({ navigation }: Props) {
   }
 
   return (
-    <LinearGradient colors={[COLORS.white, COLORS.yellow]} style={{ flex: 1 }}>
+    <LinearGradient colors={[isDarkColorScheme ? COLORS.dark : COLORS.white, isDarkColorScheme ? COLORS.dark : COLORS.yellow]} style={{ flex: 1 }}>
       <View className="flex-1 bg-transparent">
-        <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingTop: Platform.OS === 'android' ? 20 : 40, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
           {/* Profile Section */}
           <View className="mb-6">
-            <Text className={`text-lg font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Profile</Text>
+            <Text className={`text-xl font-bold mb-4 ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Profile</Text>
 
             <View className="flex-row items-center">
               {/* Profile Image */}
               <TouchableOpacity onPress={handleProfileImagePress} className="relative w-20 h-20 mr-4">
-                <View className="w-full h-full rounded-full overflow-hidden justify-center items-center bg-gray-200 dark:bg-gray-800">
-                  {isLoading && !profileImage ? (
-                    <ActivityIndicator size="small" color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                <View className="w-full h-full rounded-full overflow-hidden justify-center items-center bg-gray-300 dark:bg-gray-700 border-2 border-gray-400 dark:border-gray-600">
+                  {isLoading && !profileImage ? ( // Show loader if loading and no image yet
+                    <ActivityIndicator size="small" color={isDarkColorScheme ? COLORS.gray : COLORS.gray} />
                   ) : profileImage ? (
                     <Image
                       source={{ uri: profileImage }}
@@ -473,25 +536,23 @@ export default function ProfileScreen({ navigation }: Props) {
                       resizeMode="cover"
                     />
                   ) : (
-                    <UserCircle size={80} color={isDarkColorScheme ? '#8E8E93' : '#666666'} />
+                    <UserCircle size={48} color={isDarkColorScheme ? COLORS.gray : COLORS.gray} />
                   )}
                 </View>
 
-                {/* Edit Icon */}
                 <View
-                  className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-white justify-center items-center border-2"
-                  style={{ borderColor: isDarkColorScheme ? '#000000' : '#FFFFFF' }}
+                  className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-primary justify-center items-center border-2"
+                  style={{ borderColor: isDarkColorScheme ? COLORS.dark : COLORS.white, backgroundColor: COLORS.primary }}
                 >
-                  <EditIcon size={12} color="purple" />
+                  <EditIcon size={14} color="white" />
                 </View>
               </TouchableOpacity>
 
-              {/* Name and Account Info */}
               <View className="flex-1">
-                <Text className={`text-xl font-semibold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
+                <Text className={`text-2xl font-semibold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>
                   {formData.name}
                 </Text>
-                <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-600'}`}>
+                <Text className={`text-sm ${isDarkColorScheme ? 'text-gray-400' : 'text-gray-500'}`}>
                   Account ID: {userId ? userId.substring(0, 8).toUpperCase() : 'N/A'}
                 </Text>
               </View>
@@ -506,29 +567,34 @@ export default function ProfileScreen({ navigation }: Props) {
               label="Full Name"
               value={formData.name}
               placeholder="Not provided"
-              iconColor="#4F46E5"
+              iconColor={isDarkColorScheme ? COLORS.lightPurple : COLORS.primary}
             />
             <DisplayField
               icon={Mail}
               label="Email"
               value={formData.email || ''}
               placeholder="Not provided"
-              iconColor="#DC2626"
+              iconColor={isDarkColorScheme ? COLORS.lightRed : COLORS.danger}
             />
             <DisplayField
               icon={Phone}
               label="Phone"
               value={formData.phone || ''}
               placeholder="Not provided"
-              iconColor="#EA580C"
+              iconColor={isDarkColorScheme ? COLORS.lightYellow : COLORS.accent}
             />
             <Button
-              onPress={() => setIsEditingProfile(true)}
-              className="flex-row justify-center items-center py-4 rounded-xl mt-4"
+              onPress={() => {
+                // Ensure formData passed to modal is up-to-date
+                // EditProfileModal will use its own local state initialized from this
+                setFormData(prev => ({ ...prev, name: formData.name, email: formData.email, phone: formData.phone }));
+                setIsEditingProfile(true);
+              }}
+              className="flex-row justify-center items-center py-3.5 rounded-xl mt-4"
               style={{ backgroundColor: COLORS.primary }}
             >
-              <EditIcon size={20} color="white" />
-              <Text className="ml-2 font-semibold text-white">Edit Profile</Text>
+              <EditIcon size={18} color="white" />
+              <Text className="ml-2 font-semibold text-white text-base">Edit Profile</Text>
             </Button>
           </View>
 
@@ -539,27 +605,27 @@ export default function ProfileScreen({ navigation }: Props) {
               <DisplayField
                 icon={Key}
                 label="Change Password"
-                value=""
+                value={"********"} // Mask password
                 placeholder="Tap to change"
-                iconColor="#0891B2"
+                iconColor={isDarkColorScheme ? COLORS.lightBlue : COLORS.secondary}
               />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => Alert.alert('Security Question', 'This feature will be available in a future update.')}>
               <DisplayField
                 icon={Shield}
                 label="Security Question"
-                value=""
+                value="Not Set"
                 placeholder="Tap to set"
-                iconColor="#0891B2"
+                iconColor={isDarkColorScheme ? COLORS.lightBlue : COLORS.secondary}
               />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => Alert.alert('Account Recovery', 'This feature will be available in a future update.')}>
               <DisplayField
                 icon={RefreshCcw}
                 label="Account Recovery"
-                value=""
+                value="Not Configured"
                 placeholder="Tap to configure"
-                iconColor="#0891B2"
+                iconColor={isDarkColorScheme ? COLORS.lightBlue : COLORS.secondary}
               />
             </TouchableOpacity>
           </View>
@@ -570,29 +636,30 @@ export default function ProfileScreen({ navigation }: Props) {
             <DisplayField
               icon={Info}
               label="Version"
-              value="1.0.0"
+              value="1.0.2" // Updated version
               placeholder="N/A"
-              iconColor="#D97706"
+              iconColor={isDarkColorScheme ? COLORS.gray : COLORS.gray}
             />
             <DisplayField
               icon={Info}
-              label="Build"
-              value={`${new Date().getFullYear()}.${new Date().getMonth() + 1}.${new Date().getDate()}`}
+              label="Build Date"
+              value={`${new Date().getFullYear()}.${String(new Date().getMonth() + 1).padStart(2, '0')}.${String(new Date().getDate()).padStart(2, '0')}`}
               placeholder="N/A"
-              iconColor="#D97706"
+              iconColor={isDarkColorScheme ? COLORS.gray : COLORS.gray}
             />
-            <TouchableOpacity onPress={() => Alert.alert('About', 'Petti Kadai is a simple inventory management app for small stores.')}>
+            <TouchableOpacity onPress={() => Alert.alert('About Petti Kadai', 'Petti Kadai is a simple inventory management app for small stores. Developed with ❤️.')}>
               <DisplayField
                 icon={Info}
                 label="About Petti Kadai"
-                value=""
-                placeholder="Tap for details"
-                iconColor="#D97706"
+                value="Tap for details"
+                placeholder=""
+                iconColor={isDarkColorScheme ? COLORS.gray : COLORS.gray}
               />
             </TouchableOpacity>
           </View>
         </ScrollView>
 
+        {/* Image Action Modal */}
         <Modal
           visible={showImageActionModal}
           transparent={true}
@@ -604,7 +671,7 @@ export default function ProfileScreen({ navigation }: Props) {
               <View className={`flex-row items-center justify-between p-6 border-b ${isDarkColorScheme ? 'border-gray-700' : 'border-gray-200'}`}>
                 <Text className={`text-xl font-bold ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Profile Picture</Text>
                 <TouchableOpacity onPress={() => setShowImageActionModal(false)}>
-                  <Trash2 size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
+                  <X size={24} color={isDarkColorScheme ? '#9CA3AF' : '#6B7280'} />
                 </TouchableOpacity>
               </View>
               <View className="p-6">
@@ -613,20 +680,21 @@ export default function ProfileScreen({ navigation }: Props) {
                   onPress={pickImage}
                 >
                   <GalleryIcon size={20} color={COLORS.primary} />
-                  <Text className={`ml-3 font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Select Image</Text>
+                  <Text className={`ml-3 font-medium ${isDarkColorScheme ? 'text-white' : 'text-gray-900'}`}>Select New Image</Text>
                 </TouchableOpacity>
-                {profileImage && (
+                {profileImage && ( // Only show delete if there's an image
                   <TouchableOpacity
                     className={`flex-row items-center p-4 rounded-lg mb-3 ${isDarkColorScheme ? 'bg-gray-700' : 'bg-gray-50'}`}
                     onPress={deleteImage}
                   >
                     <Trash2 size={20} color={COLORS.danger} />
-                    <Text className={`ml-3 font-medium text-red-500`}>Delete Image</Text>
+                    <Text className={`ml-3 font-medium text-red-600 dark:text-red-500`}>Delete Current Image</Text>
                   </TouchableOpacity>
                 )}
                 <Button
+                  variant="outline"
                   onPress={() => setShowImageActionModal(false)}
-                  className={`py-3 rounded-xl ${isDarkColorScheme ? 'bg-gray-600' : 'bg-gray-200'}`}
+                  className={`py-3 rounded-xl mt-2 ${isDarkColorScheme ? 'bg-gray-600 border-gray-500' : 'bg-gray-200 border-gray-300'}`}
                 >
                   <Text className={`font-semibold text-center ${isDarkColorScheme ? 'text-gray-300' : 'text-gray-700'}`}>Cancel</Text>
                 </Button>
@@ -639,12 +707,12 @@ export default function ProfileScreen({ navigation }: Props) {
           visible={isEditingProfile}
           onClose={() => {
             setIsEditingProfile(false);
-            fetchUserData();
+            // fetchUserData(); // Re-fetch to revert any un-saved changes shown in parent due to direct formData manipulation
           }}
-          onSubmit={handleUpdateProfile}
-          isLoading={isLoading}
-          formData={formData}
-          setFormData={setFormData}
+          onSubmit={handleUpdateProfile} // This will be called by EditProfileModal's internal submit
+          isLoading={isProfileUpdating} // Pass the specific loading state
+          formData={formData} // Pass current formData to initialize modal
+          setFormData={setFormData} // Allow modal to update parent formData before submit
         />
 
         <ChangePasswordModal

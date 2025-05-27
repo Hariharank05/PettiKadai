@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo, useReducer } from 'react';
-import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList, Alert, useColorScheme as rnColorScheme } from 'react-native';
+import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList, Alert, useColorScheme as rnColorScheme } from 'react-native'; // Alert will be removed where Toaster is used
 import { Product, ProductInput } from '~/lib/models/product';
 import { useProductStore } from '~/lib/stores/productStore';
 import { useCategoryStore } from '~/lib/stores/categoryStore';
+import GlobalToaster, { Toaster } from '~/components/toaster/Toaster'; 
 import {
   Card,
   CardContent,
@@ -899,7 +900,7 @@ const ProductManagementScreen = () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permissionResult.granted === false) {
-        Alert.alert("Permission Denied", "Permission to access camera roll is required!");
+        Toaster.error("Permission Denied", { description: "Permission to access camera roll is required!" });
         return;
       }
 
@@ -915,7 +916,7 @@ const ProductManagementScreen = () => {
       }
     } catch (e) {
       console.error("Image picking error: ", e);
-      setFormError("Could not select image. Please try again.");
+      Toaster.error("Image Error", { description: "Could not select image. Please try again." });
     }
   }, [dispatch]);
 
@@ -938,8 +939,9 @@ const ProductManagementScreen = () => {
       if (!formState.name.trim()) errorMsg = 'Product name is required.';
       else if (!formState.costPrice || parseFloat(formState.costPrice) <= 0) errorMsg = 'Valid cost price is required.';
       else if (!formState.sellingPrice || parseFloat(formState.sellingPrice) <= 0) errorMsg = 'Valid selling price is required.';
-      else if (formState.category.trim() === '') errorMsg = 'Category is required.'; // Adjusted check
+      else if (formState.category.trim() === '') errorMsg = 'Category is required.';
       setFormError(errorMsg);
+      Toaster.warning("Validation Error", { description: errorMsg });
       return;
     }
     setUiIsLoading(true);
@@ -957,10 +959,11 @@ const ProductManagementScreen = () => {
             console.log(`Attempting to add new category from product form: ${finalCategoryName}`);
             await addStoreCategory({ name: finalCategoryName, description: '', imageUri: undefined });
             console.log(`New category "${finalCategoryName}" added to store.`);
-            await fetchStoreCategories();
+            await fetchStoreCategories(); // Refresh categories in store
           } catch (catError) {
             console.error(`Failed to add new category "${finalCategoryName}" from product form:`, catError);
-            Alert.alert("Category Error", `Could not add new category: ${catError instanceof Error ? catError.message : String(catError)}. Product will be saved with this category name.`);
+            const message = catError instanceof Error ? catError.message : String(catError);
+            Toaster.error("Category Error", { description: `Could not add new category: ${message}. Product will be saved with this category name.` });
           }
         } else {
           console.log(`Category "${finalCategoryName}" already exists in store. Using existing.`);
@@ -986,20 +989,24 @@ const ProductManagementScreen = () => {
           category: finalCategoryName || undefined,
         };
         await addProduct(productData);
+        Toaster.success("Product Added", { description: `"${productData.name}" has been added successfully.` });
       } else if (selectedProduct) {
         const productData: Partial<Omit<ProductInput, 'userId'>> = {
           ...commonProductData,
-          category: selectedProduct.category, // In edit mode, category is not changed for the product
-          isActive: selectedProduct.isActive, // Preserve existing isActive status
+          category: selectedProduct.category, 
+          isActive: selectedProduct.isActive, 
         };
         await updateProduct(selectedProduct.id, productData);
+        Toaster.success("Product Updated", { description: `"${productData.name}" has been updated successfully.` });
       }
 
-      setDialogOpen(false);
+      setDialogOpen(false); // This will trigger resetDialogState via onOpenChange
       fetchProducts();
     } catch (e: any) {
       console.error(`Failed to ${formMode === 'add' ? 'add' : 'update'} product:`, e);
-      setFormError(e.message || `Failed to ${formMode === 'add' ? 'add' : 'update'} product. Please try again.`);
+      const message = e.message || `Failed to ${formMode === 'add' ? 'add' : 'update'} product. Please try again.`;
+      setFormError(message);
+      Toaster.error(`Operation Failed`, { description: message });
     } finally {
       setUiIsLoading(false);
     }
@@ -1021,7 +1028,7 @@ const ProductManagementScreen = () => {
     });
     setFormMode('edit');
     setIsNewCategory(false); 
-    setIsNewProduct(false); // When editing, product name isn't "new" but pre-filled and editable
+    setIsNewProduct(false);
     setIsCategoryAccordionOpen(false);
     setIsProductAccordionOpen(false);
     setFormError(null);
@@ -1039,12 +1046,14 @@ const ProductManagementScreen = () => {
     setFormError(null);
     try {
       await deleteProduct(selectedProduct.id);
+      Toaster.success("Product Deleted", { description: `"${selectedProduct.name}" has been marked as inactive.`});
       setDeleteDialogOpen(false);
       setSelectedProduct(null);
       fetchProducts();
     } catch (e: any)      {
       console.error('Failed to delete product:', e);
-      Alert.alert("Delete Error", e.message || 'Failed to delete product. Please try again.');
+      const message = e.message || 'Failed to delete product. Please try again.';
+      Toaster.error("Delete Error", { description: message });
     } finally {
       setUiIsLoading(false);
     }
@@ -1057,8 +1066,10 @@ const ProductManagementScreen = () => {
     try {
       await fetchProducts();
       await fetchStoreCategories();
+      Toaster.info("Data Refreshed", { description: "Products and categories have been updated." });
     } catch (e) {
       console.error("Error on refresh: ", e);
+      Toaster.error("Refresh Failed", { description: "Could not refresh data." });
     } finally {
       setRefreshing(false);
     }
@@ -1086,16 +1097,12 @@ const ProductManagementScreen = () => {
     if (formMode === 'edit') return; 
     const productDetails = products.find(p => p.name === itemName);
     setIsNewProduct(false); 
-    // dispatch({ type: 'UPDATE_FIELD', field: 'name', value: itemName }); // This was in the first file
     
     if (productDetails) {
       dispatch({
         type: 'SET_FORM', 
         payload: {
           name: productDetails.name,
-          // If selecting an existing product, it might have its own category.
-          // Decide if this should override the current category selection or not.
-          // For now, let's assume if a product is selected, its category is also adopted.
           category: productDetails.category || '', 
           costPrice: productDetails.costPrice.toString(),
           sellingPrice: productDetails.sellingPrice.toString(),
@@ -1104,10 +1111,8 @@ const ProductManagementScreen = () => {
           imageUri: productDetails.imageUri || '',
         },
       });
-      // If product has a category, it's not a new category.
       setIsNewCategory(!!productDetails.category ? false : true);
     } else {
-      // Fallback if productDetails not found, just set name and assume new category
       dispatch({ type: 'UPDATE_FIELD', field: 'name', value: itemName });
       dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
       setIsNewCategory(true);
@@ -1120,7 +1125,6 @@ const ProductManagementScreen = () => {
   const handleAddNewProductMode = useCallback(() => {
     setIsNewProduct(true);
     dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' }); 
-    // If formMode is 'add' and category wasn't already new, make it new
     if (formMode === 'add' && !isNewCategory) {
         setIsNewCategory(true);
         dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
