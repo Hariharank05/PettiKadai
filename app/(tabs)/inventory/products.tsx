@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useReducer } from 're
 import { View, Text, Platform, Image, ScrollView, KeyboardAvoidingView, TouchableOpacity, RefreshControl, FlatList, Alert, useColorScheme as rnColorScheme } from 'react-native';
 import { Product, ProductInput } from '~/lib/models/product';
 import { useProductStore } from '~/lib/stores/productStore';
-import { useCategoryStore } from '~/lib/stores/categoryStore'; // Import category store
+import { useCategoryStore } from '~/lib/stores/categoryStore';
 import {
   Card,
   CardContent,
@@ -101,7 +101,6 @@ const ControlledInput = React.memo(
       }
     }, [value]);
 
-
     const handleTextChange = (text: string) => {
       setLocalValue(text);
       throttledUpdate(text);
@@ -113,7 +112,7 @@ const ControlledInput = React.memo(
         onChangeText={handleTextChange}
         placeholder={placeholder}
         keyboardType={keyboardType}
-        className={`h-12 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base placeholder-gray-400 dark:placeholder-gray-500 ${className}`}
+        className={`h-12 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-base placeholder-gray-400 dark:placeholder-gray-500 ${className} ${!editable ? 'opacity-70 bg-gray-100 dark:bg-gray-700' : ''}`}
         editable={editable}
       />
     );
@@ -143,6 +142,7 @@ interface CategorySectionProps {
   categorySearch: string;
   setCategorySearch: React.Dispatch<React.SetStateAction<string>>;
   filteredCategoriesFromStore: string[];
+  formMode: 'add' | 'edit';
   onSelectCategory: (category: string) => void;
   onAddNewCategory: () => void;
 }
@@ -160,99 +160,112 @@ const CategorySection = React.memo(
     categorySearch,
     setCategorySearch,
     filteredCategoriesFromStore,
+    formMode,
     onSelectCategory,
     onAddNewCategory,
   }: CategorySectionProps) => {
+    const isEditMode = formMode === 'edit';
+
     return (
       <View>
         <Text className="mb-2 text-base font-semibold text-gray-700 dark:text-gray-300">Category</Text>
-        <View className="flex-row justify-between items-center mb-2">
-          <Text className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            {isNewCategory ? 'Enter New Category' : 'Select Existing Category'}
-          </Text>
-          <ShadcnButton
-            variant="ghost"
-            size="sm"
-            onPress={() => {
-              const newIsNewCategory = !isNewCategory;
-              setIsNewCategory(newIsNewCategory);
-              dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
-
-              if (newIsNewCategory) {
-                setIsNewProduct(true);
-                dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
-                setIsAccordionOpen(false);
-              }
-            }}
-            disabled={isLoading}
-            className="px-2"
-          >
-            <Text className="text-[#00b9f1] dark:text-[#00b9f1] font-medium">
-              {isNewCategory ? 'Select Existing' : 'Add New'}
-            </Text>
-          </ShadcnButton>
-        </View>
-        {isNewCategory ? (
+        {isEditMode ? (
           <View>
             <ControlledInput
               value={category}
-              onChangeText={(text) => dispatch({ type: 'UPDATE_FIELD', field: 'category', value: text })}
-              placeholder="Enter new category name"
-              editable={!isLoading}
+              onChangeText={() => {}}
+              placeholder="Category"
+              editable={false}
             />
           </View>
         ) : (
-          <View>
-            <TouchableOpacity
-              onPress={() => setIsAccordionOpen(!isAccordionOpen)}
-              className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
-              disabled={isLoading}
-            >
-              <Text className="text-base text-gray-900 dark:text-gray-100">
-                {category || 'Select a category'}
+          <>
+            <View className="flex-row justify-between items-center mb-2">
+              <Text className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                {isNewCategory ? 'Enter New Category' : 'Select Existing Category'}
               </Text>
-              {isAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
-            </TouchableOpacity>
-            {isAccordionOpen && (
-              <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
-                <View className="p-2">
-                  <TouchableOpacity
-                    onPress={onAddNewCategory}
-                    className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
-                  >
-                    <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Category...</Text>
-                  </TouchableOpacity>
-                  <ControlledInput
-                    value={categorySearch}
-                    onChangeText={setCategorySearch}
-                    placeholder="Search categories..."
-                    editable={!isLoading}
-                    className="mb-1 text-sm"
-                  />
-                </View>
-                {/* Ensure this FlatList has enough items in `filteredCategoriesFromStore` to exceed 150px height for scrollbar to appear */}
-                <FlatList
-                  data={filteredCategoriesFromStore}
-                  keyExtractor={(item) => item}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => onSelectCategory(item)}
-                      className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
-                    >
-                      <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
-                    </TouchableOpacity>
-                  )}
-                  ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No categories found.</Text>}
-                  style={{ maxHeight: 150 }}
-                  nestedScrollEnabled={true}
-                  showsVerticalScrollIndicator={true}
-                  alwaysBounceVertical={Platform.OS === 'ios'} // Improves iOS scroll feedback
-                  scrollIndicatorInsets={{ right: 1 }} // Ensures scrollbar isn’t clipped
-                  overScrollMode="always" // Enables overscroll for Android
-                />
+              <ShadcnButton
+                variant="ghost"
+                size="sm"
+                onPress={() => {
+                  const newIsNewCategory = !isNewCategory;
+                  setIsNewCategory(newIsNewCategory);
+                  dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
+                  if (newIsNewCategory) {
+                    setIsNewProduct(true);
+                    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
+                    setIsAccordionOpen(false);
+                  }
+                }}
+                disabled={isLoading}
+                className="px-2"
+              >
+                <Text className="text-[#00b9f1] dark:text-[#00b9f1] font-medium">
+                  {isNewCategory ? 'Select Existing' : 'Add New'}
+                </Text>
+              </ShadcnButton>
+            </View>
+            {isNewCategory ? (
+              <ControlledInput
+                value={category}
+                onChangeText={(text) => dispatch({ type: 'UPDATE_FIELD', field: 'category', value: text })}
+                placeholder="Enter new category name"
+                editable={!isLoading}
+              />
+            ) : (
+              <View>
+                <TouchableOpacity
+                  onPress={() => setIsAccordionOpen(!isAccordionOpen)}
+                  className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
+                  disabled={isLoading}
+                >
+                  <Text className="text-base text-gray-900 dark:text-gray-100">
+                    {category || 'Select a category'}
+                  </Text>
+                  {isAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
+                </TouchableOpacity>
+                {isAccordionOpen && (
+                  <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
+                    <View className="p-2">
+                      <TouchableOpacity
+                        onPress={onAddNewCategory}
+                        className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
+                      >
+                        <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Category...</Text>
+                      </TouchableOpacity>
+                      <ControlledInput
+                        value={categorySearch}
+                        onChangeText={setCategorySearch}
+                        placeholder="Search categories..."
+                        editable={!isLoading}
+                        className="mb-1 text-sm"
+                      />
+                    </View>
+                    <FlatList
+                      data={filteredCategoriesFromStore}
+                      keyExtractor={(item) => item}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          onPress={() => onSelectCategory(item)}
+                          className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
+                        >
+                          <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
+                        </TouchableOpacity>
+                      )}
+                      ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No categories found.</Text>}
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                      alwaysBounceVertical={Platform.OS === 'ios'}
+                      scrollIndicatorInsets={{ right: 1 }}
+                      overScrollMode="always"
+                      persistentScrollbar={Platform.OS === 'android'} // Added for Android persistent scrollbar
+                    />
+                  </View>
+                )}
               </View>
             )}
-          </View>
+          </>
         )}
       </View>
     );
@@ -272,6 +285,7 @@ interface ProductNameSectionProps {
   productSearch: string;
   setProductSearch: React.Dispatch<React.SetStateAction<string>>;
   filteredProductNames: string[];
+  formMode: 'add' | 'edit';
   onSelectProduct: (productName: string) => void;
   onAddNewProduct: () => void;
   isNewCategory: boolean;
@@ -290,46 +304,25 @@ const ProductNameSection = React.memo(
     productSearch,
     setProductSearch,
     filteredProductNames,
+    formMode,
     onSelectProduct,
     onAddNewProduct,
-    // isNewCategory, // Not used by the toggle's direct logic change
-    // setIsNewCategory, // Not used by the toggle's direct logic change
+    isNewCategory,
+    setIsNewCategory,
   }: ProductNameSectionProps) => {
+    const isEditMode = formMode === 'edit';
+
     return (
       <View>
         <Text className="mb-2 mt-4 text-base font-semibold text-gray-700 dark:text-gray-300">
           Product Name <Text className="text-red-500 dark:text-red-400">*</Text>
         </Text>
-        <View className="flex-row justify-between items-center mb-2">
-          <Text className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            {isNewProduct ? 'Enter New Product' : 'Select Existing Product'}
-          </Text>
-          {/* <ShadcnButton
-            variant="ghost"
-            size="sm"
-            onPress={() => {
-              const newIsNewProduct = !isNewProduct;
-              setIsNewProduct(newIsNewProduct);
-              dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' }); // Only clear product name
-              // Category field and its state (new/existing) are NOT changed by this toggle.
-              if (newIsNewProduct) { 
-                setIsAccordionOpen(false); 
-              }
-            }}
-            disabled={isLoading}
-            className="px-2"
-          >
-            <Text className="text-[#00b9f1] dark:text-[#00b9f1] font-medium">
-              {isNewProduct ? 'Select Existing' : 'Add New'}
-            </Text>
-          </ShadcnButton> */}
-        </View>
-        {isNewProduct ? (
+        {isEditMode ? (
           <View>
             <ControlledInput
               value={name}
               onChangeText={(text) => dispatch({ type: 'UPDATE_FIELD', field: 'name', value: text })}
-              placeholder="Enter new product name"
+              placeholder="Product Name"
               editable={!isLoading}
             />
             {!name && (
@@ -337,57 +330,96 @@ const ProductNameSection = React.memo(
             )}
           </View>
         ) : (
-          <View>
-            <TouchableOpacity
-              onPress={() => setIsAccordionOpen(!isAccordionOpen)}
-              className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
-              disabled={isLoading}
-            >
-              <Text className="text-base text-gray-900 dark:text-gray-100">
-                {name || 'Select a product'}
+          <>
+            <View className="flex-row justify-between items-center mb-2">
+              <Text className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                {isNewProduct ? 'Enter New Product' : 'Select Existing Product'}
               </Text>
-              {isAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
-            </TouchableOpacity>
-            {isAccordionOpen && (
-              <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
-                <View className="p-2">
-                  <TouchableOpacity
-                    onPress={onAddNewProduct}
-                    className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
-                  >
-                    <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Product...</Text>
-                  </TouchableOpacity>
-                  <ControlledInput
-                    value={productSearch}
-                    onChangeText={setProductSearch}
-                    placeholder="Search products..."
-                    editable={!isLoading}
-                    className="mb-1 text-sm"
-                  />
-                </View>
-                {/* Ensure this FlatList has enough items in `filteredProductNames` to exceed 150px height for scrollbar to appear */}
-                <FlatList
-                  data={filteredProductNames}
-                  keyExtractor={(item) => item}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => onSelectProduct(item)}
-                      className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
-                    >
-                      <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
-                    </TouchableOpacity>
-                  )}
-                  ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No products found.</Text>}
-                  style={{ maxHeight: 150 }}
-                  nestedScrollEnabled={true}
-                  showsVerticalScrollIndicator={true}
-                  alwaysBounceVertical={Platform.OS === 'ios'} // Improves iOS scroll feedback
-                  scrollIndicatorInsets={{ right: 1 }} // Ensures scrollbar isn’t clipped
-                  overScrollMode="always" // Enables overscroll for Android
+              <ShadcnButton
+                variant="ghost"
+                size="sm"
+                onPress={() => {
+                  const newIsNewProduct = !isNewProduct;
+                  setIsNewProduct(newIsNewProduct);
+                  dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
+                  if (newIsNewProduct) {
+                    setIsAccordionOpen(false);
+                  }
+                }}
+                disabled={isLoading}
+                className="px-2"
+              >
+                <Text className="text-[#00b9f1] dark:text-[#00b9f1] font-medium">
+                  {isNewProduct ? 'Select Existing' : 'Add New'}
+                </Text>
+              </ShadcnButton>
+            </View>
+            {isNewProduct ? (
+              <View>
+                <ControlledInput
+                  value={name}
+                  onChangeText={(text) => dispatch({ type: 'UPDATE_FIELD', field: 'name', value: text })}
+                  placeholder="Enter new product name"
+                  editable={!isLoading}
                 />
+                {!name && (
+                  <Text className="text-red-500 dark:text-red-400 text-sm mt-1">Product name is required</Text>
+                )}
+              </View>
+            ) : (
+              <View>
+                <TouchableOpacity
+                  onPress={() => setIsAccordionOpen(!isAccordionOpen)}
+                  className="border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 h-12 justify-between items-center px-4 flex-row"
+                  disabled={isLoading}
+                >
+                  <Text className="text-base text-gray-900 dark:text-gray-100">
+                    {name || 'Select a product'}
+                  </Text>
+                  {isAccordionOpen ? <ChevronUp size={20} color="#6b7280" /> : <ChevronDown size={20} color="#6b7280" />}
+                </TouchableOpacity>
+                {isAccordionOpen && (
+                  <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
+                    <View className="p-2">
+                      <TouchableOpacity
+                        onPress={onAddNewProduct}
+                        className="py-2.5 px-2 mb-1 border-b border-gray-200 dark:border-gray-700"
+                      >
+                        <Text className="text-base text-[#00b9f1] dark:text-[#00b9f1] font-medium">Add New Product...</Text>
+                      </TouchableOpacity>
+                      <ControlledInput
+                        value={productSearch}
+                        onChangeText={setProductSearch}
+                        placeholder="Search products..."
+                        editable={!isLoading}
+                        className="mb-1 text-sm"
+                      />
+                    </View>
+                    <FlatList
+                      data={filteredProductNames}
+                      keyExtractor={(item) => item}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          onPress={() => onSelectProduct(item)}
+                          className="py-2.5 px-4 border-t border-gray-200 dark:border-gray-700"
+                        >
+                          <Text className="text-base text-gray-900 dark:text-gray-100">{item}</Text>
+                        </TouchableOpacity>
+                      )}
+                      ListEmptyComponent={<Text className="text-center py-3 text-gray-500 dark:text-gray-400">No products found.</Text>}
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                      alwaysBounceVertical={Platform.OS === 'ios'}
+                      scrollIndicatorInsets={{ right: 1 }}
+                      overScrollMode="always"
+                      persistentScrollbar={Platform.OS === 'android'} // Added for Android persistent scrollbar
+                    />
+                  </View>
+                )}
               </View>
             )}
-          </View>
+          </>
         )}
       </View>
     );
@@ -497,8 +529,8 @@ const QuantityUnitSection = React.memo(
             <Picker
               selectedValue={unit}
               onValueChange={(itemValue) => dispatch({ type: 'UPDATE_FIELD', field: 'unit', value: itemValue })}
-              style={{ color: Platform.OS === 'ios' ? '#000000' : (isLoading ? '#a0a0a0' : '#000000'), fontSize: 16 }}
-              dropdownIconColor={Platform.OS === 'android' ? (isLoading ? '#a0a0a0' : '#000000') : undefined}
+              style={{ color: Platform.OS === 'ios' ? (isLoading ? '#a0a0a0' : '#333333') : (isLoading ? '#a0a0a0' : (rnColorScheme() === 'dark' ? '#e5e7eb' : '#1a1a1a')), fontSize: 16 }}
+              dropdownIconColor={Platform.OS === 'android' ? (isLoading ? '#a0a0a0' : (rnColorScheme() === 'dark' ? '#e5e7eb' : '#1a1a1a')) : undefined}
               enabled={!isLoading}
             >
               <Picker.Item label="Piece" value="piece" />
@@ -602,7 +634,7 @@ const ProductFormDialogContent = React.memo(
     formMode,
     handleSubmit,
     setDialogOpen,
-    // resetDialogState,
+    resetDialogState,
     isCategoryAccordionOpen,
     setIsCategoryAccordionOpen,
     categorySearch,
@@ -620,7 +652,7 @@ const ProductFormDialogContent = React.memo(
   }: ProductFormDialogContentProps) => {
     return (
       <FlatList
-        data={[1]}
+        data={[1]} // Using a single item array to make the content scrollable
         keyExtractor={() => 'product-form-scroll'}
         renderItem={() => (
           <View>
@@ -631,9 +663,10 @@ const ProductFormDialogContent = React.memo(
                 </Text>
               </DialogTitle>
             </DialogHeader>
-            <View className="space-y-4 p-4 w-[350px] mx-auto" style={{ zIndex: 0 }}>
+            {/* Increased zIndex for category dropdown, ensure product name is lower or equal when category is open */}
+            <View className="space-y-4 p-4 w-[350px] mx-auto" style={{ zIndex: 0 /* Base zIndex */ }}>
               {formError && <Text className="text-red-500 dark:text-red-400 text-center mb-4">{formError}</Text>}
-              <View style={{ zIndex: isCategoryAccordionOpen ? 20 : 1 }}>
+              <View style={{ zIndex: (isCategoryAccordionOpen && formMode === 'add') ? 20 : (isProductAccordionOpen ? 5 : 10) }}>
                 <CategorySection
                   category={formState.category}
                   isNewCategory={isNewCategory}
@@ -646,17 +679,17 @@ const ProductFormDialogContent = React.memo(
                   categorySearch={categorySearch}
                   setCategorySearch={setCategorySearch}
                   filteredCategoriesFromStore={filteredCategoriesFromStore}
+                  formMode={formMode}
                   onSelectCategory={onSelectCategory}
                   onAddNewCategory={onAddNewCategory}
                 />
               </View>
-              <View style={{ zIndex: isProductAccordionOpen ? 20 : 1 }}>
+              {/* Product Name section zIndex should be higher when its accordion is open, but lower than category if category is also open (though ideally only one is open) */}
+              <View style={{ zIndex: isProductAccordionOpen ? 15 : (isCategoryAccordionOpen && formMode === 'add' ? 5 : 10) }}>
                 <ProductNameSection
                   name={formState.name}
                   isNewProduct={isNewProduct}
                   setIsNewProduct={setIsNewProduct}
-                  isNewCategory={isNewCategory}
-                  setIsNewCategory={setIsNewCategory}
                   dispatch={dispatch}
                   isLoading={isLoading}
                   isAccordionOpen={isProductAccordionOpen}
@@ -664,28 +697,34 @@ const ProductFormDialogContent = React.memo(
                   productSearch={productSearch}
                   setProductSearch={setProductSearch}
                   filteredProductNames={filteredProductNames}
+                  formMode={formMode}
                   onSelectProduct={onSelectProduct}
                   onAddNewProduct={onAddNewProduct}
+                  isNewCategory={isNewCategory}
+                  setIsNewCategory={setIsNewCategory}
                 />
               </View>
-              <PriceSection
-                costPrice={formState.costPrice}
-                sellingPrice={formState.sellingPrice}
-                dispatch={dispatch}
-                isLoading={isLoading}
-                profit={profit}
-              />
-              <QuantityUnitSection
-                quantity={formState.quantity}
-                unit={formState.unit}
-                dispatch={dispatch}
-                isLoading={isLoading}
-              />
-              <ImageSection
-                imageUri={formState.imageUri}
-                pickImage={pickImage}
-                isLoading={isLoading}
-              />
+              {/* Other sections with default zIndex (or lower) */}
+              <View style={{ zIndex: 1 }}>
+                <PriceSection
+                  costPrice={formState.costPrice}
+                  sellingPrice={formState.sellingPrice}
+                  dispatch={dispatch}
+                  isLoading={isLoading}
+                  profit={profit}
+                />
+                <QuantityUnitSection
+                  quantity={formState.quantity}
+                  unit={formState.unit}
+                  dispatch={dispatch}
+                  isLoading={isLoading}
+                />
+                <ImageSection
+                  imageUri={formState.imageUri}
+                  pickImage={pickImage}
+                  isLoading={isLoading}
+                />
+              </View>
             </View>
             <DialogFooter className="p-6 pt-4 flex-row justify-end gap-x-3 border-t border-gray-300 dark:border-gray-600">
               <ShadcnButton
@@ -710,10 +749,10 @@ const ProductFormDialogContent = React.memo(
             </DialogFooter>
           </View>
         )}
-        contentContainerStyle={{ padding: 0, width: '100%' }}
-        nestedScrollEnabled
+        contentContainerStyle={{ padding: 0, width: '100%' }} // Ensures FlatList takes full width of content
+        nestedScrollEnabled // Important for scrollability within DialogContent
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false} // This is for the main form scroll, not the dropdowns
+        showsVerticalScrollIndicator={false} // Hides the scrollbar for the outer FlatList if not desired
       />
     );
   }
@@ -827,8 +866,7 @@ const ProductManagementScreen = () => {
     const isSellingPriceValid = !!formState.sellingPrice && !isNaN(sellingPriceNum) && sellingPriceNum > 0;
     const isQuantityValid = formState.quantity === '' || (!isNaN(quantityNum) && quantityNum >= 0);
     const isUnitValid = !!formState.unit;
-    const isCategoryValid = isNewCategory ? true : !!formState.category.trim();
-
+    const isCategoryValid = formMode === 'edit' ? !!formState.category.trim() : (isNewCategory ? !!formState.category.trim() : !!formState.category.trim());
 
     return (
       isNameValid &&
@@ -838,7 +876,7 @@ const ProductManagementScreen = () => {
       isUnitValid &&
       isCategoryValid
     );
-  }, [formState, isNewCategory]);
+  }, [formState, isNewCategory, formMode]);
 
   useEffect(() => {
     fetchProducts();
@@ -850,7 +888,6 @@ const ProductManagementScreen = () => {
       setFormError(null);
     }
   }, [formState, dialogOpen, storeError, formError]);
-
 
   const pickImage = useCallback(async () => {
     try {
@@ -895,7 +932,7 @@ const ProductManagementScreen = () => {
       if (!formState.name.trim()) errorMsg = 'Product name is required.';
       else if (!formState.costPrice || parseFloat(formState.costPrice) <= 0) errorMsg = 'Valid cost price is required.';
       else if (!formState.sellingPrice || parseFloat(formState.sellingPrice) <= 0) errorMsg = 'Valid selling price is required.';
-      else if (formState.category.trim() === '' && !isNewCategory) errorMsg = 'Category is required if not adding a new one.';
+      else if (formMode === 'add' && formState.category.trim() === '' && !isNewCategory) errorMsg = 'Category is required.';
       setFormError(errorMsg);
       return;
     }
@@ -905,7 +942,7 @@ const ProductManagementScreen = () => {
     try {
       let finalCategoryName = formState.category.trim();
 
-      if (finalCategoryName && isNewCategory) {
+      if (formMode === 'add' && finalCategoryName && isNewCategory) {
         const existingStoreCategory = storeCategories.find(
           (sc) => sc.name.toLowerCase() === finalCategoryName.toLowerCase()
         );
@@ -922,30 +959,35 @@ const ProductManagementScreen = () => {
         } else {
           console.log(`Category "${finalCategoryName}" already exists in store. Using existing.`);
         }
-      } else if (!finalCategoryName && formMode === 'add') {
-        setFormError('Category is required. Please select or add a new category.');
-        setUiIsLoading(false);
-        return;
       }
 
-
-      const productData: Omit<ProductInput, 'userId'> = {
+      const commonProductData = {
         name: formState.name.trim(),
         costPrice: parseFloat(formState.costPrice),
         sellingPrice: parseFloat(formState.sellingPrice),
         quantity: formState.quantity ? parseInt(formState.quantity, 10) : 0,
         unit: formState.unit,
-        category: finalCategoryName || undefined,
         imageUri: formState.imageUri || undefined,
         rating: 0,
         discount: 0,
-        image: '',
+        image: formState.imageUri || '',
         isActive: true,
       };
 
       if (formMode === 'add') {
+        const productData: Omit<ProductInput, 'userId'> = {
+          ...commonProductData,
+          category: finalCategoryName || undefined,
+        };
         await addProduct(productData);
       } else if (selectedProduct) {
+        const productData: Partial<Omit<ProductInput, 'userId'>> = {
+          ...commonProductData,
+          category: selectedProduct.category, // In edit mode, category is not changed directly via this form for the product itself, but can be displayed.
+                                             // If category of product needs to be changeable, UI needs to allow selecting from existing categories or editing its string.
+                                             // Current setup shows it as read-only string.
+          isActive: selectedProduct.isActive, // Preserve existing isActive status unless changed by specific UI
+        };
         await updateProduct(selectedProduct.id, productData);
       }
 
@@ -958,7 +1000,6 @@ const ProductManagementScreen = () => {
       setUiIsLoading(false);
     }
   };
-
 
   const handleEditClick = useCallback((product: Product) => {
     setSelectedProduct(product);
@@ -975,8 +1016,8 @@ const ProductManagementScreen = () => {
       },
     });
     setFormMode('edit');
-    setIsNewCategory(false);
-    setIsNewProduct(false);
+    setIsNewCategory(false); // Category is not "new" in edit mode
+    setIsNewProduct(true);   // Product name is editable, can be considered "new" if changed
     setIsCategoryAccordionOpen(false);
     setIsProductAccordionOpen(false);
     setFormError(null);
@@ -997,7 +1038,7 @@ const ProductManagementScreen = () => {
       setDeleteDialogOpen(false);
       setSelectedProduct(null);
       fetchProducts();
-    } catch (e: any) {
+    } catch (e: any)      {
       console.error('Failed to delete product:', e);
       Alert.alert("Delete Error", e.message || 'Failed to delete product. Please try again.');
     } finally {
@@ -1020,32 +1061,35 @@ const ProductManagementScreen = () => {
   }, [fetchProducts, fetchStoreCategories]);
 
   const handleSelectCategoryFromAccordion = useCallback((item: string) => {
+    if (formMode === 'edit') return; // Category selection from accordion is for 'add' mode
     setIsNewCategory(false);
     dispatch({ type: 'UPDATE_FIELD', field: 'category', value: item });
     setCategorySearch('');
     setIsCategoryAccordionOpen(false);
-  }, [dispatch]);
+  }, [dispatch, formMode]);
 
   const handleAddNewCategoryMode = useCallback(() => {
+    if (formMode === 'edit') return;
     setIsNewCategory(true);
-    setIsNewProduct(true);
+    // When switching to "Add New Category", also imply it's a new product context unless user explicitly selects an existing product later
+    setIsNewProduct(true); 
     dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
-    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
+    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' }); // Reset name as well, as it's a new product in a new category context
     setCategorySearch('');
     setIsCategoryAccordionOpen(false);
-  }, [dispatch]);
+  }, [dispatch, formMode]);
 
   const handleSelectProductFromAccordion = useCallback((itemName: string) => {
+    if (formMode === 'edit') return; // Product selection from accordion is for 'add' mode
     const productDetails = products.find(p => p.name === itemName);
-
-    setIsNewProduct(false);
+    setIsNewProduct(false); // Now selecting an existing product
     dispatch({ type: 'UPDATE_FIELD', field: 'name', value: itemName });
-
     if (productDetails) {
+      // Pre-fill form with details of the selected existing product
       dispatch({
         type: 'SET_FORM', payload: {
           name: productDetails.name,
-          category: productDetails.category || '',
+          category: formState.category, // Preserve currently selected/entered category
           costPrice: productDetails.costPrice.toString(),
           sellingPrice: productDetails.sellingPrice.toString(),
           quantity: productDetails.quantity.toString(),
@@ -1053,26 +1097,18 @@ const ProductManagementScreen = () => {
           imageUri: productDetails.imageUri || '',
         }
       });
-      setIsNewCategory(!productDetails.category);
-    } else {
-      dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
-      setIsNewCategory(true);
     }
     setProductSearch('');
     setIsProductAccordionOpen(false);
-  }, [dispatch, products]);
+  }, [dispatch, products, formMode, formState.category]);
 
   const handleAddNewProductMode = useCallback(() => {
+    // This is for when user explicitly wants to add a new product name (not select existing)
     setIsNewProduct(true);
-    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' });
-    if (!isNewCategory) {
-      setIsNewCategory(true);
-      dispatch({ type: 'UPDATE_FIELD', field: 'category', value: '' });
-    }
+    dispatch({ type: 'UPDATE_FIELD', field: 'name', value: '' }); // Clear name field for new input
     setProductSearch('');
     setIsProductAccordionOpen(false);
-  }, [dispatch, isNewCategory]);
-
+  }, [dispatch]);
 
   const renderMainProductItem = useCallback(
     ({ item }: { item: Product }) => (
@@ -1140,12 +1176,12 @@ const ProductManagementScreen = () => {
         </CardContent>
       </Card>
     ),
-    [handleEditClick, handleDeleteClick, isLoading, COLORS]
+    [handleEditClick, handleDeleteClick, isLoading, COLORS] // COLORS dependency might not be needed here if colors are static or from theme
   );
 
   return (
     <LinearGradient
-      colors={[COLORS.white, COLORS.yellow]}
+      colors={[COLORS.white, COLORS.yellow]} // Ensure COLORS are correctly derived or theme-dependent
       style={{ flex: 1 }}
     >
       <View className="p-4 flex-1 bg-transparent">
@@ -1169,8 +1205,8 @@ const ProductManagementScreen = () => {
               onPress={() => {
                 resetDialogState();
                 setFormMode('add');
-                setIsNewCategory(true);
-                setIsNewProduct(true);
+                setIsNewCategory(true); // Default to adding a new category when opening add product form
+                setIsNewProduct(true);  // Default to adding a new product name
                 setDialogOpen(true);
               }}
               disabled={isLoading}
@@ -1211,8 +1247,8 @@ const ProductManagementScreen = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#00b9f1', '#7200da']}
-              tintColor={Platform.OS === "ios" ? "#00b9f1" : undefined}
+              colors={['#00b9f1', '#7200da']} // Customize refresh indicator colors
+              tintColor={Platform.OS === "ios" ? "#00b9f1" : undefined} // Tint color for iOS
             />
           }
           ListEmptyComponent={
@@ -1232,7 +1268,7 @@ const ProductManagementScreen = () => {
 
         <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
           <DialogContent className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-11/12 mx-auto">
-            <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700 w-80">
+            <DialogHeader className="p-5 border-b border-gray-200 dark:border-gray-700">
               <DialogTitle>
                 <Text className="text-xl font-bold text-[#7200da] dark:text-[#00b9f1]">Filter by Category</Text>
               </DialogTitle>
@@ -1250,7 +1286,6 @@ const ProductManagementScreen = () => {
               </TouchableOpacity>
               {isFilterAccordionOpen && (
                 <View className="mt-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 shadow-lg z-10">
-                  {/* Ensure this FlatList has enough items in `categoriesForFilter` to exceed 150px height for scrollbar to appear */}
                   <FlatList
                     data={categoriesForFilter}
                     keyExtractor={(item) => item}
@@ -1287,7 +1322,7 @@ const ProductManagementScreen = () => {
               </ShadcnButton>
               <ShadcnButton
                 onPress={() => setFilterDialogOpen(false)}
-                className="h-11 px-5 bg-[#00b9f1] dark:bg-[#00b9f1]"
+                className="h-11 px-5 bg-[#00b9f1] dark:bg-[#00b9f1]" // Adjusted color for consistency if needed
               >
                 <Text className="text-white">Apply</Text>
               </ShadcnButton>
@@ -1300,20 +1335,22 @@ const ProductManagementScreen = () => {
           onOpenChange={(open) => {
             setDialogOpen(open);
             if (!open) {
+              // Delay reset to allow animation to finish, especially on web
               setTimeout(() => {
                 resetDialogState();
-              }, Platform.OS === 'web' ? 10 : 150);
+              }, Platform.OS === 'web' ? 10 : 150); 
             }
           }}
         >
+          {/* KeyboardAvoidingView wraps DialogContent for better keyboard handling */}
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
-            style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0} // Adjust offset as needed
+            style={{ flex: 1, justifyContent: 'center' }} // Ensure KAV behaves as expected
           >
             <DialogContent
               className="p-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-11/12 mx-auto"
-              style={{ maxHeight: '95%' }}
+              style={{ maxHeight: '95%' }} // Ensure dialog doesn't take full screen height
             >
               <ProductFormDialogContent
                 formState={formState}
