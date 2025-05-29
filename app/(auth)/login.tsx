@@ -1,3 +1,4 @@
+// ~/screens/login.tsx
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Stack } from 'expo-router/stack';
@@ -6,7 +7,6 @@ import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Eye, EyeOff, ArrowRight, ShoppingBag } from 'lucide-react-native';
 import { initDatabase } from '~/lib/db/database';
-import { toast, Toaster } from 'sonner-native';
 import {
   View,
   KeyboardAvoidingView,
@@ -16,59 +16,15 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
-  ViewStyle,
   Image,
-  StyleSheet, // Import StyleSheet
+  StyleSheet,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AnimatedBackground from '~/components/AnimatedBackground';
+import GlobalToaster, { Toaster as toast } from '~/components/toaster/Toaster';
 
-// Toast styles using NativeWind colors but as style objects for sonner-native compatibility
-const toasterOptionsConfig = {
-  style: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    elevation: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-  },
-  titleStyle: {
-    color: '#1E293B',
-    fontWeight: '600' as '600',
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  descriptionStyle: {
-    color: '#64748B',
-    fontSize: 12,
-  },
-  success: {
-    style: {
-      backgroundColor: '#ECFDF5',
-      borderColor: '#A7F3D0',
-    },
-  },
-  error: {
-    style: {
-      backgroundColor: '#FEF2F2',
-      borderColor: '#FECACA',
-    },
-  },
-};
-
-const ACTIVE_BUTTON_COLOR = '#F9C00C'; // Define your color
-// For disabled, let's use a lighter version or opacity.
-// If we had #F9C00C in tailwind.config.js as 'custom-amber',
-// we could use 'bg-custom-amber/60'.
-// Manually choosing a lighter shade or using opacity with inline style:
-const DISABLED_BUTTON_COLOR = '#FBE08A'; // A lighter version of #F9C00C
+const ACTIVE_BUTTON_COLOR = '#F9C00C';
+const DISABLED_BUTTON_COLOR = '#FBE08A';
 
 export default function LoginScreen() {
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -85,8 +41,8 @@ export default function LoginScreen() {
       try {
         await initDatabase();
         setDbInitialized(true);
-      } catch (error) {
-        console.error('Database initialization error:', error);
+      } catch (dbError) {
+        console.error('Database initialization error:', dbError);
         toast.error('Setup failed', {
           description: 'Please restart the app and try again',
         });
@@ -103,7 +59,7 @@ export default function LoginScreen() {
   useEffect(() => {
     if (error) {
       toast.error('Sign in failed', {
-        description: error,
+        description: error || 'An unknown error occurred. Please try again.',
       });
       clearError();
     }
@@ -127,6 +83,7 @@ export default function LoginScreen() {
         router.replace('/(tabs)/home');
       }, 1000);
     }
+
   };
 
   const handleEmailOrPhoneChange = (text: string) => {
@@ -137,14 +94,6 @@ export default function LoginScreen() {
   const handlePasswordChange = (text: string) => {
     setPassword(text);
     if (error) clearError();
-  };
-
-  const toasterContainerStyle: ViewStyle = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10000,
   };
 
   const isButtonDisabled = isLoading || !emailOrPhone.trim() || !password;
@@ -165,12 +114,7 @@ export default function LoginScreen() {
               Just a moment while we prepare everything for you
             </Text>
           </View>
-          <View style={toasterContainerStyle}>
-            <Toaster
-              position="top-center"
-              toastOptions={toasterOptionsConfig}
-            />
-          </View>
+          <GlobalToaster />
         </SafeAreaView>
       </GestureHandlerRootView>
     );
@@ -273,12 +217,12 @@ export default function LoginScreen() {
                       activeOpacity={0.85}
                     >
                       {isLoading ? (
-                        <ActivityIndicator size="small" color="#334155" /> // Darker color for text on yellow
+                        <ActivityIndicator size="small" color="#334155" />
                       ) : (
                         <View className="flex-row items-center justify-center">
                           <Text className="text-white font-bold text-base mr-3">Sign In</Text>
                           <View className="w-6 h-6 rounded-full bg-white justify-center items-center shadow-sm">
-                            <ArrowRight size={16} color={ACTIVE_BUTTON_COLOR} /> 
+                            <ArrowRight size={16} color={ACTIVE_BUTTON_COLOR} />
                           </View>
                         </View>
                       )}
@@ -301,22 +245,16 @@ export default function LoginScreen() {
             </ScrollView>
           </KeyboardAvoidingView>
         </View>
-        <View style={toasterContainerStyle}>
-          <Toaster
-            position="top-center"
-            toastOptions={toasterOptionsConfig}
-          />
-        </View>
+        <GlobalToaster />
       </SafeAreaView>
     </GestureHandlerRootView>
   );
 }
 
-// Add StyleSheet for button styles not covered by Tailwind classes
 const styles = StyleSheet.create({
   signInButtonBase: {
-    height: 56, // h-14 equivalent
-    borderRadius: 16, // rounded-2xl equivalent
+    height: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',

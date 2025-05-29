@@ -1,6 +1,5 @@
-// ~/screens/forgot-password.tsx
 import React, { useState, useEffect } from 'react';
-import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ViewStyle, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, StyleSheet, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { useAuthStore } from '~/lib/stores/authStore';
@@ -9,49 +8,9 @@ import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react-native';
 import { validatePasswordStrength } from '~/lib/utils/authUtils';
-import { toast, Toaster } from 'sonner-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AnimatedBackground from '~/components/AnimatedBackground';
-
-// Toast styles using NativeWind colors but as style objects for sonner-native compatibility
-const toasterOptionsConfig = {
-  style: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    elevation: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-  },
-  titleStyle: {
-    color: '#1E293B',
-    fontWeight: '600' as '600',
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  descriptionStyle: {
-    color: '#64748B',
-    fontSize: 12,
-  },
-  success: {
-    style: {
-      backgroundColor: '#ECFDF5',
-      borderColor: '#A7F3D0',
-    },
-  },
-  error: {
-    style: {
-      backgroundColor: '#FEF2F2',
-      borderColor: '#FECACA',
-    },
-  },
-};
+import GlobalToaster, { Toaster as toast } from '~/components/toaster/Toaster';
 
 const ACTIVE_BUTTON_COLOR = '#F9C00C';
 const DISABLED_BUTTON_COLOR = '#FBE08A';
@@ -84,30 +43,28 @@ export default function ForgotPasswordScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    // console.log("[FORGOT PASSWORD] Component did mount - clearing error from store.");
     clearError();
-  }, [clearError]); // Runs on mount
+  }, [clearError]);
 
   useEffect(() => {
-    // ADD THIS CONSOLE LOG TO SEE THE EXACT ERROR
     console.log(`[FORGOT PASSWORD] Error Effect: store.error is "${error}", currentStep is ${ResetStep[currentStep]}`);
 
     if (!error) {
-      return; 
+      return;
     }
 
-    let errorToastShown = false; 
-    const currentErrorValue = error; // Capture error value for this effect run
+    let errorToastShown = false;
+    const currentErrorValue = error; // Can be string or null
 
     if (currentStep === ResetStep.IDENTIFY_USER) {
       if (currentErrorValue.toLowerCase().includes('user not found')) {
-        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.dismiss();
         toast.error('User Not Found', {
           description: 'The email or phone number entered does not match any account. Please check and try again.',
         });
         errorToastShown = true;
       } else if (currentErrorValue.toLowerCase().includes('security question not set')) {
-        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.dismiss();
         toast.error('Account Issue', {
           description: 'A security question is not set up for this account. Please contact support.',
         });
@@ -115,54 +72,62 @@ export default function ForgotPasswordScreen() {
       }
     } else if (currentStep === ResetStep.ANSWER_QUESTION) {
       if (currentErrorValue.toLowerCase().includes('incorrect security answer')) {
-        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.dismiss();
         toast.error('Incorrect Security Answer', {
           description: 'The answer provided is incorrect. Please try again.',
         });
         errorToastShown = true;
       } else if (currentErrorValue.toLowerCase().includes('user not found')) {
-        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.dismiss();
         toast.error('User Not Found', {
           description: 'The email or phone number entered does not match any account. Please check and try again.',
         });
         errorToastShown = true;
       } else if (currentErrorValue.toLowerCase().includes('security question not set')) {
-        toast.dismiss(); // Explicitly dismiss other toasts
+        toast.dismiss();
         toast.error('Account Issue', {
           description: 'A security question is not set up for this account. Please contact support.',
         });
         errorToastShown = true;
       }
     } else if (currentStep === ResetStep.CREATE_PASSWORD) {
-      toast.dismiss(); // Explicitly dismiss other toasts
+      toast.dismiss();
       toast.error('Password Reset Failed', {
-        description: currentErrorValue,
+        // Ensure description is a string, even if currentErrorValue is null
+        description: currentErrorValue || 'An unknown error occurred. Please try again.',
       });
       errorToastShown = true;
     }
 
-    // Important: Clear the error from the store AFTER processing it for this screen.
-    // This ensures that this instance of the error has been handled.
     if (errorToastShown) {
       clearError();
     } else {
-      // If no specific toast was shown for the error in the current step,
-      // (e.g. a generic network error not caught above for IDENTIFY_USER/ANSWER_QUESTION)
-      // still clear it to prevent it from lingering.
-      if (currentStep !== ResetStep.CREATE_PASSWORD) {
-        clearError();
+      // If no specific toast was shown, but there's an error,
+      // consider if a generic toast should be shown or just clear it.
+      // For now, we only show toasts for specific handled errors or validation errors.
+      // We still clear the error from the store if it wasn't handled by a toast above for current step.
+      if (currentErrorValue && currentStep !== ResetStep.CREATE_PASSWORD) { // Ensure currentErrorValue is not null before logging
+         // console.warn(`[FORGOT PASSWORD] Unhandled store error in step ${ResetStep[currentStep]}: ${currentErrorValue}`);
+         // You might want to show a generic toast here for unhandled errors:
+         /*
+         toast.error('An unexpected error occurred', {
+           description: currentErrorValue || 'Please try again later.',
+         });
+         */
       }
-      // For CREATE_PASSWORD step, if errorToastShown is false (which shouldn't happen due to above logic),
-      // the error would be cleared here if not handled.
-      // However, any error in CREATE_PASSWORD step *is* handled and shows a toast.
+      // Always clear error if it wasn't explicitly shown as a toast by this effect run for the current step
+      // (except for CREATE_PASSWORD where any error *is* shown).
+      if (currentStep !== ResetStep.CREATE_PASSWORD || !errorToastShown) {
+          clearError();
+      }
     }
   }, [error, currentStep, clearError]);
 
   useEffect(() => {
-    if (validationError) {
-      toast.dismiss(); // Dismiss other toasts before showing validation error
+    if (validationError) { // validationError is string | null, this ensures it's a string here
+      toast.dismiss();
       toast.error('Validation error', {
-        description: validationError,
+        description: validationError, // validationError is guaranteed to be a string here
       });
     }
   }, [validationError]);
@@ -172,14 +137,13 @@ export default function ForgotPasswordScreen() {
       setValidationError('Please enter your email or phone');
       return;
     }
-    clearError(); // Clear any existing store error before new async operation
+    clearError();
     setValidationError(null);
     const userDetails = await fetchUserAndSecurityQuestion(emailOrPhone);
     if (userDetails && userDetails.securityQuestion) {
       setSecurityQuestion(userDetails.securityQuestion);
       setCurrentStep(ResetStep.ANSWER_QUESTION);
     }
-    // If error, the useEffect for [error] will handle it.
   };
 
   const handleVerifySecurityAnswer = async () => {
@@ -187,7 +151,7 @@ export default function ForgotPasswordScreen() {
       setValidationError('Please enter your security answer');
       return;
     }
-    clearError(); // Clear any existing store error
+    clearError();
     setValidationError(null);
     const user = await verifySecurityAnswer(emailOrPhone, securityAnswer);
     if (user) {
@@ -208,7 +172,7 @@ export default function ForgotPasswordScreen() {
       setValidationError('Passwords do not match');
       return;
     }
-    clearError(); // Clear any existing store error
+    clearError();
     setValidationError(null);
     const success = await resetUserPassword({
       emailOrPhone,
@@ -216,13 +180,13 @@ export default function ForgotPasswordScreen() {
       newPassword,
     });
     if (success) {
-      toast.dismiss(); // Dismiss others before success
+      toast.dismiss();
       toast.success('Password reset successful!', {
         description: 'You can now sign in with your new password',
       });
       setTimeout(() => {
         setCurrentStep(ResetStep.SUCCESS);
-      }, 1000); 
+      }, 1000);
     }
   };
 
@@ -427,14 +391,6 @@ export default function ForgotPasswordScreen() {
     }
   };
 
-  const toasterContainerStyle: ViewStyle = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10000,
-  };
-
   return (
     <GestureHandlerRootView className="flex-1">
       <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF9D9' }}>
@@ -455,8 +411,8 @@ export default function ForgotPasswordScreen() {
                       router.back();
                     } else if (currentStep !== ResetStep.SUCCESS) {
                       setCurrentStep(currentStep - 1);
-                      clearError(); // Clear store error when navigating back between steps
-                      setValidationError(null); 
+                      clearError();
+                      setValidationError(null);
                     }
                   }}
                   className="p-2"
@@ -475,12 +431,7 @@ export default function ForgotPasswordScreen() {
             </ScrollView>
           </KeyboardAvoidingView>
         </View>
-        <View style={toasterContainerStyle}>
-          <Toaster
-            position="top-center" // was top-center previously
-            toastOptions={toasterOptionsConfig}
-          />
-        </View>
+        <GlobalToaster />
       </SafeAreaView>
     </GestureHandlerRootView>
   );

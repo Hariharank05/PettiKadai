@@ -1,61 +1,21 @@
+// ~/screens/signup.tsx
 import React, { useState, useEffect } from 'react';
-import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, ViewStyle, StyleSheet, ActivityIndicator } from 'react-native'; // Added StyleSheet, ActivityIndicator
+import { View, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, SafeAreaView, StatusBar, StyleSheet, ActivityIndicator } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { useAuthStore } from '~/lib/stores/authStore';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
-import { Button } from '~/components/ui/button'; // We will replace this with TouchableOpacity for consistent styling
-import { Eye, EyeOff } from 'lucide-react-native'; // Removed ChevronDown as Select component handles its own icon
+import { Eye, EyeOff } from 'lucide-react-native';
 import { SECURITY_QUESTIONS } from '~/lib/models/user';
 import { validateEmail, validatePhone, validatePasswordStrength } from '~/lib/utils/authUtils';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '~/components/ui/select';
-import { toast, Toaster } from 'sonner-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AnimatedBackground from '~/components/AnimatedBackground';
-
-// Toast styles using NativeWind colors but as style objects for sonner-native compatibility
-const toasterOptionsConfig = {
-  style: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    elevation: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-  },
-  titleStyle: {
-    color: '#1E293B',
-    fontWeight: '600' as '600',
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  descriptionStyle: {
-    color: '#64748B',
-    fontSize: 12,
-  },
-  success: {
-    style: {
-      backgroundColor: '#ECFDF5',
-      borderColor: '#A7F3D0',
-    },
-  },
-  error: {
-    style: {
-      backgroundColor: '#FEF2F2',
-      borderColor: '#FECACA',
-    },
-  },
-};
+import GlobalToaster, { Toaster as toast } from '~/components/toaster/Toaster';
 
 const ACTIVE_BUTTON_COLOR = '#F9C00C';
-const DISABLED_BUTTON_COLOR = '#FBE08A'; // A lighter version for disabled state
+const DISABLED_BUTTON_COLOR = '#FBE08A';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -72,7 +32,6 @@ export default function SignupScreen() {
   const { signup, isLoading, error, clearError } = useAuthStore();
   const router = useRouter();
 
-  // Clear stale errors from the store when the screen mounts
   useEffect(() => {
     clearError();
   }, [clearError]);
@@ -80,19 +39,20 @@ export default function SignupScreen() {
   useEffect(() => {
     if (error) {
       toast.error('Sign up failed', {
-        description: error,
+        description: error || 'An unknown error occurred. Please try again.',
       });
-      clearError(); // Clear error after showing toast
+      clearError();
     }
   }, [error, clearError]);
 
   useEffect(() => {
     if (Object.keys(validationErrors).length > 0) {
       const firstError = Object.values(validationErrors)[0];
-      toast.error('Validation error', {
-        description: firstError,
-      });
-      // Validation errors are cleared on input change or form submission attempt
+      if (firstError) {
+        toast.error('Validation error', {
+          description: firstError,
+        });
+      }
     }
   }, [validationErrors]);
 
@@ -119,7 +79,7 @@ export default function SignupScreen() {
     const userData = {
       name,
       password,
-      securityQuestion, // This should be the string value from the Select component
+      securityQuestion,
       securityAnswer,
       ...(isEmail ? { email: emailOrPhone } : { phone: emailOrPhone }),
     };
@@ -133,6 +93,7 @@ export default function SignupScreen() {
         router.replace('/(auth)/login');
       }, 1000);
     }
+
   };
 
   const toggleInputType = () => {
@@ -155,7 +116,7 @@ export default function SignupScreen() {
   };
 
   const handleSecurityQuestionChange = (value: string) => {
-    setSecurityQuestion(value); // value is the string of the question itself
+    setSecurityQuestion(value);
     if (validationErrors.securityQuestion) {
       const newErrors = { ...validationErrors };
       delete newErrors.securityQuestion;
@@ -166,14 +127,6 @@ export default function SignupScreen() {
 
   const isFormSubmittable = () => {
     return name.trim() && emailOrPhone.trim() && password && confirmPassword && securityQuestion && securityAnswer.trim();
-  };
-
-  const toasterContainerStyle: ViewStyle = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10000,
   };
 
   return (
@@ -266,7 +219,7 @@ export default function SignupScreen() {
                 <View>
                   <Text className="text-base text-slate-800 font-medium mb-2">Security Question</Text>
                   <Select
-                    defaultValue="" // Keep empty to enforce selection
+                    defaultValue=""
                     onValueChange={handleSecurityQuestionChange}
                     open={selectOpen}
                     onOpenChange={setSelectOpen}
@@ -324,12 +277,7 @@ export default function SignupScreen() {
             </ScrollView>
           </KeyboardAvoidingView>
         </View>
-        <View style={toasterContainerStyle}>
-          <Toaster
-            position="top-center"
-            toastOptions={toasterOptionsConfig}
-          />
-        </View>
+        <GlobalToaster />
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -337,11 +285,11 @@ export default function SignupScreen() {
 
 const styles = StyleSheet.create({
   actionButtonBase: {
-    height: 48, // h-12
-    borderRadius: 16, // rounded-2xl
+    height: 48,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    marginBottom: 16, // mb-4
+    marginBottom: 16,
   },
 });
